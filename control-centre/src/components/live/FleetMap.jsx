@@ -43,8 +43,11 @@ export function FleetMap({ fleet, selectedTrainId, onTrainSelect }) {
   const fleetRef = useRef(fleet);
   const selectedRef = useRef(selectedTrainId);
   const onSelectRef = useRef(onTrainSelect);
+  // eslint-disable-next-line react-hooks/refs
   fleetRef.current = fleet;
+  // eslint-disable-next-line react-hooks/refs
   selectedRef.current = selectedTrainId;
+  // eslint-disable-next-line react-hooks/refs
   onSelectRef.current = onTrainSelect;
 
   const placeMarkers = useCallback((map) => {

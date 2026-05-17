@@ -29,6 +29,7 @@ function TrendBadge({ direction, weeks }) {
   return <span className="exc-trend exc-trend--stable">Stable</span>;
 }
 
+// eslint-disable-next-line no-unused-vars
 function MiniSparkline({ peaks }) {
   if (!peaks || peaks.length < 2) return null;
   const max = Math.max(...peaks, 85);
@@ -212,17 +213,19 @@ function groupByRoute(exceptions) {
 
 export function ExceptionWorkflow({ dateRange = '7d' }) {
   const rangeInfo = EXCEPTION_DATE_RANGES[dateRange] ?? EXCEPTION_DATE_RANGES['7d'];
-  const [exceptions, setExceptions] = useState(() => getExceptionsForRange(dateRange));
+  const exceptions = useMemo(() => getExceptionsForRange(dateRange), [dateRange]);
   const [selectedId, setSelectedId] = useState(null);
   const [reviewModalFor, setReviewModalFor] = useState(null);
   const [showDismissed, setShowDismissed] = useState(false);
   const detailRef = useRef(null);
 
-  useEffect(() => {
-    setExceptions(getExceptionsForRange(dateRange));
+  // Reset selections when dateRange changes
+  const prevDateRange = useRef(dateRange);
+  if (prevDateRange.current !== dateRange) {
+    prevDateRange.current = dateRange;
     setSelectedId(null);
     setShowDismissed(false);
-  }, [dateRange]);
+  }
 
   const selectedExc = useMemo(() => exceptions.find(e => e.id === selectedId) ?? null, [exceptions, selectedId]);
 

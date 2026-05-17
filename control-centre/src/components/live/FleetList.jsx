@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 import './FleetList.css';
 
 const SEVERITY_DOT = { red: '#FF3B3B', amber: '#F5A623', green: '#22C55E' };
@@ -53,7 +53,7 @@ function TrainCard({ train, selectedTrainId, onSelect }) {
 }
 
 export function FleetList({ trains, selectedTrainId, onSelect, sortBy, onSortChange }) {
-  const [normalExpanded, setNormalExpanded] = useState(false);
+
 
   const nonNormal = trains.filter(t => t.severity !== 'green');
   const normal    = trains.filter(t => t.severity === 'green');

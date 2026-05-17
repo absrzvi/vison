@@ -82,15 +82,14 @@ export function SystemHealth() {
   const worstFleet = issueTrains.length > 0 ? worstOf(issueTrains[0]) : 'green';
   const selectedTrain = fleet.find(t => t.id === selectedTrainId) ?? null;
 
-  // Force re-read of lastUpdate every tick
-  void tick;
-  const lastUpdateLabel = lastUpdate
-    ? (() => {
-        const s = Math.floor((Date.now() - lastUpdate.getTime()) / 1000);
-        if (s < 60) return `${s}s ago`;
-        return `${Math.floor(s / 60)}m ${s % 60}s ago`;
-      })()
-    : '—';
+  // Re-compute elapsed label every tick without calling Date.now() during render.
+  const lastUpdateLabel = useMemo(() => {
+    if (!lastUpdate) return '—';
+    const s = Math.floor((Date.now() - lastUpdate.getTime()) / 1000);
+    if (s < 60) return `${s}s ago`;
+    return `${Math.floor(s / 60)}m ${s % 60}s ago`;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastUpdate, tick]);
 
   const handleIssueTileClick = () => {
     if (issueCount === 0) return;

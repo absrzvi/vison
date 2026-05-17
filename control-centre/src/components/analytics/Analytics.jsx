@@ -3,7 +3,7 @@ import { OccupancyHeatmap } from './OccupancyHeatmap';
 import { DwellTime } from './DwellTime';
 import { AIDetection } from './AIDetection';
 import { ExceptionWorkflow } from './ExceptionWorkflow';
-import { ROUTES, HOURS, DWELL_DATA, DETECTION_TREND, getExceptionsForRange, getOccupancyHeatmap, getDwellData } from '../../mock/analytics';
+import { DETECTION_TREND, getExceptionsForRange, getOccupancyHeatmap, getDwellData } from '../../mock/analytics';
 import './Analytics.css';
 
 const TABS = [

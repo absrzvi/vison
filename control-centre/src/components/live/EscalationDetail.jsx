@@ -61,12 +61,15 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
     setSelectedTags([]);
   };
 
-  useEffect(() => {
+  // Reset form state when the selected escalation changes.
+  const prevEscId = useRef(escalation?.id);
+  if (prevEscId.current !== escalation?.id) {
+    prevEscId.current = escalation?.id;
     setResolving(false);
     setOutcome('');
     setSelectedTags([]);
     setFrameExpanded(false);
-  }, [escalation?.id]);
+  }
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };

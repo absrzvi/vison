@@ -1,5 +1,6 @@
 pyproject.toml
 src/oebb_shared/__init__.py
+src/oebb_shared/py.typed
 src/oebb_shared.egg-info/PKG-INFO
 src/oebb_shared.egg-info/SOURCES.txt
 src/oebb_shared.egg-info/dependency_links.txt
@@ -14,6 +15,7 @@ src/oebb_shared/adapters/pis/base.py
 src/oebb_shared/adapters/pis/mock.py
 src/oebb_shared/events/__init__.py
 src/oebb_shared/events/envelope.py
+src/oebb_shared/events/payloads.py
 src/oebb_shared/events/types.py
 src/oebb_shared/http/__init__.py
 src/oebb_shared/http/retry.py
