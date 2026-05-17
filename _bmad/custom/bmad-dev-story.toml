@@ -1,0 +1,14 @@
+# Team overrides for bmad-dev-story.
+# Scalars override base, arrays append.
+
+[workflow]
+
+# Mandatory Pre-Flight block — agent must output this BEFORE the first RED test.
+# Any open question must be resolved (or explicitly accepted as risk) before coding begins.
+persistent_facts = [
+  "MANDATORY PRE-FLIGHT GATE: Before writing the first failing test, output a Pre-Flight block with these four sections: (1) Assumptions — one per line, things inferred from the story that weren't explicit; (2) Open Questions — anything genuinely ambiguous — STOP and ask if any exist; (3) Simplicity Check — components/hooks/endpoints you'll add and WHY each is necessary, plus things you considered and decided NOT to add; (4) Surgical-Change Test — exact list of files you'll touch and which story AC or security bullet each change traces to. This block is required by the DoD checklist. A missing Pre-Flight block is a QA checklist FAIL.",
+  "SECURITY TESTS FIRST: The story's '## Security Tests' section enumerates tests that must be written in the RED phase, before any other tests. Write them, confirm they fail for the right reason, then proceed to domain tests.",
+  "FOUR E2E PATHS: When the story involves UI, Playwright tests must cover all four paths — happy path, auth failure, validation/error, and edge-case/boundary. Missing any path is a QA checklist FAIL.",
+  "QA SCORE GATE: Story cannot be marked DONE unless the QA score (computed by bmad-qa-generate-e2e-tests) is >= 85/100.",
+  "SECURITY SENTINEL: Run bmad-security-sentinel in parallel with bmad-code-review on every story before marking DONE. Never skip.",
+]

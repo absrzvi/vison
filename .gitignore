@@ -13,10 +13,16 @@ control-centre/dist/
 .claude/settings.local.json
 .claude/launch.json
 .claude/skills/
+!.claude/skills/bmad-security-sentinel/
+!.claude/skills/bmad-security-sentinel/SKILL.md
+!.claude/skills/bmad-security-sentinel/checklist.md
 
 # ── BMAD agent runtime (installed tooling, not project artifacts) ──────────────
 _bmad/
 !_bmad/custom/config.toml
+!_bmad/custom/config.user.toml
+!_bmad/custom/bmad-agent-dev.toml
+!_bmad/custom/bmad-dev-story.toml
 
 # ── Superpowers brainstorm scratchpad ─────────────────────────────────────────
 .superpowers/
