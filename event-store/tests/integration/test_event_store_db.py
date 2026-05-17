@@ -1,8 +1,15 @@
-"""Integration tests: real SQLite in-memory — insert, page, cursor."""
+"""Integration tests: real SQLite — insert, page, cursor, sync_state."""
 import sqlite3
+
 import pytest
 
-from event_store.database import init_db, insert_event, get_events_page, get_sync_cursor, advance_sync_cursor
+from event_store.database import (
+    advance_sync_cursor,
+    get_events_page,
+    get_sync_cursor,
+    init_db,
+    insert_event,
+)
 from event_store.exceptions import JourneyNotFoundError, UnsupportedSchemaVersionError
 
 
@@ -37,9 +44,9 @@ def test_insert_and_retrieve(db: sqlite3.Connection) -> None:
 
 
 @pytest.mark.integration
-def test_idempotent_insert(db: sqlite3.Connection) -> None:
-    insert_event(db, _BASE_EVENT)
-    insert_event(db, _BASE_EVENT)  # duplicate — must not raise
+def test_idempotent_insert_returns_false(db: sqlite3.Connection) -> None:
+    assert insert_event(db, _BASE_EVENT) is True
+    assert insert_event(db, _BASE_EVENT) is False  # duplicate
     rows = get_events_page(db, journey_id=_BASE_EVENT["journey_id"])
     assert len(rows) == 1
 
@@ -60,15 +67,20 @@ def test_unsupported_schema_version_raises(db: sqlite3.Connection) -> None:
 @pytest.mark.integration
 def test_cursor_pagination(db: sqlite3.Connection) -> None:
     for i in range(5):
-        insert_event(db, {
-            **_BASE_EVENT,
-            "event_id": f"evt-{i:03d}",
-            "timestamp": f"2026-05-16T10:0{i}:00Z",
-        })
+        insert_event(
+            db,
+            {
+                **_BASE_EVENT,
+                "event_id": f"evt-{i:03d}",
+                "timestamp": f"2026-05-16T10:0{i}:00Z",
+            },
+        )
     page1 = get_events_page(db, journey_id=_BASE_EVENT["journey_id"], limit=3)
     assert len(page1) == 3
     cursor = page1[-1]["event_id"]
-    page2 = get_events_page(db, journey_id=_BASE_EVENT["journey_id"], after_event_id=cursor, limit=3)
+    page2 = get_events_page(
+        db, journey_id=_BASE_EVENT["journey_id"], after_event_id=cursor, limit=3
+    )
     assert len(page2) == 2
     all_ids = {r["event_id"] for r in page1 + page2}
     assert len(all_ids) == 5

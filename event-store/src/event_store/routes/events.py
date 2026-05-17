@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Generator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from oebb_shared.events.envelope import EventModel
 
 from ..database import get_connection, get_events_page, insert_event
 from ..exceptions import JourneyNotFoundError, UnsupportedSchemaVersionError
 from ..models import EventPage, IngestRequest, IngestResponse
-from oebb_shared.events.envelope import EventModel
 
-router = APIRouter(prefix="/events")
+router = APIRouter(prefix="/api/v1/events")
 
 
-def _get_db() -> sqlite3.Connection:
+def _get_db() -> Generator[sqlite3.Connection, None, None]:
     conn = get_connection()
     try:
         yield conn
@@ -21,7 +22,7 @@ def _get_db() -> sqlite3.Connection:
         conn.close()
 
 
-@router.post("/ingest", response_model=IngestResponse, status_code=202)
+@router.post("", response_model=IngestResponse, status_code=202)
 def ingest_events(
     body: IngestRequest,
     conn: sqlite3.Connection = Depends(_get_db),
@@ -30,12 +31,20 @@ def ingest_events(
     duplicates: list[str] = []
     for ev in body.events:
         try:
-            insert_event(conn, ev.model_dump())
-            accepted += 1
+            inserted = insert_event(conn, ev.model_dump())
+            if inserted:
+                accepted += 1
+            else:
+                duplicates.append(ev.event_id)
         except UnsupportedSchemaVersionError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except Exception:
-            duplicates.append(ev.event_id)
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "UNSUPPORTED_SCHEMA_VERSION",
+                    "detail": str(exc),
+                    "recoverable": False,
+                },
+            ) from exc
     return IngestResponse(accepted=accepted, duplicate_ids=duplicates)
 
 
@@ -49,7 +58,10 @@ def list_events(
     try:
         rows = get_events_page(conn, journey_id=journey_id, after_event_id=after, limit=limit)
     except JourneyNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "JOURNEY_NOT_FOUND", "detail": str(exc), "recoverable": False},
+        ) from exc
     items = [EventModel(**r) for r in rows]
     next_cursor = items[-1].event_id if len(items) == limit else None
     return EventPage(items=items, next_cursor=next_cursor)

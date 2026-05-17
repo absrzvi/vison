@@ -3,9 +3,17 @@ from __future__ import annotations
 import structlog
 from fastapi import FastAPI
 
-from .config import settings
+from .config import get_settings
 from .routes.health import router as health_router
 from .routes.ingest import router as ingest_router
+
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.add_log_level,
+        structlog.processors.JSONRenderer(),
+    ]
+)
 
 log = structlog.get_logger()
 
@@ -16,5 +24,6 @@ app.include_router(ingest_router)
 
 
 @app.on_event("startup")
-def _startup() -> None:
-    log.info("cloud-backend started", db_url=settings.database_url)
+async def _startup() -> None:
+    settings = get_settings()
+    log.info("cloud_backend_started", db_url=settings.database_url)

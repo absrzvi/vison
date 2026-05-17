@@ -1,0 +1,109 @@
+stages:
+  - lint
+  - security
+  - test
+  - build
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PYTHON_VERSION: "3.11"
+
+default:
+  image: python:3.11-slim
+  cache:
+    paths:
+      - .cache/pip/
+
+# ── Lint ──────────────────────────────────────────────────────────────────────
+
+lint:shared:
+  stage: lint
+  script:
+    - pip install ruff mypy pydantic>=2.7 pydantic-settings>=2.2 structlog>=24.1
+    - cd shared && python -m ruff check src/ tests/
+    - cd shared && python -m mypy --strict src/
+
+lint:event-store:
+  stage: lint
+  script:
+    - pip install -e shared/
+    - pip install -e "event-store/[dev]"
+    - cd event-store && python -m ruff check src/ tests/
+    - cd event-store && python -m mypy --strict src/
+
+lint:cloud-backend:
+  stage: lint
+  script:
+    - pip install -e shared/
+    - pip install -e "cloud-backend/[dev]"
+    - cd cloud-backend && python -m ruff check src/ tests/
+    - cd cloud-backend && python -m mypy --strict src/
+
+# ── Security ──────────────────────────────────────────────────────────────────
+
+security:bandit:
+  stage: security
+  script:
+    - pip install bandit
+    - bandit -r shared/src event-store/src cloud-backend/src -ll
+  allow_failure: false
+
+security:detect-secrets:
+  stage: security
+  script:
+    - pip install detect-secrets
+    - detect-secrets scan --baseline .secrets.baseline
+  allow_failure: true
+
+# ── Test ──────────────────────────────────────────────────────────────────────
+
+test:shared:
+  stage: test
+  script:
+    - pip install -e "shared/[dev]"
+    - cd shared && python -m pytest tests/ -m "unit" --cov=oebb_shared --cov-report=term-missing
+
+test:event-store:
+  stage: test
+  script:
+    - pip install -e shared/
+    - pip install -e "event-store/[dev]"
+    - cd event-store && python -m pytest tests/ -m "unit or contract or integration" --cov=event_store --cov-report=term-missing
+
+test:cloud-backend:
+  stage: test
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+      variables:
+        POSTGRES_USER: oebb
+        POSTGRES_PASSWORD: oebb
+        POSTGRES_DB: oebb
+  variables:
+    DATABASE_URL: postgresql+asyncpg://oebb:oebb@postgres:5432/oebb
+  script:
+    - pip install -e shared/
+    - pip install -e "cloud-backend/[dev]"
+    - cd cloud-backend && python -m pytest tests/unit/ --cov=cloud_backend --cov-report=term-missing
+
+# ── Build ──────────────────────────────────────────────────────────────────────
+
+build:event-store:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - docker build -f event-store/Dockerfile -t oebb/event-store:$CI_COMMIT_SHORT_SHA .
+  only:
+    - master
+
+build:cloud-backend:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - docker build -f cloud-backend/Dockerfile -t oebb/cloud-backend:$CI_COMMIT_SHORT_SHA .
+  only:
+    - master

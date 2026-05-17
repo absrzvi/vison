@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Generator
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..database import get_connection, get_events_page
+from ..database import get_connection, get_journey
 from ..exceptions import JourneyNotFoundError
-from ..models import EventPage, JourneyListItem
+from ..models import JourneyMeta
 
-router = APIRouter(prefix="/journeys")
+router = APIRouter(prefix="/api/v1/journeys")
 
 
-def _get_db() -> sqlite3.Connection:
+def _get_db() -> Generator[sqlite3.Connection, None, None]:
     conn = get_connection()
     try:
         yield conn
@@ -19,31 +20,16 @@ def _get_db() -> sqlite3.Connection:
         conn.close()
 
 
-@router.get("", response_model=list[JourneyListItem])
-def list_journeys(conn: sqlite3.Connection = Depends(_get_db)) -> list[JourneyListItem]:
-    rows = conn.execute(
-        """
-        SELECT journey_id, vehicle_id,
-               COUNT(*) AS event_count,
-               MIN(timestamp) AS first_seen,
-               MAX(timestamp) AS last_seen
-        FROM events
-        GROUP BY journey_id, vehicle_id
-        ORDER BY first_seen DESC
-        """  # noqa: S608
-    ).fetchall()
-    return [JourneyListItem(**dict(r)) for r in rows]
-
-
-@router.get("/{journey_id}/events", response_model=EventPage)
-def journey_events(
+@router.get("/{journey_id}", response_model=JourneyMeta)
+def get_journey_meta(
     journey_id: str,
     conn: sqlite3.Connection = Depends(_get_db),
-) -> EventPage:
+) -> JourneyMeta:
     try:
-        rows = get_events_page(conn, journey_id=journey_id)
+        row = get_journey(conn, journey_id)
     except JourneyNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    from oebb_shared.events.envelope import EventModel
-    items = [EventModel(**r) for r in rows]
-    return EventPage(items=items, next_cursor=None)
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "JOURNEY_NOT_FOUND", "detail": str(exc), "recoverable": False},
+        ) from exc
+    return JourneyMeta(**row)

@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: oebb
+      POSTGRES_PASSWORD: oebb
+      POSTGRES_DB: oebb
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oebb -d oebb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  event-store:
+    build:
+      context: .
+      dockerfile: event-store/Dockerfile
+    environment:
+      DB_PATH: /data/events.db
+      CURSOR_PAGE_SIZE: "100"
+    ports:
+      - "8001:8001"
+    volumes:
+      - event_store_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cloud-backend:
+    build:
+      context: .
+      dockerfile: cloud-backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://oebb:oebb@postgres:5432/oebb
+      API_KEY: dev-insecure-key
+      LOG_LEVEL: INFO
+    ports:
+      - "8002:8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8002/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  event_store_data:

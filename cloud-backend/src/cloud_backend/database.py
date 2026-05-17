@@ -1,32 +1,54 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import AsyncGenerator
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+import structlog
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
-from .config import settings
+from .config import get_settings
 
-engine = create_engine(settings.database_url, pool_pre_ping=True)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+log = structlog.get_logger()
 
-
-class Base(DeclarativeBase):
-    pass
+_engine: AsyncEngine | None = None
+_session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
-def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
+def get_engine() -> AsyncEngine:
+    global _engine
+    if _engine is None:
+        settings = get_settings()
+        _engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+    return _engine
+
+
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = async_sessionmaker(
+            bind=get_engine(),
+            expire_on_commit=False,
+        )
+    return _session_factory
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    factory = get_session_factory()
+    async with factory() as session:
+        yield session
+
+
+async def check_connection() -> bool:
+    from sqlalchemy import text
+
     try:
-        yield db
-    finally:
-        db.close()
-
-
-def check_connection() -> bool:
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
+        async with get_session_factory()() as session:
+            await session.execute(text("SELECT 1"))
         return True
     except Exception:
+        log.warning("db_connection_check_failed")
         return False

@@ -1,0 +1,36 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^(shared|event-store|cloud-backend)/
+      - id: ruff-format
+        files: ^(shared|event-store|cloud-backend)/
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        args: [--strict]
+        files: ^(shared|event-store|cloud-backend)/src/
+        additional_dependencies:
+          - pydantic>=2.7
+          - pydantic-settings>=2.2
+          - fastapi>=0.111
+          - structlog>=24.1
+          - sqlalchemy[asyncio]>=2.0
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.8
+    hooks:
+      - id: bandit
+        args: [-ll]
+        files: ^(shared|event-store|cloud-backend)/src/
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: [--baseline, .secrets.baseline]
+        exclude: ^(\.env\.example|.*\.lock)$

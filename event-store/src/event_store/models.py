@@ -1,15 +1,23 @@
 from __future__ import annotations
 
-from typing import Any
-
-from pydantic import BaseModel, Field
-
 from oebb_shared.events.envelope import EventModel
+from pydantic import BaseModel, Field
 
 
 class EventPage(BaseModel):
     items: list[EventModel]
     next_cursor: str | None = None  # event_id of last item, None if no more pages
+
+
+class JourneyMeta(BaseModel):
+    journey_id: str
+    vehicle_id: str
+    trip_number: str
+    route_name: str | None = None
+    origin: str | None = None
+    destination: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
 
 
 class JourneyListItem(BaseModel):
@@ -29,8 +37,10 @@ class IngestResponse(BaseModel):
     duplicate_ids: list[str] = Field(default_factory=list)
 
 
-class HealthResponse(BaseModel):
+class HealthLiveResponse(BaseModel):
     status: str = "ok"
-    db_path: str
-    event_count: int
-    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class HealthReadyResponse(BaseModel):
+    status: str = "ok"
+    db_connected: bool = True

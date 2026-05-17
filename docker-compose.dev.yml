@@ -1,0 +1,16 @@
+services:
+  event-store:
+    volumes:
+      - ./event-store/src:/app/src
+      - ./shared/src:/app/shared_src
+    environment:
+      DB_PATH: /data/events-dev.db
+    command: ["uvicorn", "event_store.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+
+  cloud-backend:
+    volumes:
+      - ./cloud-backend/src:/app/src
+      - ./shared/src:/app/shared_src
+    environment:
+      LOG_LEVEL: DEBUG
+    command: ["uvicorn", "cloud_backend.main:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]

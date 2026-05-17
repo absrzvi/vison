@@ -1,8 +1,8 @@
 """ADR-4 / AC11: cursor-based pagination returns (items, next_cursor)."""
 import pytest
+from oebb_shared.events.envelope import EventModel
 
 from event_store.models import EventPage
-from oebb_shared.events.envelope import EventModel
 
 
 @pytest.mark.unit

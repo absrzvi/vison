@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     db_path: str = "/data/events.db"
     log_level: str = "INFO"
-    host: str = "0.0.0.0"  # noqa: S104
+    host: str = "0.0.0.0"
     port: int = 8001
     cursor_page_size: int = 100
 

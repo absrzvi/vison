@@ -5,12 +5,16 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+import structlog
+
 from .config import settings
 from .exceptions import JourneyNotFoundError, UnsupportedSchemaVersionError
 
+log = structlog.get_logger()
+
 SUPPORTED_SCHEMA_VERSIONS: frozenset[int] = frozenset({1})
 
-_SCHEMA_FILE = Path(__file__).parent.parent.parent / "schema.sql"
+_SCHEMA_FILE = Path(__file__).parent / "schema.sql"
 
 
 def get_connection(db_path: str | None = None) -> sqlite3.Connection:
@@ -27,20 +31,43 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def insert_event(conn: sqlite3.Connection, event: dict[str, Any]) -> None:
+def insert_event(conn: sqlite3.Connection, event: dict[str, Any]) -> bool:
+    """Insert event. Returns True if inserted, False if duplicate (idempotent)."""
     version = event.get("schema_version", 1)
     if version not in SUPPORTED_SCHEMA_VERSIONS:
+        log.warning("schema_version_unsupported", schema_version=version, recoverable=True)
         raise UnsupportedSchemaVersionError(version)
-    conn.execute(
+    cursor = conn.execute(
         """
         INSERT OR IGNORE INTO events
-            (event_id, journey_id, vehicle_id, timestamp, event_type, severity, source, schema_version, payload)
+            (event_id, journey_id, vehicle_id, timestamp, event_type,
+             severity, source, schema_version, payload)
         VALUES
-            (:event_id, :journey_id, :vehicle_id, :timestamp, :event_type, :severity, :source, :schema_version, :payload)
+            (:event_id, :journey_id, :vehicle_id, :timestamp, :event_type,
+             :severity, :source, :schema_version, :payload)
         """,
         {**event, "payload": json.dumps(event.get("payload", {}))},
     )
     conn.commit()
+    inserted = cursor.rowcount > 0
+    if inserted:
+        log.info("event_stored", event_id=event.get("event_id"), journey_id=event.get("journey_id"))
+    else:
+        log.info("event_duplicate", event_id=event.get("event_id"))
+    return inserted
+
+
+def get_journey(conn: sqlite3.Connection, journey_id: str) -> dict[str, Any]:
+    """Return journey metadata or raise JourneyNotFoundError."""
+    row = conn.execute(
+        "SELECT journey_id, vehicle_id, trip_number, route_name, "
+        "origin, destination, start_time, end_time "
+        "FROM journeys WHERE journey_id = ?",
+        (journey_id,),
+    ).fetchone()
+    if row is None:
+        raise JourneyNotFoundError(journey_id)
+    return dict(row)
 
 
 def get_events_page(
@@ -53,7 +80,6 @@ def get_events_page(
     page_size = limit or settings.cursor_page_size
 
     if journey_id is not None:
-        # Validate journey exists first
         row = conn.execute(
             "SELECT 1 FROM events WHERE journey_id = ? LIMIT 1", (journey_id,)
         ).fetchone()
@@ -85,23 +111,26 @@ def get_events_page(
           {journey_clause}
         ORDER BY timestamp ASC, event_id ASC
         LIMIT ?
-        """,  # noqa: S608
+        """,
         [*params, page_size],
     ).fetchall()
 
-    return [
-        {**dict(r), "payload": json.loads(r["payload"])} for r in rows
-    ]
+    return [{**dict(r), "payload": json.loads(r["payload"])} for r in rows]
 
 
 def get_sync_cursor(conn: sqlite3.Connection) -> str:
-    row = conn.execute("SELECT last_event_id FROM sync_cursor WHERE id = 1").fetchone()
-    return str(row["last_event_id"]) if row else ""
+    row = conn.execute(
+        "SELECT last_synced_event_id FROM sync_state WHERE id = 1"
+    ).fetchone()
+    if row is None or row["last_synced_event_id"] is None:
+        return ""
+    return str(row["last_synced_event_id"])
 
 
 def advance_sync_cursor(conn: sqlite3.Connection, last_event_id: str, updated_at: str) -> None:
     conn.execute(
-        "UPDATE sync_cursor SET last_event_id = ?, updated_at = ? WHERE id = 1",
+        "UPDATE sync_state SET last_synced_event_id = ?, last_sync_at = ? WHERE id = 1",
         (last_event_id, updated_at),
     )
     conn.commit()
+    log.info("sync_cursor_advanced", last_event_id=last_event_id)

@@ -1,20 +1,37 @@
 from __future__ import annotations
 
-from fastapi import WebSocket
+import json
 
+import structlog
+from fastapi import WebSocket, WebSocketDisconnect
 from oebb_shared.ws.subscription import SubscriptionRequest
+
+log = structlog.get_logger()
 
 
 async def websocket_stub(websocket: WebSocket) -> None:
-    """Skeleton WebSocket handler — full fan-out implemented in Story 1-3."""
+    """Skeleton WebSocket handler — parses SubscriptionRequest and stays open.
+
+    Full event fan-out implemented in Story E1-S6.
+    """
     await websocket.accept()
-    raw = await websocket.receive_json()
-    _sub = SubscriptionRequest(
-        event_types=raw.get("event_types", []),
-        min_severity=raw.get("min_severity", "info"),
-        coach_ids=raw.get("coach_ids"),
-        reconnect_replay_depth=raw.get("reconnect_replay_depth", 50),
-    )
-    # Acknowledge subscription; real fan-out loop deferred to Story 1-3
-    await websocket.send_json({"status": "subscribed", "replay_depth": _sub.reconnect_replay_depth})
-    await websocket.close()
+    try:
+        raw = await websocket.receive_text()
+        data = json.loads(raw)
+        sub = SubscriptionRequest(
+            event_types=data.get("event_types", []),
+            min_severity=data.get("min_severity", "info"),
+            coach_ids=data.get("coach_ids"),
+            reconnect_replay_depth=data.get("reconnect_replay_depth", 50),
+        )
+        log.info("ws_subscribed", event_types=sub.event_types, min_severity=sub.min_severity)
+        await websocket.send_text(
+            json.dumps({"status": "subscribed", "filter": data})
+        )
+        # Hold connection open — no event delivery in this story
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        log.info("ws_disconnected")
+    except Exception:
+        pass
