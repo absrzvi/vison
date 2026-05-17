@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .types import EventType
+
+_JOURNEY_ID_RE = re.compile(r"^[^_]+_[^_]+_\d{8}$")
 
 
 def _utc_now() -> str:
@@ -31,8 +34,12 @@ class Event:
     schema_version: int = 1
 
 
-class EventModel(BaseModel):
-    """Pydantic variant for FastAPI request/response body validation."""
+class EventEnvelope(BaseModel):
+    """Canonical Pydantic model for all event payloads.
+
+    journey_id must follow the pattern {vehicle_id}_{trip_number}_{YYYYMMDD}.
+    Unrecognised event_type values raise ValidationError — no silent coercion.
+    """
 
     event_id: str = Field(default_factory=_new_uuid)
     journey_id: str
@@ -46,5 +53,17 @@ class EventModel(BaseModel):
 
     model_config = {"use_enum_values": True}
 
+    @field_validator("journey_id")
+    @classmethod
+    def _validate_journey_id(cls, v: str) -> str:
+        if not _JOURNEY_ID_RE.match(v):
+            raise ValueError(
+                f"journey_id must match {{vehicle_id}}_{{trip_number}}_{{YYYYMMDD}}, got: {v!r}"
+            )
+        return v
+
+
+# Backwards-compatible alias used by E1-S1 event-store code
+EventModel = EventEnvelope
 
 SUPPORTED_SCHEMA_VERSIONS: frozenset[int] = frozenset({1})
