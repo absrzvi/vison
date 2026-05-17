@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(ls *)",
+      "Bash(dir *)",
+      "Bash(pwd)",
+      "Bash(mkdir *)",
+      "Bash(docker ps*)",
+      "Bash(docker logs*)",
+      "Bash(docker compose*)",
+      "Bash(python *)",
+      "Bash(pip *)",
+      "Bash(npm *)",
+      "Bash(node *)"
+    ]
+  }
+}
