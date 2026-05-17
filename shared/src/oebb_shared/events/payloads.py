@@ -6,21 +6,39 @@ Optional fields (e.g. confidence) are excluded from serialisation when not set.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, model_serializer
+from pydantic import BaseModel, Field, model_serializer
 
 from .types import EventType
 
 
 class _BasePayload(BaseModel):
-    model_config = {"populate_by_name": True}
+    model_config = {"populate_by_name": True, "extra": "forbid"}
 
 
-def _drop_none_confidence(data: dict[str, Any]) -> dict[str, Any]:
-    """Remove 'confidence' key when its value is None."""
-    if data.get("confidence") is None:
-        data.pop("confidence", None)
+# Reusable annotated types
+_ConfidenceScore = Annotated[float, Field(ge=0.0, le=1.0)]
+_NonNegFloat = Annotated[float, Field(ge=0.0)]
+_NonNegInt = Annotated[int, Field(ge=0)]
+_NonEmptyStr = Annotated[str, Field(min_length=1)]
+
+
+class BoundingBox(BaseModel):
+    """Pixel-space bounding box. All coordinates are non-negative integers."""
+
+    model_config = {"extra": "forbid"}
+
+    x: _NonNegInt
+    y: _NonNegInt
+    w: _NonNegInt
+    h: _NonNegInt
+
+
+def _drop_none(data: dict[str, Any], key: str) -> dict[str, Any]:
+    """Return a new dict with `key` removed when its value is None."""
+    if data.get(key) is None:
+        return {k: v for k, v in data.items() if k != key}
     return data
 
 
@@ -32,30 +50,30 @@ def _drop_none_confidence(data: dict[str, Any]) -> dict[str, Any]:
 class OccupancyUpdatePayload(_BasePayload):
     """OCCUPANCY_UPDATE — source: inference, ~1 Hz per car."""
 
-    car_id: str
+    car_id: _NonEmptyStr
     zone: str | None = None
-    occupancy_count: int
-    occupancy_pct: float
-    capacity: int
-    confidence: float | None = None
-    service_tier: str
+    occupancy_count: _NonNegInt
+    occupancy_pct: Annotated[float, Field(ge=0.0, le=1.0)]
+    capacity: Annotated[int, Field(ge=1)]
+    confidence: _ConfidenceScore | None = None
+    service_tier: _NonEmptyStr
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
-        return _drop_none_confidence(handler(self))
+        return _drop_none(handler(self), "confidence")
 
 
 class OccupancyThresholdCrossedPayload(_BasePayload):
     """OCCUPANCY_THRESHOLD_CROSSED — fired when pct crosses configured threshold."""
 
-    car_id: str
+    car_id: _NonEmptyStr
     zone: str | None = None
-    threshold_pct: float
+    threshold_pct: Annotated[float, Field(ge=0.0, le=1.0)]
     direction: Literal["rising", "falling"]
-    occupancy_pct: float
-    occupancy_count: int
-    capacity: int
-    service_tier: str
+    occupancy_pct: Annotated[float, Field(ge=0.0, le=1.0)]
+    occupancy_count: _NonNegInt
+    capacity: Annotated[int, Field(ge=1)]
+    service_tier: _NonEmptyStr
 
 
 # ---------------------------------------------------------------------------
@@ -66,28 +84,25 @@ class OccupancyThresholdCrossedPayload(_BasePayload):
 class AlertRaisedPayload(_BasePayload):
     """ALERT_RAISED — source: fusion. alert_id pairs with ALERT_RESOLVED."""
 
-    alert_id: str
-    alert_code: str
-    car_id: str
+    alert_id: _NonEmptyStr
+    alert_code: _NonEmptyStr
+    car_id: _NonEmptyStr
     zone: str | None = None
-    description: str
-    auto_resolve_after_s: int | None = None
+    description: _NonEmptyStr
+    auto_resolve_after_s: _NonNegInt | None = None
     priority: Literal["escalated", "normal"] | None = None
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
-        d: dict[str, Any] = handler(self)
-        if d.get("priority") is None:
-            d.pop("priority", None)
-        return d
+        return _drop_none(handler(self), "priority")
 
 
 class AlertResolvedPayload(_BasePayload):
     """ALERT_RESOLVED — alert_id must match a prior ALERT_RAISED."""
 
-    alert_id: str
-    alert_code: str
-    car_id: str
+    alert_id: _NonEmptyStr
+    alert_code: _NonEmptyStr
+    car_id: _NonEmptyStr
     zone: str | None = None
     resolve_reason: Literal["manual", "auto", "condition_cleared"]
 
@@ -100,26 +115,26 @@ class AlertResolvedPayload(_BasePayload):
 class VestibuleCongestionPayload(_BasePayload):
     """VESTIBULE_CONGESTION — fired when congestion score crosses threshold."""
 
-    car_id: str
-    vestibule_id: str
-    congestion_score: float
-    person_count: int
-    dwell_time_avg_s: float
-    threshold_score: float
+    car_id: _NonEmptyStr
+    vestibule_id: _NonEmptyStr
+    congestion_score: Annotated[float, Field(ge=0.0, le=1.0)]
+    person_count: _NonNegInt
+    dwell_time_avg_s: _NonNegFloat
+    threshold_score: Annotated[float, Field(ge=0.0, le=1.0)]
 
 
 class LuggageRackSaturationPayload(_BasePayload):
     """LUGGAGE_RACK_SATURATION — fired once per saturation event."""
 
-    car_id: str
-    rack_id: str
-    fill_pct: float
-    item_count: int
-    confidence: float | None = None
+    car_id: _NonEmptyStr
+    rack_id: _NonEmptyStr
+    fill_pct: Annotated[float, Field(ge=0.0, le=1.0)]
+    item_count: _NonNegInt
+    confidence: _ConfidenceScore | None = None
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
-        return _drop_none_confidence(handler(self))
+        return _drop_none(handler(self), "confidence")
 
 
 # ---------------------------------------------------------------------------
@@ -130,33 +145,33 @@ class LuggageRackSaturationPayload(_BasePayload):
 class UnattendedBagPayload(_BasePayload):
     """UNATTENDED_BAG — dwell_s is elapsed time since owner last detected near bag."""
 
-    car_id: str
+    car_id: _NonEmptyStr
     zone: str | None = None
-    track_id: str
-    dwell_s: float
-    bbox: dict[str, int]
-    camera_id: str
-    confidence: float | None = None
+    track_id: _NonEmptyStr
+    dwell_s: _NonNegFloat
+    bbox: BoundingBox
+    camera_id: _NonEmptyStr
+    confidence: _ConfidenceScore | None = None
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
-        return _drop_none_confidence(handler(self))
+        return _drop_none(handler(self), "confidence")
 
 
 class DoorObstructionPayload(_BasePayload):
     """DOOR_OBSTRUCTION — clearance triggers ALERT_RESOLVED."""
 
-    car_id: str
-    door_id: str
+    car_id: _NonEmptyStr
+    door_id: _NonEmptyStr
     obstruction_type: Literal["person", "object", "unknown"]
-    track_id: str
-    camera_id: str
-    confidence: float | None = None
+    track_id: _NonEmptyStr
+    camera_id: _NonEmptyStr
+    confidence: _ConfidenceScore | None = None
     door_state: Literal["open", "closing", "closed"]
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
-        return _drop_none_confidence(handler(self))
+        return _drop_none(handler(self), "confidence")
 
 
 # ---------------------------------------------------------------------------
@@ -169,27 +184,27 @@ AssistanceType = Literal["wheelchair", "pram", "crutches", "visual_impairment", 
 class AccessibilityDetectedPayload(_BasePayload):
     """ACCESSIBILITY_DETECTED — triggers downstream ramp/staff workflow."""
 
-    car_id: str
+    car_id: _NonEmptyStr
     zone: str | None = None
-    track_id: str
-    assistance_type: list[AssistanceType]
-    camera_id: str
-    confidence: float | None = None
-    near_door_id: str
+    track_id: _NonEmptyStr
+    assistance_type: Annotated[list[AssistanceType], Field(min_length=1)]
+    camera_id: _NonEmptyStr
+    confidence: _ConfidenceScore | None = None
+    near_door_id: _NonEmptyStr
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
-        return _drop_none_confidence(handler(self))
+        return _drop_none(handler(self), "confidence")
 
 
 class RampDeployedPayload(_BasePayload):
     """RAMP_DEPLOYED — emitted after ACCESSIBILITY_DETECTED + ramp actuation confirmed."""
 
-    car_id: str
-    door_id: str
-    triggered_by_track_id: str
+    car_id: _NonEmptyStr
+    door_id: _NonEmptyStr
+    triggered_by_track_id: _NonEmptyStr
     deployed_by: Literal["auto", "manual"]
-    station_id: str
+    station_id: _NonEmptyStr
 
 
 # ---------------------------------------------------------------------------
@@ -202,22 +217,22 @@ AlarmType = Literal["emergency_brake", "fire", "passenger_call", "intrusion", "o
 class AlarmActivePayload(_BasePayload):
     """ALARM_ACTIVE — alarm_id pairs with ALARM_CLEARED."""
 
-    alarm_id: str
+    alarm_id: _NonEmptyStr
     alarm_type: AlarmType
-    car_id: str
+    car_id: _NonEmptyStr
     zone: str | None = None
-    hardware_code: str
+    hardware_code: _NonEmptyStr
     triggered_by: Literal["passenger", "automatic", "unknown"]
 
 
 class AlarmClearedPayload(_BasePayload):
     """ALARM_CLEARED — alarm_id must match a prior ALARM_ACTIVE."""
 
-    alarm_id: str
+    alarm_id: _NonEmptyStr
     alarm_type: AlarmType
-    car_id: str
+    car_id: _NonEmptyStr
     cleared_by: Literal["crew", "automatic", "unknown"]
-    duration_s: float
+    duration_s: _NonNegFloat
 
 
 # ---------------------------------------------------------------------------
@@ -228,23 +243,23 @@ class AlarmClearedPayload(_BasePayload):
 class JourneyStartedPayload(_BasePayload):
     """JOURNEY_STARTED — emitted once on departure."""
 
-    trip_number: str
-    origin_station_id: str
-    scheduled_departure: str
-    actual_departure: str
-    consist: list[str]
-    service_class: str
+    trip_number: _NonEmptyStr
+    origin_station_id: _NonEmptyStr
+    scheduled_departure: _NonEmptyStr
+    actual_departure: _NonEmptyStr
+    consist: Annotated[list[_NonEmptyStr], Field(min_length=1)]
+    service_class: _NonEmptyStr
 
 
 class JourneyEndedPayload(_BasePayload):
     """JOURNEY_ENDED — journey_id in envelope must match JOURNEY_STARTED."""
 
-    trip_number: str
-    destination_station_id: str
-    scheduled_arrival: str
-    actual_arrival: str
-    total_duration_s: float
-    peak_occupancy_pct: float
+    trip_number: _NonEmptyStr
+    destination_station_id: _NonEmptyStr
+    scheduled_arrival: _NonEmptyStr
+    actual_arrival: _NonEmptyStr
+    total_duration_s: _NonNegFloat
+    peak_occupancy_pct: Annotated[float, Field(ge=0.0, le=1.0)]
 
 
 # ---------------------------------------------------------------------------
@@ -257,23 +272,23 @@ DegradationType = Literal["offline", "low_fps", "blur", "occlusion", "night_fail
 class CameraDegradedPayload(_BasePayload):
     """CAMERA_DEGRADED — must pair with CAMERA_RECOVERED."""
 
-    camera_id: str
-    car_id: str
+    camera_id: _NonEmptyStr
+    car_id: _NonEmptyStr
     degradation_type: DegradationType
-    fps_actual: float
-    fps_expected: float
-    quality_score: float
-    affected_zones: list[str]
+    fps_actual: _NonNegFloat
+    fps_expected: _NonNegFloat
+    quality_score: Annotated[float, Field(ge=0.0, le=1.0)]
+    affected_zones: Annotated[list[str], Field(min_length=1)]
 
 
 class CameraRecoveredPayload(_BasePayload):
     """CAMERA_RECOVERED — camera_id must match a prior CAMERA_DEGRADED."""
 
-    camera_id: str
-    car_id: str
-    downtime_s: float
-    fps_actual: float
-    quality_score: float
+    camera_id: _NonEmptyStr
+    car_id: _NonEmptyStr
+    downtime_s: _NonNegFloat
+    fps_actual: _NonNegFloat
+    quality_score: Annotated[float, Field(ge=0.0, le=1.0)]
 
 
 SyncType = Literal["ntp", "config", "firmware"]
@@ -283,11 +298,11 @@ class SyncCompletedPayload(_BasePayload):
     """SYNC_COMPLETED — emitted after successful clock/config sync cycle."""
 
     sync_type: SyncType
-    nodes_synced: int
-    nodes_failed: int
-    max_skew_ms: float
+    nodes_synced: _NonNegInt
+    nodes_failed: _NonNegInt
+    max_skew_ms: _NonNegFloat
     skew_by_node: dict[str, float]
-    sync_server: str
+    sync_server: _NonEmptyStr
 
 
 # ---------------------------------------------------------------------------

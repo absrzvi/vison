@@ -3,7 +3,7 @@
 **Epic:** 1 — Foundation & Shared Infrastructure
 **Story:** 2
 **Story Key:** 1-2-event-envelope-pydantic-models
-**Status:** review
+**Status:** done
 **Date Created:** 2026-05-17
 
 ---
@@ -92,9 +92,38 @@ _Empty_
 
 ---
 
+## Review Findings
+
+### Patch (all applied)
+
+- [x] `re.match` → `re.fullmatch` on journey_id — trailing newline bypass
+- [x] journey_id calendar date validation — `\d{8}` now checked via `datetime.strptime`
+- [x] `timestamp` field validator — ISO-8601 UTC Z required
+- [x] `event_id` field validator — UUID v4 format enforced
+- [x] `schema_version` validator against `SUPPORTED_SCHEMA_VERSIONS`
+- [x] `EventEnvelope.payload` validated against `PAYLOAD_MODELS` when non-empty
+- [x] `extra="forbid"` on `EventEnvelope` and `_BasePayload`
+- [x] `_utc_now()` now emits microsecond precision (prevents same-second deduplication collision)
+- [x] `confidence` fields: `ge=0.0, le=1.0` across all 5 payload models
+- [x] `occupancy_count`, `capacity`, numeric counts: `ge=0` / `ge=1`
+- [x] `occupancy_pct`, `fill_pct`, `congestion_score`, `threshold_score`: `ge=0, le=1`
+- [x] `min_length=1` on all required `str` fields and key list fields
+- [x] `bbox` → typed `BoundingBox(x,y,w,h)` model
+- [x] `_drop_none_confidence` → `_drop_none(data, key)` (non-mutating, generic)
+- [x] `AlertRaisedPayload._serialize` uses shared `_drop_none` helper
+- [x] `SUPPORTED_SCHEMA_VERSIONS` and `BoundingBox` added to `__all__`
+- [x] 15 new edge-case tests added (constraints, fullmatch, extra fields, JSON serialisation)
+
+### Deferred
+
+- [x] [Defer] `Event` dataclass vs `EventEnvelope` — two competing representations; kept for E1-S1 backwards compat, revisit when event-store migrates to Pydantic end-to-end
+
+---
+
 ## Change Log
 
 | Date | Change |
 |------|--------|
 | 2026-05-17 | Story created |
 | 2026-05-17 | Implementation complete — all ACs satisfied, status → review |
+| 2026-05-17 | Code review — 17 patches applied, status → done |

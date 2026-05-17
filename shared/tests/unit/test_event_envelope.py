@@ -9,6 +9,7 @@ from oebb_shared.events import (
     PAYLOAD_MODELS,
     EventEnvelope,
     EventType,
+    BoundingBox,
     OccupancyUpdatePayload,
     AccessibilityDetectedPayload,
     AlertRaisedPayload,
@@ -419,3 +420,159 @@ def test_occupancy_threshold_crossed_payload() -> None:
         service_tier="standard",
     )
     assert p.direction == "rising"
+
+
+# ---------------------------------------------------------------------------
+# Constraint edge cases (added in code review)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_envelope_timestamp_must_have_z_suffix() -> None:
+    with pytest.raises(ValidationError, match="timestamp"):
+        _make_envelope(timestamp="2026-05-17T10:00:00")  # no Z
+
+
+@pytest.mark.unit
+def test_envelope_timestamp_naive_datetime_rejected() -> None:
+    with pytest.raises(ValidationError, match="timestamp"):
+        _make_envelope(timestamp="2026-05-17 10:00:00Z")  # space separator
+
+
+@pytest.mark.unit
+def test_envelope_event_id_must_be_uuid_v4() -> None:
+    with pytest.raises(ValidationError, match="event_id"):
+        _make_envelope(event_id="not-a-uuid")
+
+
+@pytest.mark.unit
+def test_envelope_schema_version_unsupported_raises() -> None:
+    with pytest.raises(ValidationError, match="schema_version"):
+        _make_envelope(schema_version=99)
+
+
+@pytest.mark.unit
+def test_envelope_journey_id_trailing_newline_rejected() -> None:
+    with pytest.raises(ValidationError, match="journey_id"):
+        _make_envelope(journey_id="R5001C-031_RJ-0847_20260516\n")
+
+
+@pytest.mark.unit
+def test_envelope_journey_id_invalid_date_rejected() -> None:
+    with pytest.raises(ValidationError, match="journey_id"):
+        _make_envelope(journey_id="R5001C-031_RJ-0847_20261399")
+
+
+@pytest.mark.unit
+def test_envelope_extra_field_forbidden() -> None:
+    with pytest.raises(ValidationError):
+        EventEnvelope(**{**_VALID_ENVELOPE_DATA, "unexpected_field": "oops"})  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_envelope_payload_validated_against_registry() -> None:
+    with pytest.raises(ValidationError):
+        _make_envelope(
+            event_type="OCCUPANCY_UPDATE",
+            payload={"car_id": "car-1"},  # missing required fields
+        )
+
+
+@pytest.mark.unit
+def test_occupancy_negative_count_rejected() -> None:
+    with pytest.raises(ValidationError):
+        OccupancyUpdatePayload(
+            car_id="car-1",
+            occupancy_count=-1,
+            occupancy_pct=0.5,
+            capacity=200,
+            service_tier="standard",
+        )
+
+
+@pytest.mark.unit
+def test_confidence_out_of_range_rejected() -> None:
+    with pytest.raises(ValidationError):
+        OccupancyUpdatePayload(
+            car_id="car-1",
+            occupancy_count=100,
+            occupancy_pct=0.5,
+            capacity=200,
+            confidence=1.5,
+            service_tier="standard",
+        )
+
+
+@pytest.mark.unit
+def test_occupancy_pct_out_of_range_rejected() -> None:
+    with pytest.raises(ValidationError):
+        OccupancyUpdatePayload(
+            car_id="car-1",
+            occupancy_count=100,
+            occupancy_pct=1.5,
+            capacity=200,
+            service_tier="standard",
+        )
+
+
+@pytest.mark.unit
+def test_empty_car_id_rejected() -> None:
+    with pytest.raises(ValidationError):
+        OccupancyUpdatePayload(
+            car_id="",
+            occupancy_count=100,
+            occupancy_pct=0.5,
+            capacity=200,
+            service_tier="standard",
+        )
+
+
+@pytest.mark.unit
+def test_bbox_missing_required_key_rejected() -> None:
+    with pytest.raises(ValidationError):
+        UnattendedBagPayload(
+            car_id="car-3",
+            track_id="bag-001",
+            dwell_s=60.0,
+            bbox={"x": 10, "y": 20},  # missing w, h
+            camera_id="cam-3-01",
+        )
+
+
+@pytest.mark.unit
+def test_accessibility_empty_assistance_type_rejected() -> None:
+    with pytest.raises(ValidationError):
+        AccessibilityDetectedPayload(
+            car_id="car-2",
+            track_id="person-001",
+            assistance_type=[],  # must have at least one
+            camera_id="cam-2-01",
+            near_door_id="car-2-door-R-1",
+        )
+
+
+@pytest.mark.unit
+def test_payload_extra_field_rejected() -> None:
+    with pytest.raises(ValidationError):
+        OccupancyUpdatePayload(
+            car_id="car-1",
+            occupancy_count=100,
+            occupancy_pct=0.5,
+            capacity=200,
+            service_tier="standard",
+            typo_field="oops",
+        )
+
+
+@pytest.mark.unit
+def test_confidence_omitted_in_json_serialisation() -> None:
+    p = OccupancyUpdatePayload(
+        car_id="car-1",
+        occupancy_count=100,
+        occupancy_pct=0.5,
+        capacity=200,
+        service_tier="standard",
+    )
+    import json
+    parsed = json.loads(p.model_dump_json())
+    assert "confidence" not in parsed

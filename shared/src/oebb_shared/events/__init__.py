@@ -1,6 +1,7 @@
 from .envelope import Event, EventEnvelope, EventModel, SUPPORTED_SCHEMA_VERSIONS
 from .payloads import (
     PAYLOAD_MODELS,
+    BoundingBox,
     AccessibilityDetectedPayload,
     AlarmActivePayload,
     AlarmClearedPayload,
@@ -28,6 +29,7 @@ __all__ = [
     "EventType",
     "PAYLOAD_MODELS",
     "SUPPORTED_SCHEMA_VERSIONS",
+    "BoundingBox",
     "OccupancyUpdatePayload",
     "OccupancyThresholdCrossedPayload",
     "AlertRaisedPayload",
