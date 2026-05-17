@@ -1,38 +1,45 @@
-# Container Map — Decided 2026-05-17
+# Container Map — Phase 1 (Control Centre Only)
 
-## Onboard (SYS2 — Edge)
+Decided: 2026-05-17. Supersedes earlier draft that included conductor-app, diagnostics-llm, ws-gateway.
 
-| Container | Port | Purpose | Status |
-|---|---|---|---|
-| `inference` | — | Hailo-8 model serving — occupancy, object detection, event generation | Build |
-| `vlan-pollers` | — | APC (VLAN 8), Stadler SNMP (VLAN 7), PIS/FIS (VLAN 3), reservations (VLAN 6) | Build |
-| `event-store` | 8001 | FastAPI + SQLite WAL. Edge truth store. WebSocket for conductor-app + driver-display | Built (Story 1-1) |
-| `sync-agent` | — | Cursor-based batch push edge→cloud, 15s cadence | Build |
-| `conductor-app` | 80 | Static SPA + local API, served via edge nginx. Must work offline (tunnels) | Build |
+## Phase 1 — Active Build
 
-## Landside (Cloud)
+```
+[edge-ingest] → [event-store] → [sync-agent] → [cloud-backend] → [control-centre-dashboard]
+```
 
-| Container | Port | Purpose | Status |
-|---|---|---|---|
-| `cloud-backend` | 8002 | FastAPI + PostgreSQL. Fleet overview endpoint + SSE alerts endpoint | Shell built (Story 1-1) — needs fleet/SSE |
-| `control-centre-dashboard` | 80 | React SPA. REST poll 15s (ambient) + SSE alert stream | Build |
-| `diagnostics-llm` | — | LLM fault explanation. Resource-heavy, landside only (Hailo-8 is vision-only) | Build |
+| Container | Where | Port | Purpose | Status |
+|---|---|---|---|---|
+| `edge-ingest` | Onboard (SYS2) | — | Hailo-8 inference (occupancy, object detection) + VLAN pollers (APC VLAN 8, Stadler SNMP VLAN 7, PIS/FIS VLAN 3, reservations VLAN 6). Generates events, writes to event-store. | Build |
+| `event-store` | Onboard (SYS2) | 8001 | FastAPI + SQLite WAL. Edge truth store + cursor sync point. | Built (Story 1-1) |
+| `sync-agent` | Onboard (SYS2) | — | Cursor-based batch push edge→cloud. 15s cadence; flush immediately on alert-class events. | Build |
+| `cloud-backend` | Landside | 8002 | FastAPI + PostgreSQL. `GET /api/v1/fleet/overview` (REST poll) + `GET /api/v1/alerts/stream` (SSE). | Shell built (Story 1-1) — needs fleet/SSE endpoints |
+| `control-centre-dashboard` | Landside | 80 | React SPA. 15s REST poll (ambient fleet view) + SSE (alert push). | Build |
 
 ## Transport Channels
 
 | Channel | Protocol | Endpoint | Cadence |
 |---|---|---|---|
-| Edge → conductor-app / driver-display | WebSocket | `event-store:8001/ws` | Real-time, offline-tolerant |
-| Edge → cloud | REST batch (sync-agent push) | `cloud-backend POST /api/v1/events` | 15s |
+| Edge → cloud | REST batch (sync-agent push) | `POST /api/v1/events` on cloud-backend | 15s; immediate flush on ALARM_ACTIVE / ALERT_RAISED |
 | cloud-backend → Control Centre (ambient) | REST poll | `GET /api/v1/fleet/overview` | 15s pull |
 | cloud-backend → Control Centre (alerts) | SSE | `GET /api/v1/alerts/stream` | Push on ALARM_ACTIVE / ALERT_RAISED / ALERT_RESOLVED |
 
-## Explicitly Removed
+## Deferred to Phase 2
 
-- **ws-gateway** — not needed. Edge WebSocket is built into event-store. No cloud WebSocket required; REST + SSE sufficient for Control Centre operator workflow.
+| Container | Reason |
+|---|---|
+| `conductor-app` | Onboard SPA — Phase 2 scope |
+| Edge WebSocket (`event-store:8001/ws`) | Stubbed in event-store; activate in Phase 2 for conductor-app |
 
-## Open Story Notes (not blockers)
+## Explicitly Out of Scope (Later Roadmap)
 
-1. **SSE reconnect policy** — control-centre frontend: exponential backoff + max retry cap. Add to dashboard story.
-2. **sync-agent failure mode** — define SQLite WAL retention window + cursor behaviour if cloud-backend unreachable >N minutes. Add to sync-agent story.
-3. **conductor-app offline boundary** — explicit mapping of local-only vs cloud-proxied API calls before conductor-app story is scoped.
+| Container | Reason |
+|---|---|
+| `diagnostics-llm` | Later roadmap stage |
+| `ws-gateway` | Not needed — REST + SSE sufficient for Control Centre; no cloud WebSocket required |
+
+## Open Story Notes
+
+1. **sync-agent alert flush** — flush immediately on alert-class events, not just on 15s tick. Add to sync-agent story.
+2. **SSE reconnect policy** — control-centre frontend: exponential backoff + max retry cap. Add to dashboard story.
+3. **sync-agent failure mode** — SQLite WAL retention window + cursor behaviour if cloud-backend unreachable >N minutes. Add to sync-agent story.
