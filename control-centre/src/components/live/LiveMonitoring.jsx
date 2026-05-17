@@ -62,6 +62,7 @@ export function LiveMonitoring() {
         if (type === 'escalations') {
           setFeedTypeFilter('all');
           setFeedStatusFilter('unacknowledged');
+          document.getElementById('unified-feed-root')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else if (type === 'incidents') {
           setFeedTypeFilter('ai');
           setFeedStatusFilter(null);

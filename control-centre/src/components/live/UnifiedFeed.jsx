@@ -42,7 +42,7 @@ export function UnifiedFeed({ escalations, activeFilter, onFilterChange, statusF
     return true;
   });
 
-  const toggleStatus = (key) => setStatusFilter(prev => prev === key ? null : key);
+  const toggleStatus = (key) => setStatusFilter(statusFilter === key ? null : key);
   const toggleSev    = (key) => setSevFilter(prev => prev === key ? null : key);
 
   // Derive modal escalation from live props so status stays current
@@ -50,7 +50,7 @@ export function UnifiedFeed({ escalations, activeFilter, onFilterChange, statusF
 
   return (
     <>
-    <div className="unified-feed">
+    <div id="unified-feed-root" className="unified-feed">
       <div className="unified-feed__header">
         <span className="unified-feed__title">
           Escalations
