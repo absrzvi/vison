@@ -60,3 +60,59 @@ Transform tasks into verifiable goals. For multi-step tasks state a brief plan w
 - BMAD skills handle PM/design process. Superpowers skills handle implementation workflow.
 - Context7 MCP: use for any library/framework/API documentation lookup — even well-known ones.
 - Brainstorm before any creative or feature work. Write plans before touching code on multi-step tasks.
+
+---
+
+## Design Methodology — BMAD + WDS
+
+Two frameworks work together. BMAD handles the full lifecycle; WDS (Whiteport Design Studio) is a design-only expansion module that sits between the PRD and implementation phases.
+
+### Agents
+
+| Agent | Framework | Role | Phases |
+|---|---|---|---|
+| **Saga** | WDS | Business & Product Analyst | 0–2: Alignment, Product Brief, Trigger Mapping |
+| **Freya** | WDS | UX/UI Designer | 3–8: Scenarios, UX Design, Dev, Assets, Design System, Evolution |
+| BMAD agents | BMAD | PM, Architect, Dev, Tech Writer | PRD, architecture, epics, stories, implementation |
+
+**Freya replaces Sally.** Always use Freya for UX/design topics — Sally is BMAD's generic UX persona; Freya is the WDS specialist with the full methodology.
+
+### Full Workflow Sequence
+
+```
+BMAD:  brainstorming → product-brief → PRD → architecture → epics & stories
+                                                    ↓
+WDS:        Saga: Phase 0 Alignment
+                  Phase 1 Product Brief  →  A-Product-Brief/
+                  Phase 2 Trigger Mapping →  B-Trigger-Map/
+            Freya: Phase 3 UX Scenarios  →  C-UX-Scenarios/
+                   Phase 4 UX Design     →  D-UX-Design/
+                   Phase 5 Agentic Dev   →  G-Product-Development/
+                   Phase 6 Asset Gen
+                   Phase 7 Design System →  D-Design-System/
+                   Phase 8 Product Evol.
+                                                    ↓
+BMAD:  dev-story → quick-dev → implementation → qa → sprint review
+```
+
+### WDS Phase Map
+
+| Phase | Agent | Focus | Output folder |
+|---|---|---|---|
+| 0. Alignment & Signoff | Saga | Stakeholder alignment | — |
+| 1. Product Brief | Saga | Vision, positioning, success criteria | `A-Product-Brief/` |
+| 2. Trigger Mapping | Saga | User psychology, business goals | `B-Trigger-Map/` |
+| 3. UX Scenarios | Freya | 8-question scenario dialog | `C-UX-Scenarios/` |
+| 4. UX Design | Freya | Page specs, interactions, design log | `D-UX-Design/` |
+| 5. Agentic Development | Freya | AI-assisted dev & testing | `G-Product-Development/` |
+| 6. Asset Generation | Freya | Visual and text assets | — |
+| 7. Design System | Freya | Component library, design tokens | `D-Design-System/` |
+| 8. Product Evolution | Freya | Brownfield improvements | — |
+
+### Design output location
+
+All WDS artifacts live in `_bmad-output/design-artifacts/`. Design tools: Figma (via MCP), Excalidraw (wireframes), Penpot, Stitch.
+
+### Current project position
+
+Architecture complete (BMAD Steps 1–8). Now in WDS Phase 4–5 — Freya owns Control Centre Dashboard UX Design before any coding starts.
