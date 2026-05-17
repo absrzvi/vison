@@ -169,7 +169,9 @@ Train intent packets (MQTT)
 
 ### 4.3 Hermes Agent Runtime
 
-Hermes Agent is the landside orchestration engine. Key capabilities used:
+Hermes Agent is the landside orchestration engine. **Version pinning required** — pin to a specific release tag in CI; add a compatibility test that asserts all 6 Rail MCP tools are discoverable and schema-valid after any Hermes upgrade. The Hermes Function Calling standard is Nous Research's own spec, not IETF — breakage at the contract layer is a real upgrade risk.
+
+Key capabilities used:
 
 | Hermes capability | How we use it |
 |---|---|
@@ -196,6 +198,19 @@ The one component Nomad builds from scratch is a **Rail MCP Server** — an HTTP
 All tools return structured JSON. Pydantic models enforce schema at the MCP server boundary — Hermes never receives untyped responses.
 
 **Implementation note (Amelia):** Build the MCP server for one provider (Azure OpenAI) first. Hermes' built-in provider routing handles additional providers without MCP server changes — no premature abstraction needed on our side.
+
+### 4.5 Hermes Pre-Build Spike Tests
+
+These four unknowns must be resolved via spikes before the Hermes integration is committed to the implementation plan. Each spike produces a pass/fail result and a documented finding.
+
+| Spike | Test | Pass criteria |
+|---|---|---|
+| **MCP startup behaviour** | Start Hermes with Rail MCP Server intentionally down | Hard error surfaced in logs — silent failure is a showstopper |
+| **SQLite concurrency** | 10 concurrent fleet manager sessions against one Hermes SQLite instance | No lock contention errors; session isolation confirmed |
+| **Skills async model** | Trigger `schedule_report` skill, measure loop block time | Skill dispatches async — UI does not stall >500ms |
+| **BYOK 429 handling** | Inject HTTP 429s from a mock provider mid-session | Error surfaces to fleet manager UI; no silent degradation |
+
+Spike 1 (MCP startup) and Spike 4 (429 handling) are highest priority — either failure forces an architectural rethink. Run those first.
 
 ### 4.5 BYOK Model Gateway
 
@@ -304,8 +319,17 @@ Schema drift without version bump = silent production break across potentially 5
 
 ## 8. Open Questions
 
+### Product & UX
 1. Who at ÖBB owns the decision to graduate "experimental" chat to "standard"? Named sponsor + success metric needed before launch.
-2. Which provider does ÖBB have an active enterprise agreement with? Determines which provider to configure in Hermes first.
-3. What is the depot API schema — is there an existing endpoint or does it need to be built?
-4. Scheduled reports: push (email/Slack) or pull (dashboard panel only) for v1? Hermes supports both via its integrations (Telegram, Discord, email) — delivery channel is a config choice not an architecture choice.
-5. Hermes Agent version pinning strategy — MIT licence, fast-moving repo (95k stars, active). Need to pin to a release tag and define an upgrade review cadence.
+2. Scheduled reports: push (email/Slack) or pull (dashboard panel only) for v1? Hermes supports both natively — delivery channel is a config choice, not an architecture choice.
+
+### Technical
+3. Which provider does ÖBB have an active enterprise agreement with? Determines which provider to configure in Hermes first.
+4. What is the depot API schema — existing endpoint or greenfield? Determines scope of the Rail MCP Server `get_depot_schedule` tool.
+5. Hermes Agent version pinning strategy — pin to a release tag, define upgrade review cadence. Who owns the Hermes upgrade decision on the Nomad side?
+6. SQLite WAL mode — is Hermes handling this for concurrent sessions, or does Nomad need to configure it? Resolved by Spike 2.
+
+### Commercial (for ÖBB sales conversation)
+7. Does ÖBB's IT security function need to audit Hermes before production sign-off? Estimate timeline impact.
+8. Who at ÖBB approves third-party runtime dependencies — IT, legal, or procurement?
+9. Value framing: the €400/train pitch must position around **rail specialisation and integration** (the Rail MCP Server, intent packet schema, HAFAS/depot hydration), not the Hermes runtime itself. ÖBB will perceive Hermes as "free software" — Nomad's moat is the domain layer on top of it.
