@@ -3,7 +3,7 @@
 **Epic:** 2 — Control Centre Dashboard
 **Story:** E2-S1
 **Story Key:** 2-1-real-ws-client
-**Status:** review
+**Status:** done
 **Date Created:** 2026-05-17
 
 ---
@@ -118,6 +118,33 @@ No vitest/jest configured. ACs are verified via dev server visual inspection and
 
 ---
 
+### Review Findings
+
+**Decision-Needed (resolved)**
+- [x] [Review][Decision] `FLEET_STATE` snapshot discards in-flight `ESCALATION_NEW` items — resolved: leave as-is, FLEET_STATE is mock-only; added comment in FleetContext
+- [x] [Review][Decision] `SubscriptionRequest` missing `type` field — resolved: leave as-is, E1-S7 server already works with this shape
+
+**Patches (applied)**
+- [x] [Review][Patch] `_seenIds` Set grows without bound — capped at 1000 with FIFO eviction queue [RealWebSocketClient.js]
+- [x] [Review][Patch] `new WebSocket(undefined/empty)` throws uncaught SyntaxError — guard added in `_open()` [RealWebSocketClient.js]
+- [x] [Review][Patch] `timestamp` not validated before `new Date()` — extracted `formatTimestamp()` returning `'--:--'` on invalid [RealWebSocketClient.js]
+- [x] [Review][Patch] `event_id === 0` (falsy) skips dedup — changed to `!= null` check [RealWebSocketClient.js]
+- [x] [Review][Patch] `_attempt` not reset on `disconnect()` — added `this._attempt = 0` in disconnect [RealWebSocketClient.js]
+- [x] [Review][Patch] `_open()` doesn't close previous `_ws` before overwriting — close + null previous socket [RealWebSocketClient.js]
+- [x] [Review][Patch] `FLEET_STATE` handler sets `wsStatus/connected` directly bypassing `onStatusChange` — removed direct setters [FleetContext.jsx]
+- [x] [Review][Patch] `MockWebSocketClient` gets no `onStatusChange` — wired through, calls connected/disconnected [mock/websocket.js]
+- [x] [Review][Patch] `payload` accessed without null guard — `safePayload = payload ?? {}` [RealWebSocketClient.js]
+- [x] [Review][Patch] `_ws.onerror` not nulled in `disconnect()` — cleared alongside `onclose` [RealWebSocketClient.js]
+
+**Deferred**
+- [x] [Review][Defer] `acknowledge`/`resolve` stubs `console.warn` in production — explicitly scoped to E2-S5
+- [x] [Review][Defer] No banner feedback after max retries — UX enhancement, out of this story's scope
+- [x] [Review][Defer] `TRAIN_UPDATE` doesn't set `connected` — pre-existing design; status driven by callbacks
+- [x] [Review][Defer] Luggage escalations targeted by `ESCALATION_UPDATED` — pre-existing mock design
+
+---
+
 ## Change Log
 
 - 2026-05-17: E2-S1 implemented — RealWebSocketClient + FleetContext env branching + AppShell reconnect banner
+- 2026-05-17: E2-S1 review patches — seenIds cap, WS guard, timestamp validation, dedup fix, disconnect reset, payload null-guard, status bypass fix, MockWSClient onStatusChange

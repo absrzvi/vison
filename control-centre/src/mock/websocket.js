@@ -257,8 +257,9 @@ function generateKPIs(fleet) {
 }
 
 export class MockWebSocketClient {
-  constructor(onMessage) {
+  constructor(onMessage, onStatusChange) {
     this.onMessage = onMessage;
+    this.onStatusChange = onStatusChange ?? (() => {});
     this.interval = null;
     this.connected = false;
   }
@@ -266,12 +267,18 @@ export class MockWebSocketClient {
   connect() {
     this.connected = true;
     // Simulate ~300ms network handshake before first payload
-    setTimeout(() => { if (this.connected) this._emit(); }, 300);
+    setTimeout(() => {
+      if (this.connected) {
+        this.onStatusChange('connected');
+        this._emit();
+      }
+    }, 300);
   }
 
   disconnect() {
     this.connected = false;
     if (this.interval) clearInterval(this.interval);
+    this.onStatusChange('disconnected');
   }
 
   _emit() {

@@ -13,7 +13,7 @@ function makeClient(onMessage, onStatusChange) {
     return new RealWebSocketClient(onMessage, onStatusChange);
   }
   console.warn('[FleetContext] VITE_WS_URL not set — falling back to MockWebSocketClient');
-  return new MockWebSocketClient(onMessage);
+  return new MockWebSocketClient(onMessage, onStatusChange);
 }
 
 export function FleetProvider({ children }) {
@@ -33,12 +33,11 @@ export function FleetProvider({ children }) {
 
     const onMessage = (msg) => {
       if (msg.type === 'FLEET_STATE') {
+        // FLEET_STATE is mock-only; real WS delivers individual events.
         setFleet(msg.payload.fleet);
         setKpis(msg.payload.kpis);
         setEscalations([...msg.payload.escalations, ...LUGGAGE_ESCALATIONS]);
         setLastUpdate(new Date());
-        setConnected(true);
-        setWsStatus('connected');
       }
       if (msg.type === 'ESCALATION_UPDATED') {
         setEscalations(prev =>

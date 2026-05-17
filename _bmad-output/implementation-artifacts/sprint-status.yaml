@@ -54,7 +54,7 @@ development_status:
 
   # ── Epic 2: Control Centre Dashboard — Live Operations ──
   epic-2: in-progress
-  2-1-real-ws-client: review
+  2-1-real-ws-client: done
   2-2-kpi-strip-filter-tap-wiring: backlog
   2-3-fleet-list-passenger-count-sort: backlog
   2-4-unified-feed-new-items-chip: backlog

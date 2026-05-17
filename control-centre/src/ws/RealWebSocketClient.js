@@ -30,11 +30,18 @@ const SEVERITY_MAP = { info: 'green', warning: 'amber', critical: 'red' };
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_MAX_MS = 30000;
 const JITTER_FACTOR = 0.2;
+const SEEN_IDS_MAX = 1000;
 
 function backoffDelay(attempt) {
   const base = Math.min(BACKOFF_BASE_MS * 2 ** attempt, BACKOFF_MAX_MS);
   const jitter = base * JITTER_FACTOR * (Math.random() * 2 - 1);
-  return Math.round(base + jitter);
+  return Math.max(0, Math.round(base + jitter));
+}
+
+function formatTimestamp(ts) {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return '--:--';
+  return d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
 }
 
 export class RealWebSocketClient {
@@ -46,7 +53,9 @@ export class RealWebSocketClient {
     this._active = false;
     this._retryTimer = null;
     // Track seen event_ids to prevent duplicate delivery on replay overlap.
+    // Capped at SEEN_IDS_MAX entries — oldest evicted first.
     this._seenIds = new Set();
+    this._seenIdsQueue = [];
   }
 
   connect() {
@@ -56,9 +65,11 @@ export class RealWebSocketClient {
 
   disconnect() {
     this._active = false;
+    this._attempt = 0;
     clearTimeout(this._retryTimer);
     if (this._ws) {
       this._ws.onclose = null;
+      this._ws.onerror = null;
       this._ws.close();
       this._ws = null;
     }
@@ -76,6 +87,19 @@ export class RealWebSocketClient {
 
   _open() {
     const wsUrl = import.meta.env.VITE_WS_URL;
+    if (!wsUrl) {
+      this._onStatusChange('disconnected');
+      return;
+    }
+
+    // Close any lingering socket before opening a new one.
+    if (this._ws) {
+      this._ws.onclose = null;
+      this._ws.onerror = null;
+      this._ws.close();
+      this._ws = null;
+    }
+
     this._ws = new WebSocket(wsUrl);
 
     this._ws.onopen = () => {
@@ -108,14 +132,25 @@ export class RealWebSocketClient {
     };
   }
 
+  _trackSeenId(id) {
+    if (this._seenIds.has(id)) return true;
+    this._seenIds.add(id);
+    this._seenIdsQueue.push(id);
+    if (this._seenIdsQueue.length > SEEN_IDS_MAX) {
+      this._seenIds.delete(this._seenIdsQueue.shift());
+    }
+    return false;
+  }
+
   _handleEnvelope(envelope) {
     const { event_id, vehicle_id, event_type, severity, payload, timestamp } = envelope;
 
     // Dedup — replayed events on reconnect may overlap with already-seen events.
-    if (event_id && this._seenIds.has(event_id)) return;
-    if (event_id) this._seenIds.add(event_id);
+    // event_id === 0 is falsy but valid; use null/undefined check instead.
+    if (event_id != null && this._trackSeenId(event_id)) return;
 
     const frontendSeverity = SEVERITY_MAP[severity] ?? 'green';
+    const safePayload = payload ?? {};
 
     if (event_type === 'OCCUPANCY_UPDATE') {
       this._onMessage({
@@ -123,8 +158,8 @@ export class RealWebSocketClient {
         payload: {
           trainId: vehicle_id,
           severity: frontendSeverity,
-          coachId: payload.coach_id ?? null,
-          occupancy: payload.occupancy ?? null,
+          coachId: safePayload.coach_id ?? null,
+          occupancy: safePayload.occupancy ?? null,
           timestamp,
         },
       });
@@ -138,12 +173,12 @@ export class RealWebSocketClient {
           id: event_id,
           type: 'ai',
           trainId: vehicle_id,
-          coachId: payload.coach_id ?? null,
-          title: payload.title ?? event_type,
-          detail: payload.detail ?? '',
+          coachId: safePayload.coach_id ?? null,
+          title: safePayload.title ?? event_type,
+          detail: safePayload.detail ?? '',
           severity: frontendSeverity,
           status: 'unacknowledged',
-          timestamp: new Date(timestamp).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: formatTimestamp(timestamp),
           stillFrame: null,
         },
       });
@@ -157,12 +192,12 @@ export class RealWebSocketClient {
           id: event_id,
           type: 'occupancy',
           trainId: vehicle_id,
-          coachId: payload.coach_id ?? null,
-          title: `Overcrowding — Coach ${payload.coach_id ?? '?'}`,
-          detail: payload.detail ?? `Occupancy exceeded threshold.`,
+          coachId: safePayload.coach_id ?? null,
+          title: `Overcrowding — Coach ${safePayload.coach_id ?? '?'}`,
+          detail: safePayload.detail ?? 'Occupancy exceeded threshold.',
           severity: frontendSeverity,
           status: 'unacknowledged',
-          timestamp: new Date(timestamp).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: formatTimestamp(timestamp),
           stillFrame: null,
         },
       });
