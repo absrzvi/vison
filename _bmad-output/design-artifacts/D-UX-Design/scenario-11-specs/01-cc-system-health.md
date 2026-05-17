@@ -410,6 +410,7 @@ Desktop only. Two-column layout when train detail panel is open (inline — no m
 - **App healthy count:** Counts only `status === 'green'` containers. Amber containers are degraded, not healthy.
 - **Maintenance App deep-link:** URL scheme TBC with Maintenance App team. Controlled by `MAINTENANCE_APP_ENABLED` flag (currently `false`).
 - **No remediation actions here:** This view is read-only + ticket-raising only. No restart buttons, no SNMP detail, no config changes.
+- **Health badge thresholds (resolved OQ7/OQ8):** Duration-based. `CCTV_AMBER_SEC = 120`, `CCTV_RED_SEC = 300`. Same constants apply to Applications (`APP_AMBER_SEC = 120`, `APP_RED_SEC = 300`). Degradation clock starts from the last healthy signal timestamp. Green = currently healthy or recovered within threshold. Amber = unhealthy 2–5 min. Red = unhealthy > 5 min.
 - **Staleness propagation is outbound:** This tab reads health status. The Live Monitoring tab reads the staleness flag emitted by `fusion` container — the two tabs are independent consumers of the same event-store data.
 
 ---
@@ -421,8 +422,8 @@ Desktop only. Two-column layout when train detail panel is open (inline — no m
 | 1 | What is the health poll interval for `rtsp-ingest` and `event-store` endpoints? | Determines how fresh the "Updated Xs ago" timestamp can be and when to trigger the stale state (currently: > 60s) | 🔴 Open |
 | 2 | Should the panel show CCTV detail even when all streams are healthy (all-green train tapped)? | Claudia may tap a green row to verify — empty "all healthy" panel vs. no panel on green rows | 🔴 Open |
 | 3 | Deep-link URL scheme for Maintenance App — format and auth handoff | `sh-panel-cta` cannot be implemented without this | 🔴 Open (Maintenance App team) |
-| 4 | Amber vs red threshold for CCTV streams — is amber "some streams down" or "degraded quality"? | Determines badge colour logic in `sh-badge-vlan` | 🔴 Open |
-| 5 | Amber vs red threshold for Applications — is amber "restarting" or "1–2 containers unhealthy"? | Determines badge colour logic in `sh-badge-containers` | 🔴 Open |
+| 4 | Amber vs red threshold for CCTV streams — is amber "some streams down" or "degraded quality"? | Determines badge colour logic in `sh-badge-vlan` | ✅ Resolved: **amber = degraded for ≥ 2 min, red = degraded for ≥ 5 min** (wall-clock duration since last healthy signal). Constants: `CCTV_AMBER_SEC = 120`, `CCTV_RED_SEC = 300`. |
+| 5 | Amber vs red threshold for Applications — is amber "restarting" or "1–2 containers unhealthy"? | Determines badge colour logic in `sh-badge-containers` | ✅ Resolved: **amber = unhealthy for ≥ 2 min, red = unhealthy for ≥ 5 min** (duration-based, same constants as CCTV). Constants: `APP_AMBER_SEC = 120`, `APP_RED_SEC = 300`. |
 
 ---
 

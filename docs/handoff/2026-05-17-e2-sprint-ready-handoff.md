@@ -74,12 +74,12 @@ Recommended E1 implementation order: **E1-S1 → E1-S2 → E1-S3 → E1-S6 → E
 | OQ1 | Pose estimation feasibility for seated/standing split | Coach drill-in columns | Hailo-8 / Nomad Digital |
 | OQ4 | Maintenance App deep-link URL + auth | System Health CTA (`MAINTENANCE_APP_ENABLED = false`) | Maintenance App team |
 | OQ5 | 7-day trend query key — by train number or route+timeslot? | Analytics trend accuracy | Nomad Digital backend |
-| OQ7 | CCTV stream amber vs red threshold | System Health badge logic | ÖBB / Nomad Digital |
-| OQ8 | Applications amber vs red threshold | System Health badge logic | ÖBB / Nomad Digital |
+| ~~OQ7~~ | ~~CCTV stream amber vs red threshold~~ | ~~System Health badge logic~~ | ✅ Resolved: amber ≥ 2 min (`CCTV_AMBER_SEC=120`), red ≥ 5 min (`CCTV_RED_SEC=300`) |
+| ~~OQ8~~ | ~~Applications amber vs red threshold~~ | ~~System Health badge logic~~ | ✅ Resolved: same duration thresholds — `APP_AMBER_SEC=120`, `APP_RED_SEC=300` |
 | OQ9 | Health poll interval for rtsp-ingest and event-store | "Updated Xs ago" freshness | Nomad Digital |
 | OQ10 | Dismissed exceptions: greyed vs hidden | Analytics exception list | ÖBB operations / Claudia |
 
-OQ7, OQ8, OQ9 should be resolved before E2-S9 (System Health) is implemented. The rest can wait.
+OQ9 should be resolved before E2-S9 (System Health) is implemented. OQ7 and OQ8 are resolved.
 
 ---
 
@@ -98,5 +98,5 @@ OQ7, OQ8, OQ9 should be resolved before E2-S9 (System Health) is implemented. Th
 ## Next Steps
 
 1. Start **E1 implementation** — E1-S1 is the unblocking root story
-2. Resolve OQ7, OQ8, OQ9 with Nomad Digital before E2-S9 sprint
+2. Resolve OQ9 (health poll interval) with Nomad Digital before E2-S9 sprint
 3. E2 sprint begins once E1-S1, S2, S3, S6, S7 are done
