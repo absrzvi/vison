@@ -12,7 +12,7 @@ function minsElapsed(timestamp) {
 }
 
 export function AppShell() {
-  const { escalations } = useFleetData();
+  const { escalations, wsStatus } = useFleetData();
   const navigate = useNavigate();
   const [tick, setTick] = useState(0);
 
@@ -61,6 +61,12 @@ export function AppShell() {
         <NavLink to="/dashboard/health"    className={({ isActive }) => `tab-bar__tab ${isActive ? 'tab-bar__tab--active' : ''}`}>System Health</NavLink>
         <NavLink to="/dashboard/analytics" className={({ isActive }) => `tab-bar__tab ${isActive ? 'tab-bar__tab--active' : ''}`}>Analytics</NavLink>
       </nav>
+
+      {wsStatus === 'reconnecting' && (
+        <div className="app-reconnecting-banner" role="status" aria-live="polite">
+          Reconnecting…
+        </div>
+      )}
 
       <main className="app-main">
         <Outlet />
