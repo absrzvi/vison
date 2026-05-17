@@ -59,7 +59,7 @@
   background: transparent;
   cursor: pointer;
   text-align: left;
-  transition: background 120ms ease, transform 300ms ease;
+  transition: background 120ms ease;
   width: 100%;
 }
 

@@ -59,7 +59,7 @@ export function FleetList({ trains, selectedTrainId, onSelect, sortBy, onSortCha
   const normal    = trains.filter(t => t.severity === 'green');
 
   const handleSortChange = (sort) => {
-    localStorage.setItem('fleet-sort-pref', sort);
+    try { localStorage.setItem('fleet-sort-pref', sort); } catch {}
     onSortChange(sort);
   };
 

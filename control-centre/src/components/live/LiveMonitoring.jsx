@@ -14,7 +14,15 @@ export function LiveMonitoring() {
   const location = useLocation();
   const navigate = useNavigate();
   const [selectedTrainId, setSelectedTrainId] = useState(location.state?.selectTrainId ?? null);
-  const [fleetSort, setFleetSort] = useState(() => localStorage.getItem('fleet-sort-pref') ?? 'passengers');
+  const VALID_SORTS = ['passengers', 'severity'];
+  const [fleetSort, setFleetSort] = useState(() => {
+    try {
+      const stored = localStorage.getItem('fleet-sort-pref');
+      return VALID_SORTS.includes(stored) ? stored : 'passengers';
+    } catch {
+      return 'passengers';
+    }
+  });
 
   useEffect(() => {
     if (location.state?.selectTrainId) {
@@ -29,7 +37,7 @@ export function LiveMonitoring() {
       const sorted = [...fleet].sort((a, b) =>
         sevOrder[a.severity] !== sevOrder[b.severity]
           ? sevOrder[a.severity] - sevOrder[b.severity]
-          : b.avgOccupancy - a.avgOccupancy
+          : totalPassengers(b) - totalPassengers(a)
       );
       setSelectedTrainId(sorted[0].id);
     }
@@ -40,7 +48,7 @@ export function LiveMonitoring() {
   const selectedTrain = fleet.find(t => t.id === selectedTrainId) ?? null;
   const isStale = lastUpdate && (Date.now() - lastUpdate.getTime()) > 60000;
 
-  const totalPassengers = (train) => train.coaches.reduce((s, c) => s + (c.headCount ?? 0), 0);
+  const totalPassengers = (train) => (train.coaches ?? []).reduce((s, c) => s + (isNaN(c.headCount) ? 0 : (c.headCount ?? 0)), 0);
 
   const sortedFleet = useMemo(() => {
     const sevOrder = { red: 0, amber: 1, green: 2 };

@@ -3,7 +3,7 @@
 **Epic:** 2 — Control Centre Dashboard — Live Operations  
 **Story:** 3  
 **Story Key:** 2-3-fleet-list-passenger-count-sort  
-**Status:** review  
+**Status:** done  
 **Date Created:** 2026-05-17  
 
 ---
@@ -77,6 +77,19 @@
 - `FleetList.css` — AC7 animation
 
 ### Debug Log
+
+### Review Findings
+
+- [x] [Review][Decision] AC7 — CSS `transform` transition is dead — stripped dead `transform` transition; AC7 animation accepted as not implemented (FLIP deferred)
+- [x] [Review][Decision] AC1 ambiguity — global passenger sort is correct intent; severity tiebreak satisfies AC2; dismissed
+- [x] [Review][Patch] `train.coaches` missing guard — fixed: `(train.coaches ?? [])` + NaN guard [LiveMonitoring.jsx]
+- [x] [Review][Patch] Stale `'occupancy'` in localStorage — fixed: allowlist validation + try/catch on init [LiveMonitoring.jsx]
+- [x] [Review][Patch] `localStorage` access SecurityError — fixed: try/catch on setItem [FleetList.jsx]
+- [x] [Review][Patch] Auto-select tiebreak used removed `avgOccupancy` — fixed: now uses `totalPassengers` [LiveMonitoring.jsx]
+- [x] [Review][Patch] `headCount: NaN` corrupts sort — fixed: `isNaN` guard in `totalPassengers` [LiveMonitoring.jsx]
+- [x] [Review][Defer] `showNormal` not reset when fleet empties then refills — minor UX glitch, pre-existing pattern [FleetList.jsx] — deferred, pre-existing
+- [x] [Review][Defer] No stable final tiebreak by `id` — depot trains with equal passengers/severity jitter on SSE updates [LiveMonitoring.jsx sortedFleet] — deferred, pre-existing
+- [x] [Review][Defer] Toggle button missing `aria-expanded` / `aria-controls` [FleetList.jsx fleet-list__normal-toggle] — deferred, pre-existing
 
 ### Completion Notes
 

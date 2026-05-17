@@ -38,6 +38,7 @@ generated: 2026-05-17
 last_updated: 2026-05-17
 project: oebb-agent
 # code-review 2026-05-17: story 2-2 → in-progress (1 patch finding: AC1 scroll-to-top)
+# code-review 2026-05-17: story 2-3 → done (5 patches applied)
 project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
@@ -57,7 +58,7 @@ development_status:
   epic-2: in-progress
   2-1-real-ws-client: done
   2-2-kpi-strip-filter-tap-wiring: done
-  2-3-fleet-list-passenger-count-sort: review
+  2-3-fleet-list-passenger-count-sort: done
   2-4-unified-feed-new-items-chip: backlog
   2-5-escalation-detail-acknowledge-resolve: backlog
   2-6-train-detail-event-store-alert: backlog
