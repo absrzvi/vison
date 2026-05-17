@@ -3,7 +3,7 @@
 **Epic:** 1 — Foundation & Shared Infrastructure
 **Story:** E1-S4
 **Story Key:** 1-4-sqlite-event-store
-**Status:** review
+**Status:** done
 **Date Created:** 2026-05-17
 
 ---
@@ -215,9 +215,30 @@ Existing tests that must continue to pass:
 
 ---
 
+### Review Findings
+
+- [x] [Review][Decision] #2 — 409 shape: accepted nested `{"detail": {...}}` FastAPI envelope as canonical; spec updated in-place; test already validates nested shape correctly
+- [x] [Review][Patch] #1 — `test_sigkill_no_data_loss` fixed: `_insert_journey()` helper added; called before inserting events [tests/integration/test_sync_cursor.py]
+- [x] [Review][Patch] #3 — `advance_sync_cursor` made a shim delegating to `advance_cursor`; canonical entry point is now `sync/cursor.py` [database.py:130]
+- [x] [Review][Patch] #4 — `conftest.py` assert replaced with regex matching actual `connect(":memory:")` calls only [tests/conftest.py:23]
+- [x] [Review][Patch] #5 — dismissed: FastAPI serialises via `by_alias=True` by default; `data` key is emitted correctly on the wire
+- [x] [Review][Patch] #8 — `test_events_route` fixture patches only `db_path` and `cursor_page_size` attributes; no longer replaces entire settings object [tests/unit/test_events_route.py:35]
+- [x] [Review][Patch] #10 — unused `EventModel` import removed from `routes/events.py` [routes/events.py:7]
+- [x] [Review][Patch] #12 — `_make_event` timestamp uses total-seconds offset; no rollover possible [tests/integration/test_sync_cursor.py:27]
+- [x] [Review][Defer] #6 — `next_cursor` off-by-one: non-null cursor on exact-limit last page [routes/events.py:62] — deferred, known pagination pattern; callers must handle empty follow-up
+- [x] [Review][Defer] #7 — `after_event_id` silently ignored when cursor event not found — restarts from page 0 [database.py:92] — deferred, cloud-backend re-sync is idempotent
+- [x] [Review][Defer] #9 — `insert_event` may double-serialise payload if upstream already JSON-encodes [database.py:49] — deferred, verify EventEnvelope.payload type
+- [x] [Review][Defer] #11 — `truncate_old_journeys` leaves orphan rows in `journeys` table [sync/cursor.py:29] — deferred, journeys table not written by ingest route; revisit when journeys endpoint added
+- [x] [Review][Defer] #13 — `INSERT OR IGNORE` swallows CHECK constraint violations silently [database.py:40] — deferred, Pydantic validates upstream; accept risk for now
+- [x] [Review][Defer] #14 — SIGKILL test uses `conn.close()` not true process crash — WAL durability not actually tested [tests/integration/test_sync_cursor.py:59] — deferred, true crash test requires subprocess; PoC scope
+- [x] [Review][Defer] #15 — `check_same_thread=False` without lock — lock-under-load risk [database.py:22] — deferred, single-worker PoC; revisit before production
+
+---
+
 ## Change Log
 
 | Date | Change |
 |------|--------|
 | 2026-05-17 | Story created via bmad-create-story with exhaustive artifact analysis |
 | 2026-05-17 | Implementation complete — 26/26 tests pass, mypy strict clean |
+| 2026-05-17 | Code review complete — 1 decision-needed, 7 patch, 7 deferred |

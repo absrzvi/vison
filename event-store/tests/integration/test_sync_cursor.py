@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from event_store.database import (
-    advance_sync_cursor,
     get_connection,
     get_events_page,
     get_sync_cursor,
@@ -19,12 +18,24 @@ from event_store.sync.cursor import advance_cursor, truncate_old_journeys
 _JOURNEY = "V001_RJ-0001_20260517"
 
 
+def _insert_journey(conn: sqlite3.Connection, journey_id: str = _JOURNEY) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO journeys (journey_id, vehicle_id, trip_number) VALUES (?, ?, ?)",
+        (journey_id, "V001", "RJ-0001"),
+    )
+    conn.commit()
+
+
 def _make_event(n: int, journey_id: str = _JOURNEY) -> dict:
+    # Use total seconds offset to avoid minute-rollover at n>=60
+    total_seconds = n
+    hh, rem = divmod(total_seconds, 3600)
+    mm, ss = divmod(rem, 60)
     return {
         "event_id": f"evt-{n:03d}",
         "journey_id": journey_id,
         "vehicle_id": "V001",
-        "timestamp": f"2026-05-17T10:{n // 60:02d}:{n % 60:02d}Z",
+        "timestamp": f"2026-05-17T{10 + hh:02d}:{mm:02d}:{ss:02d}Z",
         "event_type": "OCCUPANCY_UPDATE",
         "severity": "info",
         "source": "inference",
@@ -49,6 +60,7 @@ def test_sigkill_no_data_loss(tmp_path: Path) -> None:
     # Phase 1: insert 50 events and advance cursor
     conn1 = get_connection(db_file)
     init_db(conn1)
+    _insert_journey(conn1)
     events = [_make_event(i) for i in range(1, 51)]
     for ev in events:
         assert insert_event(conn1, ev) is True

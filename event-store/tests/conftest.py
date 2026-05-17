@@ -20,7 +20,11 @@ def pytest_collection_finish(session: object) -> None:
             content = Path(path).read_text(encoding="utf-8")
         except OSError:
             continue
-        assert ":memory:" not in content, (
-            f"{path}: forbidden ':memory:' SQLite path — use tmp_path per ADR-4. "
-            "WAL mode does not work with :memory: and will silently pass without WAL semantics."
-        )
+        import re
+        # Match only sqlite3.connect(":memory:") or get_connection(":memory:") calls,
+        # not comments or docstrings that mention the string for explanatory purposes.
+        if re.search(r"""(?:connect|get_connection)\s*\(\s*['"][^'"]*:memory:[^'"]*['"]\s*\)""", content):
+            raise AssertionError(
+                f"{path}: forbidden ':memory:' SQLite path — use tmp_path per ADR-4. "
+                "WAL mode does not work with :memory: and will silently pass without WAL semantics."
+            )

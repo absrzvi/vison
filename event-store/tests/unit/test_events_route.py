@@ -31,10 +31,9 @@ def client(tmp_path: Path) -> TestClient:
     init_db(conn)
     conn.close()
 
-    # Patch get_connection so every request opens the same test DB file
-    with patch("event_store.database.settings") as mock_settings:
-        mock_settings.db_path = db_file
-        mock_settings.cursor_page_size = 100
+    # Patch only the two attributes database.py reads — avoids MagicMock bleed on other fields
+    with patch("event_store.database.settings.db_path", db_file), \
+         patch("event_store.database.settings.cursor_page_size", 100):
         with TestClient(app, raise_server_exceptions=False) as c:
             yield c
 

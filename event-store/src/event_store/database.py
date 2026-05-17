@@ -128,9 +128,6 @@ def get_sync_cursor(conn: sqlite3.Connection) -> str:
 
 
 def advance_sync_cursor(conn: sqlite3.Connection, last_event_id: str, updated_at: str) -> None:
-    conn.execute(
-        "UPDATE sync_state SET last_synced_event_id = ?, last_sync_at = ? WHERE id = 1",
-        (last_event_id, updated_at),
-    )
-    conn.commit()
-    log.info("sync_cursor_advanced", last_event_id=last_event_id)
+    """Deprecated shim — use event_store.sync.cursor.advance_cursor instead."""
+    from .sync.cursor import advance_cursor  # avoid circular at module level
+    advance_cursor(conn, last_event_id)
