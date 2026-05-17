@@ -119,7 +119,7 @@ export function FleetProvider({ children }) {
       // Only apply if not already resolved by a concurrent WS update.
       setEscalations(prev =>
         prev.map(e =>
-          e.id === id && e.status === 'acknowledged'
+          e.id === id && e.status !== 'resolved'
             ? { ...e, status: 'resolved' }
             : e
         )

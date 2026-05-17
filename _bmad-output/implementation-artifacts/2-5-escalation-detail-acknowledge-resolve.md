@@ -83,6 +83,22 @@
 - [x] [Review][Patch] **`res.json()` throws on 204 No Content — false failure toast** [`src/api/escalations.js:18`] — guarded with `res.status === 204` check
 - [x] [Review][Patch] **Pending state not cancelled on unmount / escalation switch — stale toast on re-open** [`src/context/FleetContext.jsx:98-100`] — render-phase reset on escalation id change clears all state; TERMINAL_STATUSES guard prevents stale WS clear
 
+### Review Findings — Round 2 (2026-05-17)
+
+#### Patches
+- [x] [Review][Patch] **`submittedFromStatus` not cleared on error — form permanently stuck after cancel/reopen same escalation** [`src/components/live/EscalationDetail.jsx`] — clear `submittedFromStatus.current` in error path or on modal close
+- [x] [Review][Patch] **`disabled={isPending||!canSubmit}` makes validation messages unreachable — button never clickable with invalid form** [`src/components/live/EscalationDetail.jsx:257`] — remove `!canSubmit` from disabled; keep guard in `handleResolve`; messages trigger on click attempt
+- [x] [Review][Patch] **`resolve` optimistic guard `status==='acknowledged'` silently no-ops if local status already advanced** [`src/context/FleetContext.jsx:120`] — widen to `status !== 'resolved'`
+- [x] [Review][Patch] **`AbortSignal.timeout` unavailable in Node <17.3 / older Safari — breaks tests and some browsers** [`src/api/escalations.js:14`] — add feature detection fallback
+
+#### Deferred
+- [x] [Review][Defer] **`TERMINAL_STATUSES` hardcoded — breaks if backend adds `closed`/`expired` states** — PoC; revisit when backend status enum is locked
+- [x] [Review][Defer] **`setState` during render (prevEscId pattern) — StrictMode warnings** — pre-existing pattern
+- [x] [Review][Defer] **`ESCALATION_UPDATED` spread can null out `stillFrame`** — pre-existing, unrelated
+- [x] [Review][Defer] **Cancel handler doesn't reset `frameExpanded`** — low-impact cosmetic drift
+- [x] [Review][Defer] **Race: WS terminal tick before `submittedFromStatus` set → premature form clear** — sub-ms window on single JS thread; PoC acceptable
+- [x] [Review][Defer] **No request-in-flight de-dupe across multiple callers** — no multiple-caller path in current UI
+
 #### Deferred (pre-existing)
 - [x] [Review][Defer] **`computeElapsed` midnight wrapping produces wrong elapsed times** [`src/components/live/EscalationDetail.jsx:31-47`] — pre-existing, not touched in this story
 - [x] [Review][Defer] **`LUGGAGE_ESCALATIONS` re-appended on every FLEET_STATE — potential duplicates on reconnect** [`src/context/FleetContext.jsx:49`] — pre-existing mock pattern

@@ -3,6 +3,13 @@ const API_KEY  = import.meta.env.VITE_API_KEY  ?? '';
 
 const FETCH_TIMEOUT_MS = 10000;
 
+function _timeoutSignal(ms) {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), ms);
+  return ctrl.signal;
+}
+
 async function _post(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
@@ -11,7 +18,7 @@ async function _post(path, body) {
       'X-API-Key': API_KEY,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    signal: _timeoutSignal(FETCH_TIMEOUT_MS),
   });
   if (!res.ok) {
     const err = new Error(`API error ${res.status}`);

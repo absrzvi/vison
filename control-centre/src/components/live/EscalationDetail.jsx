@@ -76,7 +76,16 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
       setSelectedTags([]);
       setSubmitAttempted(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [escalation?.status]);
+
+  // P1 — if the action errored, the ref stays set and blocks future form-clears.
+  // Clear it whenever an error lands so the next successful attempt works correctly.
+  useEffect(() => {
+    if (actionError) {
+      submittedFromStatus.current = null;
+    }
+  }, [actionError]);
 
   const handleAcknowledge = () => {
     // Clear any stale error before re-trying (P8).
@@ -266,7 +275,7 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
                 <button
                   className="btn btn--primary"
                   onClick={handleResolve}
-                  disabled={isPending || !canSubmit}
+                  disabled={isPending}
                 >
                   {isPending ? 'Submitting…' : 'Submit Resolution'}
                 </button>
