@@ -1,24 +1,27 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
-from oebb_shared.events.envelope import SUPPORTED_SCHEMA_VERSIONS, EventModel
+from fastapi import APIRouter, Depends, HTTPException, Security
+from oebb_shared.events.envelope import SUPPORTED_SCHEMA_VERSIONS, EventEnvelope
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..api.auth import require_api_key
 from ..database import get_db
+from ..routes.alerts_sse import ALERT_EVENT_TYPES, publish_alert
 
 log = structlog.get_logger()
 
-router = APIRouter(prefix="/api/v1/events")
+router = APIRouter(prefix="/api/v1/events", dependencies=[Security(require_api_key)])
 
 
 class IngestRequest(BaseModel):
-    events: list[EventModel] = Field(min_length=1, max_length=500)
+    events: list[EventEnvelope] = Field(min_length=1, max_length=500)
 
 
 class IngestResponse(BaseModel):
@@ -33,13 +36,13 @@ async def ingest_events(
 ) -> IngestResponse:
     accepted = 0
     duplicates: list[str] = []
+
     for ev in body.events:
         if ev.schema_version not in SUPPORTED_SCHEMA_VERSIONS:
             log.warning(
                 "schema_version_unsupported",
                 schema_version=ev.schema_version,
                 event_id=ev.event_id,
-                recoverable=True,
             )
             raise HTTPException(
                 status_code=422,
@@ -49,26 +52,49 @@ async def ingest_events(
                     "recoverable": False,
                 },
             )
+
+        # source_timestamp defaults to envelope timestamp when not separately provided
+        source_ts = datetime.now(UTC)
+
         result: CursorResult[tuple[()]] = await db.execute(  # type: ignore[assignment]
             text("""
                 INSERT INTO events
-                    (event_id, journey_id, vehicle_id, timestamp, event_type,
-                     severity, source, schema_version, payload)
+                    (event_id, journey_id, event_type, severity, source,
+                     timestamp, source_timestamp, payload)
                 VALUES
-                    (:event_id, :journey_id, :vehicle_id, :timestamp, :event_type,
-                     :severity, :source, :schema_version, :payload)
-                ON CONFLICT (event_id) DO NOTHING
+                    (:event_id, :journey_id, :event_type, :severity, :source,
+                     :timestamp, :source_timestamp, :payload)
+                ON CONFLICT ON CONSTRAINT uq_events_journey_type_source_ts DO NOTHING
             """),
             {
-                **ev.model_dump(exclude={"payload"}),
+                "event_id": ev.event_id,
+                "journey_id": ev.journey_id,
+                "event_type": ev.event_type,
+                "severity": ev.severity,
+                "source": ev.source,
+                "timestamp": source_ts,
+                "source_timestamp": source_ts,
                 "payload": json.dumps(ev.payload),
             },
         )
+
         if result.rowcount == 0:
             duplicates.append(ev.event_id)
             log.info("event_duplicate", event_id=ev.event_id)
         else:
             accepted += 1
             log.info("event_stored", event_id=ev.event_id, journey_id=ev.journey_id)
+            # Fan-out alert-class events to SSE subscribers immediately
+            if ev.event_type in ALERT_EVENT_TYPES:
+                publish_alert({
+                    "event_id": ev.event_id,
+                    "event_type": ev.event_type,
+                    "severity": ev.severity,
+                    "journey_id": ev.journey_id,
+                    "vehicle_id": ev.vehicle_id,
+                    "timestamp": ev.timestamp,
+                    "payload": ev.payload,
+                })
+
     await db.commit()
     return IngestResponse(accepted=accepted, duplicate_ids=duplicates)
