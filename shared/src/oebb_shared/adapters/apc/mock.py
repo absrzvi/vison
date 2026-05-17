@@ -1,4 +1,4 @@
-from .base import APCAdapter, DoorState, OccupancyReading
+from .adapter import APCAdapter, DoorState, OccupancyReading
 
 _MOCK_OCCUPANCY: dict[str, OccupancyReading] = {
     "car-1": OccupancyReading(car_id="car-1", count=45, timestamp="2026-05-17T10:00:00Z"),
