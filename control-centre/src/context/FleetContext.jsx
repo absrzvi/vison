@@ -7,6 +7,9 @@ import { acknowledgeEscalation, resolveEscalation } from '../api/escalations';
 const LUGGAGE_ESCALATIONS = luggageEventsToEscalations(LUGGAGE_EVENTS);
 const OPERATOR_ID = import.meta.env.VITE_OPERATOR_ID ?? 'operator-unknown';
 
+// Statuses that represent a terminal WS truth — safe to clear pending action state.
+const TERMINAL_STATUSES = new Set(['acknowledged', 'resolved']);
+
 const FleetContext = createContext(null);
 
 function makeClient(onMessage, onStatusChange) {
@@ -53,13 +56,16 @@ export function FleetProvider({ children }) {
         setEscalations(prev =>
           prev.map(e => e.id === msg.payload.id ? { ...e, ...msg.payload } : e)
         );
-        // Clear any pending action state for this escalation (AC4 — WS tick clears stale state)
-        setEscalationActionState(prev => {
-          if (!(msg.payload.id in prev)) return prev;
-          const next = { ...prev };
-          delete next[msg.payload.id];
-          return next;
-        });
+        // Only clear pending action state when the WS tick carries a terminal status
+        // (AC4). Clearing on any field update would race with in-flight REST calls.
+        if (TERMINAL_STATUSES.has(msg.payload.status)) {
+          setEscalationActionState(prev => {
+            if (!(msg.payload.id in prev)) return prev;
+            const next = { ...prev };
+            delete next[msg.payload.id];
+            return next;
+          });
+        }
       }
       if (msg.type === 'ESCALATION_NEW') {
         setEscalations(prev => {
@@ -87,8 +93,14 @@ export function FleetProvider({ children }) {
     setEscalationActionState(prev => ({ ...prev, [id]: 'pending' }));
     try {
       await acknowledgeEscalation(id);
+      // Only apply optimistic update if escalation hasn't already moved past 'acknowledged'
+      // (guards against a WS 'resolved' arriving before this REST response).
       setEscalations(prev =>
-        prev.map(e => e.id === id ? { ...e, status: 'acknowledged' } : e)
+        prev.map(e =>
+          e.id === id && e.status === 'unacknowledged'
+            ? { ...e, status: 'acknowledged' }
+            : e
+        )
       );
       setEscalationActionState(prev => {
         const next = { ...prev };
@@ -104,8 +116,13 @@ export function FleetProvider({ children }) {
     setEscalationActionState(prev => ({ ...prev, [id]: 'pending' }));
     try {
       await resolveEscalation(id, outcome, actionTags, OPERATOR_ID);
+      // Only apply if not already resolved by a concurrent WS update.
       setEscalations(prev =>
-        prev.map(e => e.id === id ? { ...e, status: 'resolved' } : e)
+        prev.map(e =>
+          e.id === id && e.status === 'acknowledged'
+            ? { ...e, status: 'resolved' }
+            : e
+        )
       );
       setEscalationActionState(prev => {
         const next = { ...prev };

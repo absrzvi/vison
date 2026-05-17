@@ -60,25 +60,43 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
   const actionError = actionState instanceof Error ? actionState : null;
 
   const canSubmit = outcome.trim().length > 0 && selectedTags.length > 0;
+  const outcomeEmpty = submitAttempted && outcome.trim().length === 0;
+  const tagsEmpty = submitAttempted && selectedTags.length === 0;
+
+  // Clear form only after the context confirms success (escalation status changed).
+  // Track the status we submitted from so we know when the context has caught up.
+  const submittedFromStatus = useRef(null);
+  useEffect(() => {
+    if (!escalation || !submittedFromStatus.current) return;
+    if (escalation.status !== submittedFromStatus.current) {
+      // Status advanced — safe to clear the resolve form now.
+      submittedFromStatus.current = null;
+      setResolving(false);
+      setOutcome('');
+      setSelectedTags([]);
+      setSubmitAttempted(false);
+    }
+  }, [escalation?.status]);
 
   const handleAcknowledge = () => {
+    // Clear any stale error before re-trying (P8).
     onAcknowledge(escalation.id);
   };
 
   const handleResolve = () => {
     setSubmitAttempted(true);
     if (!canSubmit) return;
+    // Record the status we're resolving from; form clears when context confirms (P4).
+    submittedFromStatus.current = escalation.status;
     onResolve(escalation.id, outcome.trim(), selectedTags);
-    setResolving(false);
-    setOutcome('');
-    setSelectedTags([]);
-    setSubmitAttempted(false);
   };
 
-  // Reset form state when the selected escalation changes.
+  // Reset all form state when the selected escalation changes (P10 — also discards
+  // any pending stale state for the previous escalation's id).
   const prevEscId = useRef(escalation?.id);
   if (prevEscId.current !== escalation?.id) {
     prevEscId.current = escalation?.id;
+    submittedFromStatus.current = null;
     setResolving(false);
     setOutcome('');
     setSelectedTags([]);
@@ -202,7 +220,7 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
             </div>
           )}
 
-          {/* Error toast (AC3) */}
+          {/* Error toast — shown until next action attempt clears it (P8) */}
           {actionError && (
             <div className="esc-detail__error-toast" role="alert">
               Action failed — please try again
@@ -221,8 +239,8 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
                 maxLength={200}
                 rows={3}
               />
-              {/* AC5 inline validation */}
-              {submitAttempted && outcome.trim().length === 0 && (
+              {/* AC5 — outcome validation (P2/P3) */}
+              {outcomeEmpty && (
                 <p className="resolve-form__validation-msg">Outcome required</p>
               )}
               <div className="resolve-form__char-count">{outcome.length} / 200</div>
@@ -239,16 +257,20 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
                   </button>
                 ))}
               </div>
+              {/* P3 — tags validation */}
+              {tagsEmpty && (
+                <p className="resolve-form__validation-msg">Select at least one action</p>
+              )}
 
               <div className="resolve-form__actions">
                 <button
                   className="btn btn--primary"
                   onClick={handleResolve}
-                  disabled={isPending}
+                  disabled={isPending || !canSubmit}
                 >
                   {isPending ? 'Submitting…' : 'Submit Resolution'}
                 </button>
-                <button className="btn btn--ghost" onClick={() => { setResolving(false); setOutcome(''); setSelectedTags([]); setSubmitAttempted(false); }}>
+                <button className="btn btn--ghost" onClick={() => { setResolving(false); setOutcome(''); setSelectedTags([]); setSubmitAttempted(false); submittedFromStatus.current = null; }}>
                   Cancel
                 </button>
               </div>

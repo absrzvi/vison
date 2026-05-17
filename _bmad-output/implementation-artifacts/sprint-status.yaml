@@ -60,7 +60,7 @@ development_status:
   2-2-kpi-strip-filter-tap-wiring: done
   2-3-fleet-list-passenger-count-sort: done
   2-4-unified-feed-new-items-chip: done
-  2-5-escalation-detail-acknowledge-resolve: review
+  2-5-escalation-detail-acknowledge-resolve: done
   2-6-train-detail-event-store-alert: backlog
   2-7-loading-skeletons: backlog
   2-8-per-operator-configurable-alert-threshold: backlog

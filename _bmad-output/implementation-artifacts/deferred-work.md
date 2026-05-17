@@ -60,3 +60,15 @@
 - **`showNormal` not reset when fleet empties then refills** [FleetList.jsx] — minor UX glitch; toggle state persists through SSE reconnect cycles; low-impact for PoC
 - **No stable final tiebreak by `id`** [LiveMonitoring.jsx sortedFleet] — depot trains with equal passengers/severity jitter on SSE updates; add `a.id.localeCompare(b.id)` as last tiebreak when sort stability matters
 - **Toggle button missing `aria-expanded` / `aria-controls`** [FleetList.jsx fleet-list__normal-toggle] — accessibility gap; address in a dedicated a11y pass
+
+## Deferred from: code review of 2-5-escalation-detail-acknowledge-resolve (2026-05-17)
+
+- **`VITE_API_KEY` shipped in browser bundle** [escalations.js:2] — known PoC limitation; Keycloak evaluation in progress; ADR-6/7 OAuth2/OIDC upgrade covers this at fleet rollout
+- **`operator_id` is a static env var, not per-session** [FleetContext.jsx:8 `VITE_OPERATOR_ID`] — PoC approximation; real per-operator identity comes from Keycloak session at rollout
+- **`computeElapsed` midnight wrapping bug** [EscalationDetail.jsx:31-47] — pre-existing function; HH:MM timestamp without date context produces wrong elapsed across midnight; revisit when backend sends ISO timestamps
+- **`LUGGAGE_ESCALATIONS` re-appended on every FLEET_STATE** [FleetContext.jsx:49] — mock pattern; may cause duplicates on reconnect; revisit when luggage WS integration is real
+- **`OPERATOR_ID` defaults to `'operator-unknown'` silently** [FleetContext.jsx:8] — PoC design; audit trail records sentinel value; must be per-operator session at fleet rollout (ADR-6/7)
+- **ESC closes resolve modal discarding typed outcome silently** [EscalationDetail.jsx] — pre-existing UX pattern; add unsaved-changes guard when modal UX is hardened
+- **Vitest `afterEach(vi.restoreAllMocks)` doesn't restore `vi.stubGlobal`** [escalations.test.js] — cosmetic; tests pass; `stubGlobal` persists for the file's lifetime which is fine
+- **`environment: node` in vite test config — jsdom needed for React component tests** [vite.config.js] — acceptable for pure API module tests; switch to jsdom when component tests are added
+- **No prop-types / runtime guard on `onResolve`/`onAcknowledge` props** [EscalationDetail.jsx] — pre-existing pattern; codebase has no prop-types; add if TypeScript is introduced

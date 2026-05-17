@@ -1,6 +1,6 @@
 # Story E2-S5 — Escalation Detail Acknowledge / Resolve API Wiring
 
-**Status:** review  
+**Status:** done  
 **Sprint:** Epic 2  
 **Story Key:** 2-5-escalation-detail-acknowledge-resolve
 
@@ -64,6 +64,33 @@
   - [x] T6.2 Test successful resolve (200 response)
   - [x] T6.3 Test non-2xx throws with status
   - [x] T6.4 Test network error propagates
+
+### Review Findings (2026-05-17)
+
+#### Decision-Needed
+- [x] [Review][Decision] **VITE_API_KEY in public browser bundle** — deferred; Keycloak evaluation in progress; OAuth2/OIDC upgrade path per ADR-6/7 covers this at fleet rollout
+- [x] [Review][Decision] **`operator_id` from env var vs. "from session"** — deferred; PoC approximation acceptable; real per-operator identity comes from Keycloak session at rollout
+
+#### Patches
+- [x] [Review][Patch] **`encodeURIComponent(id)` missing in URL paths** [`src/api/escalations.js:21,26`]
+- [x] [Review][Patch] **Submit button disabled by `isPending` not `!canSubmit` — violates AC5** [`src/components/live/EscalationDetail.jsx:241`] — disable on `isPending || !canSubmit`
+- [x] [Review][Patch] **No validation message when zero tags selected** [`src/components/live/EscalationDetail.jsx`] — add inline message parallel to "Outcome required"
+- [x] [Review][Patch] **`handleResolve` clears form before awaiting response — data loss on retry** [`src/components/live/EscalationDetail.jsx:68-76`] — form now clears via `useEffect` watching `escalation.status` change
+- [x] [Review][Patch] **Stale-closure: REST success can overwrite a later WS `resolved` state** [`src/context/FleetContext.jsx:90-92,107-109`] — optimistic update now guards on predecessor status
+- [x] [Review][Patch] **`ESCALATION_UPDATED` WS tick clears `pending` action state for in-flight request** [`src/context/FleetContext.jsx:57-62`] — only clears on `TERMINAL_STATUSES` (acknowledged/resolved)
+- [x] [Review][Patch] **No fetch timeout — hung request locks button indefinitely** [`src/api/escalations.js:5`] — `AbortSignal.timeout(10000)` added
+- [x] [Review][Patch] **Error toast sticky with no dismissal/auto-clear** [`src/components/live/EscalationDetail.jsx:202-206`] — clears on escalation switch; re-attempting action overwrites error state
+- [x] [Review][Patch] **`res.json()` throws on 204 No Content — false failure toast** [`src/api/escalations.js:18`] — guarded with `res.status === 204` check
+- [x] [Review][Patch] **Pending state not cancelled on unmount / escalation switch — stale toast on re-open** [`src/context/FleetContext.jsx:98-100`] — render-phase reset on escalation id change clears all state; TERMINAL_STATUSES guard prevents stale WS clear
+
+#### Deferred (pre-existing)
+- [x] [Review][Defer] **`computeElapsed` midnight wrapping produces wrong elapsed times** [`src/components/live/EscalationDetail.jsx:31-47`] — pre-existing, not touched in this story
+- [x] [Review][Defer] **`LUGGAGE_ESCALATIONS` re-appended on every FLEET_STATE — potential duplicates on reconnect** [`src/context/FleetContext.jsx:49`] — pre-existing mock pattern
+- [x] [Review][Defer] **`OPERATOR_ID` defaults to `'operator-unknown'` silently** [`src/context/FleetContext.jsx:8`] — PoC design, ADR-6/7 OAuth2 upgrade path
+- [x] [Review][Defer] **ESC closes modal discarding typed resolve outcome silently** — pre-existing UX pattern
+- [x] [Review][Defer] **Vitest `afterEach(vi.restoreAllMocks)` doesn't restore `stubGlobal`** [`src/api/__tests__/escalations.test.js`] — tests pass; cosmetic test hygiene
+- [x] [Review][Defer] **`environment: node` in vite test config — jsdom needed when React component tests added** [`vite.config.js`] — only API module tested here
+- [x] [Review][Defer] **No prop-types guard for `onResolve`/`onAcknowledge` vs context coupling** — pre-existing pattern, no prop-types in codebase
 
 ---
 
