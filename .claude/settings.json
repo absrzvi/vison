@@ -14,5 +14,20 @@
       "Bash(npm *)",
       "Bash(node *)"
     ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "$handoff = Get-ChildItem -Path '.' -Filter 'handoff-*.md' | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($handoff) { $age = (Get-Date) - $handoff.LastWriteTime; if ($age.TotalHours -lt 8) { Write-Output ('{\"systemMessage\": \"Handoff up to date: ' + $handoff.Name + '\"}') } else { Write-Output '{\"systemMessage\": \"HANDOFF NOT UPDATED: Update handoff-*.md or run WDS /wrap before closing.\"}' } } else { Write-Output '{\"systemMessage\": \"NO HANDOFF FILE: Create a handoff file before closing.\"}' }",
+            "timeout": 10,
+            "statusMessage": "Checking handoff file..."
+          }
+        ]
+      }
+    ]
   }
 }
