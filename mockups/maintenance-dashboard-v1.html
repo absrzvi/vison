@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maintenance Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #080814; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; font-size: 13px; }
+  h2 { font-size: 16px; color: #fff; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 12px; margin-bottom: 20px; }
+
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #0d0d1f; border-bottom: 1px solid #1e1e3a;
+    padding: 10px 16px; border-radius: 10px 10px 0 0;
+  }
+  .topbar .brand { font-size: 14px; font-weight: 700; color: #f97316; }
+  .topbar .context { font-size: 11px; color: #555; }
+  .topbar .sync { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #f97316; }
+  .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #f97316; animation: blink 2s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .dashboard {
+    background: #0d0d1f;
+    border: 1px solid #1e1e3a;
+    border-radius: 0 0 10px 10px;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 300px;
+    grid-template-rows: auto auto;
+    gap: 14px;
+  }
+
+  /* KPI strip */
+  .kpi-strip {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+  }
+  .kpi-card {
+    background: #12122a; border-radius: 8px; padding: 12px 14px;
+    border-top: 3px solid transparent;
+  }
+  .kpi-card.orange { border-color: #f97316; }
+  .kpi-card.red { border-color: #ef4444; }
+  .kpi-card.amber { border-color: #ffaa00; }
+  .kpi-card.green { border-color: #00c49f; }
+  .kpi-card.purple { border-color: #a855f7; }
+  .kpi-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .kpi-value { font-size: 24px; font-weight: 700; color: #fff; }
+  .kpi-sub { font-size: 10px; color: #555; margin-top: 3px; }
+
+  .panel {
+    background: #12122a; border-radius: 10px; padding: 14px;
+  }
+  .panel-title {
+    font-size: 11px; font-weight: 700; color: #555;
+    text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel-title .badge {
+    font-size: 10px; padding: 2px 8px; border-radius: 10px;
+    background: #1a0d00; color: #f97316; font-weight: 700;
+  }
+
+  /* Work orders */
+  .work-order {
+    background: #0d0d20; border-radius: 8px; padding: 12px;
+    margin-bottom: 8px; border-left: 4px solid transparent;
+  }
+  .work-order.critical { border-color: #ef4444; }
+  .work-order.high { border-color: #f97316; }
+  .work-order.medium { border-color: #ffaa00; }
+  .work-order.low { border-color: #4a9eff; }
+  .wo-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .wo-title { font-size: 12px; font-weight: 700; color: #fff; }
+  .wo-priority {
+    font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; white-space: nowrap;
+  }
+  .wo-priority.critical { background: #2a0a0a; color: #ef4444; }
+  .wo-priority.high { background: #1a0d00; color: #f97316; }
+  .wo-priority.medium { background: #2a1e00; color: #ffaa00; }
+  .wo-priority.low { background: #0d1b2e; color: #4a9eff; }
+  .wo-meta { font-size: 11px; color: #555; margin-bottom: 4px; }
+  .wo-ai { font-size: 11px; color: #a855f7; margin-top: 4px; }
+  .wo-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .wo-btn {
+    font-size: 10px; padding: 4px 10px; border-radius: 6px; cursor: pointer; border: none;
+  }
+  .wo-btn.primary { background: #f97316; color: #fff; }
+  .wo-btn.secondary { background: #1e1e3a; color: #888; }
+
+  /* Fault trend chart (CSS-only) */
+  .trend-chart {
+    margin-bottom: 12px;
+  }
+  .chart-label { font-size: 10px; color: #444; margin-bottom: 6px; }
+  .chart-bars {
+    display: flex; align-items: flex-end; gap: 4px; height: 60px;
+    border-bottom: 1px solid #1e1e3a; margin-bottom: 4px;
+  }
+  .bar-group { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
+  .bar {
+    width: 100%; border-radius: 3px 3px 0 0; min-height: 2px;
+    transition: height 0.3s;
+  }
+  .bar.hvac { background: #ef4444; }
+  .bar.brake { background: #ffaa00; }
+  .bar.other { background: #4a9eff44; }
+  .bar-date { font-size: 9px; color: #444; }
+
+  /* Fleet health table */
+  .fleet-table { width: 100%; border-collapse: collapse; }
+  .fleet-table th {
+    font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 1px;
+    text-align: left; padding: 6px 8px; border-bottom: 1px solid #1e1e3a;
+  }
+  .fleet-table td {
+    padding: 8px; border-bottom: 1px solid #1a1a2e; font-size: 12px;
+  }
+  .fleet-table tr:last-child td { border-bottom: none; }
+  .fleet-table .train-id { font-weight: 700; color: #f97316; }
+  .score-bar {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .score-track {
+    flex: 1; height: 6px; background: #1e1e3a; border-radius: 3px; overflow: hidden;
+  }
+  .score-fill { height: 100%; border-radius: 3px; }
+  .score-fill.high { background: #00c49f; }
+  .score-fill.mid { background: #ffaa00; }
+  .score-fill.low { background: #ef4444; }
+  .score-num { font-size: 11px; font-weight: 700; color: #fff; width: 24px; }
+
+  /* Cleaning schedule */
+  .cleaning-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid #1a1a2e; font-size: 12px;
+  }
+  .cleaning-item:last-child { border-bottom: none; }
+  .cleaning-train { color: #fff; font-weight: 600; }
+  .cleaning-meta { color: #555; font-size: 11px; }
+  .cleaning-priority {
+    font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700;
+  }
+  .cleaning-priority.high { background: #2a1e00; color: #ffaa00; }
+  .cleaning-priority.normal { background: #0d1b2e; color: #4a9eff; }
+
+  /* Prediction panel */
+  .predict-item {
+    background: #0d0d20; border-radius: 8px; padding: 10px 12px;
+    margin-bottom: 8px; border-left: 3px solid #a855f7;
+  }
+  .predict-title { font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .predict-detail { font-size: 11px; color: #888; line-height: 1.5; }
+  .predict-window {
+    display: inline-block; margin-top: 6px;
+    font-size: 10px; background: #1a0820; color: #a855f7;
+    padding: 2px 8px; border-radius: 10px;
+  }
+</style>
+</head>
+<body>
+
+<h2>Maintenance Dashboard — Fleet Health & Predictive Maintenance</h2>
+<p class="subtitle">Web · Landside · Diagnostics AI (Hailo-8 #2) + Occupancy data · OEBB Fleet Maintenance</p>
+
+<div class="topbar">
+  <div>
+    <div class="brand">OEBB Smart Rail · Maintenance</div>
+    <div class="context">Fleet Maintenance Manager · F. Gruber · Updated: 09:45</div>
+  </div>
+  <div class="sync"><div class="sync-dot"></div> Syncing from 14 trains via SYS1</div>
+</div>
+
+<div class="dashboard">
+
+  <!-- KPI strip -->
+  <div class="kpi-strip">
+    <div class="kpi-card red">
+      <div class="kpi-label">Open Work Orders</div>
+      <div class="kpi-value">4</div>
+      <div class="kpi-sub">2 AI-generated today</div>
+    </div>
+    <div class="kpi-card orange">
+      <div class="kpi-label">Active Faults</div>
+      <div class="kpi-value">3</div>
+      <div class="kpi-sub">Across 2 trains</div>
+    </div>
+    <div class="kpi-card purple">
+      <div class="kpi-label">Predicted Failures</div>
+      <div class="kpi-value">2</div>
+      <div class="kpi-sub">Next 7 days</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Fleet Health Avg</div>
+      <div class="kpi-value">81</div>
+      <div class="kpi-sub">↓ 3pts this week</div>
+    </div>
+    <div class="kpi-card amber">
+      <div class="kpi-label">Cleaning Triggers</div>
+      <div class="kpi-value">3</div>
+      <div class="kpi-sub">AI-triggered from occupancy</div>
+    </div>
+  </div>
+
+  <!-- Work orders -->
+  <div class="panel">
+    <div class="panel-title">Work Orders <span class="badge">4 open</span></div>
+
+    <div class="work-order critical">
+      <div class="wo-header">
+        <div class="wo-title">HVAC fan replacement — RJ 561 C3</div>
+        <div class="wo-priority critical">Critical</div>
+      </div>
+      <div class="wo-meta">📍 Salzburg depot · Tonight after service · Est. 2h</div>
+      <div class="wo-ai">🔮 AI-generated · Bearing wear pattern · Predicted failure 48–72h</div>
+      <div class="wo-actions">
+        <button class="wo-btn primary">Assign Technician</button>
+        <button class="wo-btn secondary">View Fault History</button>
+      </div>
+    </div>
+
+    <div class="work-order high">
+      <div class="wo-header">
+        <div class="wo-title">Brake pressure check — RJ 561 Bogie 2</div>
+        <div class="wo-priority high">High</div>
+      </div>
+      <div class="wo-meta">📍 Salzburg depot · Tonight · Est. 1h</div>
+      <div class="wo-ai">🔮 AI-generated · Pressure variance trending · First occurrence 08:51</div>
+      <div class="wo-actions">
+        <button class="wo-btn primary">Assign Technician</button>
+        <button class="wo-btn secondary">View Fault History</button>
+      </div>
+    </div>
+
+    <div class="work-order medium">
+      <div class="wo-header">
+        <div class="wo-title">Passenger info display reset — ICE 724 C5</div>
+        <div class="wo-priority medium">Medium</div>
+      </div>
+      <div class="wo-meta">📍 Wien Hbf · On arrival 11:30 · Est. 20min</div>
+      <div class="wo-ai">🔮 AI-generated · Screen 2 unresponsive, recurred after reset</div>
+      <div class="wo-actions">
+        <button class="wo-btn primary">Assign Technician</button>
+        <button class="wo-btn secondary">Dismiss</button>
+      </div>
+    </div>
+
+    <div class="work-order low">
+      <div class="wo-header">
+        <div class="wo-title">Deep clean — ICE 724 C1 + C2</div>
+        <div class="wo-priority low">Scheduled</div>
+      </div>
+      <div class="wo-meta">📍 Wien Hbf terminus · After 12:00 service · Est. 45min</div>
+      <div class="wo-ai">🧹 Occupancy-triggered · C1+C2 ran at >90% for 3h today</div>
+      <div class="wo-actions">
+        <button class="wo-btn primary">Assign Cleaning</button>
+        <button class="wo-btn secondary">Defer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Middle col: fault trends + predictions -->
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+
+    <!-- Fault trend -->
+    <div class="panel">
+      <div class="panel-title">Fault Trend — Last 7 Days</div>
+      <div class="trend-chart">
+        <div class="chart-label">Daily fault count by subsystem</div>
+        <div class="chart-bars">
+          <div class="bar-group"><div class="bar hvac" style="height:20px"></div><div class="bar brake" style="height:8px"></div><div class="bar-date">7</div></div>
+          <div class="bar-group"><div class="bar hvac" style="height:12px"></div><div class="bar brake" style="height:6px"></div><div class="bar-date">8</div></div>
+          <div class="bar-group"><div class="bar hvac" style="height:16px"></div><div class="bar brake" style="height:10px"></div><div class="bar-date">9</div></div>
+          <div class="bar-group"><div class="bar hvac" style="height:10px"></div><div class="bar brake" style="height:6px"></div><div class="bar-date">10</div></div>
+          <div class="bar-group"><div class="bar hvac" style="height:14px"></div><div class="bar brake" style="height:8px"></div><div class="bar-date">11</div></div>
+          <div class="bar-group"><div class="bar hvac" style="height:22px"></div><div class="bar brake" style="height:12px"></div><div class="bar-date">12</div></div>
+          <div class="bar-group"><div class="bar hvac" style="height:30px"></div><div class="bar brake" style="height:14px"></div><div class="bar-date">13</div></div>
+        </div>
+        <div style="display:flex; gap:12px; font-size:10px; color:#555; margin-top:4px;">
+          <span><span style="color:#ef4444">■</span> HVAC</span>
+          <span><span style="color:#ffaa00">■</span> Brakes</span>
+        </div>
+      </div>
+
+      <div class="panel-title" style="margin-top:12px;">AI Predictions — Next 7 Days</div>
+      <div class="predict-item">
+        <div class="predict-title">HVAC fan failure — RJ 561 Coach 3</div>
+        <div class="predict-detail">Bearing wear pattern matches pre-failure signature from RJ 544 (2026-04-28). High confidence.</div>
+        <div class="predict-window">⏱ 48–72h window</div>
+      </div>
+      <div class="predict-item">
+        <div class="predict-title">Brake caliper wear — ICE 724 Bogie 1</div>
+        <div class="predict-detail">Pressure variance increasing over 5 days. Matches wear curve. Recommend inspection before next service.</div>
+        <div class="predict-window">⏱ 5–7 day window</div>
+      </div>
+    </div>
+
+    <!-- Fleet health table -->
+    <div class="panel">
+      <div class="panel-title">Fleet Health Scores</div>
+      <table class="fleet-table">
+        <thead>
+          <tr>
+            <th>Train</th>
+            <th>Health</th>
+            <th>Faults</th>
+            <th>Last depot</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="train-id">RJ 561</td>
+            <td>
+              <div class="score-bar">
+                <div class="score-track"><div class="score-fill low" style="width:74%"></div></div>
+                <div class="score-num">74</div>
+              </div>
+            </td>
+            <td style="color:#ef4444">3 active</td>
+            <td style="color:#555">3 days ago</td>
+          </tr>
+          <tr>
+            <td class="train-id">ICE 724</td>
+            <td>
+              <div class="score-bar">
+                <div class="score-track"><div class="score-fill mid" style="width:82%"></div></div>
+                <div class="score-num">82</div>
+              </div>
+            </td>
+            <td style="color:#ffaa00">1 warning</td>
+            <td style="color:#555">1 day ago</td>
+          </tr>
+          <tr>
+            <td class="train-id">RJ 847</td>
+            <td>
+              <div class="score-bar">
+                <div class="score-track"><div class="score-fill high" style="width:96%"></div></div>
+                <div class="score-num">96</div>
+              </div>
+            </td>
+            <td style="color:#00c49f">Clear</td>
+            <td style="color:#555">Today</td>
+          </tr>
+          <tr>
+            <td class="train-id">S7 112</td>
+            <td>
+              <div class="score-bar">
+                <div class="score-track"><div class="score-fill high" style="width:91%"></div></div>
+                <div class="score-num">91</div>
+              </div>
+            </td>
+            <td style="color:#00c49f">Clear</td>
+            <td style="color:#555">2 days ago</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- Right col: cleaning schedule -->
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <div class="panel">
+      <div class="panel-title">Cleaning Schedule <span class="badge">AI-triggered</span></div>
+      <div class="cleaning-item">
+        <div>
+          <div class="cleaning-train">ICE 724 · C1 + C2</div>
+          <div class="cleaning-meta">Deep clean · Wien Hbf · After 12:00</div>
+          <div class="cleaning-meta" style="color:#a855f7; margin-top:2px;">🧹 >90% occupancy for 3h</div>
+        </div>
+        <div class="cleaning-priority high">Priority</div>
+      </div>
+      <div class="cleaning-item">
+        <div>
+          <div class="cleaning-train">RJ 561 · C4</div>
+          <div class="cleaning-meta">Standard clean · Salzburg · Tonight</div>
+          <div class="cleaning-meta" style="color:#a855f7; margin-top:2px;">🧹 High footfall + luggage density</div>
+        </div>
+        <div class="cleaning-priority high">Priority</div>
+      </div>
+      <div class="cleaning-item">
+        <div>
+          <div class="cleaning-train">RJ 847 · All coaches</div>
+          <div class="cleaning-meta">Routine clean · Graz depot · Tonight</div>
+          <div class="cleaning-meta" style="color:#555; margin-top:2px;">🧹 Scheduled cycle</div>
+        </div>
+        <div class="cleaning-priority normal">Routine</div>
+      </div>
+    </div>
+
+    <!-- Depot schedule summary -->
+    <div class="panel">
+      <div class="panel-title">Tonight's Depot Plan</div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="background:#0d0d20; border-radius:8px; padding:10px 12px;">
+          <div style="font-size:12px; font-weight:700; color:#f97316; margin-bottom:4px;">Salzburg Depot</div>
+          <div style="font-size:11px; color:#888; line-height:1.7;">
+            ✓ RJ 561 HVAC fan replacement<br>
+            ✓ RJ 561 brake pressure check<br>
+            ✓ RJ 561 C4 clean<br>
+            <span style="color:#555">Est. completion: 04:30</span>
+          </div>
+        </div>
+        <div style="background:#0d0d20; border-radius:8px; padding:10px 12px;">
+          <div style="font-size:12px; font-weight:700; color:#4a9eff; margin-bottom:4px;">Wien Hbf</div>
+          <div style="font-size:11px; color:#888; line-height:1.7;">
+            ✓ ICE 724 C1+C2 deep clean<br>
+            ✓ ICE 724 C5 display fix<br>
+            <span style="color:#555">Est. completion: 14:30</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<p style="text-align:center; color: #555; font-size: 11px; margin-top: 16px;">Mockup · Web dashboard · Maintenance view · Let me know what to change in the terminal</p>
+
+</body>
+</html>

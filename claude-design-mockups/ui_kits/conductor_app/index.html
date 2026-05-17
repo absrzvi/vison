@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ÖBB Smart Rail — Conductor App · Interactive Prototype</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../../colors_and_type.css" />
+
+  <style>
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(ellipse at 30% 0%, #0D1628 0%, var(--obb-surface-0) 60%);
+      color: var(--obb-text-on-dark-1);
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 32px 24px;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+    #root { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 8px 14px 8px 8px;
+      background: var(--obb-surface-2);
+      border: 1px solid var(--obb-border-bright);
+      border-radius: 999px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      max-width: 460px;
+    }
+    .badge img { height: 22px; }
+    .badge-text { font-size: 11px; color: var(--obb-text-on-dark-3); letter-spacing: .04em; }
+    .badge-text b { color: var(--obb-text-on-dark-1); margin-right: 6px; }
+
+    @keyframes rn-pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(226,0,42,0); }
+      50%      { box-shadow: 0 0 12px 2px rgba(226,0,42,0.15); }
+    }
+    @keyframes rn-pulse-strong {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.3; }
+    }
+  </style>
+
+  <!-- Inline icon set (Lucide-compatible) -->
+  <script src="icons.js"></script>
+
+  <!-- React + Babel -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="scenarios.js"></script>
+</head>
+<body class="obb-dark" style="background-color: rgb(76, 76, 118)">
+
+  <div class="badge">
+    <img src="../../assets/logos/OeBB_railnet.png" alt="ÖBB railnet" style="filter:brightness(0) invert(1); opacity:0.92;" />
+    <span class="badge-text"><b>Smart Rail</b>· Conductor App · Interactive prototype</span>
+  </div>
+
+  <div id="root"></div>
+
+  <script type="text/babel" src="Icon.jsx"></script>
+  <script type="text/babel" src="Atoms.jsx"></script>
+  <script type="text/babel" src="BottomNav.jsx"></script>
+  <script type="text/babel" src="HomeScreen.jsx"></script>
+  <script type="text/babel" src="TrainScreen.jsx"></script>
+  <script type="text/babel" src="AlertsScreen.jsx"></script>
+  <script type="text/babel" src="EscalateScreen.jsx"></script>
+  <script type="text/babel" src="ChatScreen.jsx"></script>
+  <script type="text/babel" src="PhoneFrame.jsx"></script>
+  <script type="text/babel" src="ScenarioControls.jsx"></script>
+  <script type="text/babel" src="App.jsx"></script>
+
+</body>
+</html>

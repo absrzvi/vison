@@ -1,0 +1,325 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "claude-code",
+  "elements": [
+    {
+      "id": "bg",
+      "type": "rectangle",
+      "x": 0, "y": 0, "width": 1920, "height": 1080,
+      "strokeColor": "#343a40", "backgroundColor": "#1a1a1e",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "kpi-strip",
+      "type": "rectangle",
+      "x": 0, "y": 0, "width": 1920, "height": 64,
+      "strokeColor": "#2c2c32", "backgroundColor": "#212127",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "kpi-label",
+      "type": "text",
+      "x": 40, "y": 22,
+      "text": "KPI STRIP — Active Trains · Open Escalations · Active Incidents · Capacity Alerts · Luggage Alerts",
+      "fontSize": 13, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#9c9ea0", "opacity": 100
+    },
+    {
+      "id": "tab-bar",
+      "type": "rectangle",
+      "x": 0, "y": 64, "width": 1920, "height": 44,
+      "strokeColor": "#2c2c32", "backgroundColor": "#18181c",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "tab-live",
+      "type": "rectangle",
+      "x": 0, "y": 64, "width": 160, "height": 44,
+      "strokeColor": "#e2002a", "backgroundColor": "#18181c",
+      "fillStyle": "solid", "strokeWidth": 2, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "tab-live-label",
+      "type": "text",
+      "x": 28, "y": 78,
+      "text": "LIVE  ●",
+      "fontSize": 13, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#e2002a", "opacity": 100
+    },
+    {
+      "id": "tab-analytics-label",
+      "type": "text",
+      "x": 180, "y": 78,
+      "text": "ANALYTICS",
+      "fontSize": 13, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#6c6c74", "opacity": 100
+    },
+    {
+      "id": "tab-health-label",
+      "type": "text",
+      "x": 320, "y": 78,
+      "text": "SYSTEM HEALTH",
+      "fontSize": 13, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#6c6c74", "opacity": 100
+    },
+    {
+      "id": "fleet-col",
+      "type": "rectangle",
+      "x": 0, "y": 108, "width": 480, "height": 972,
+      "strokeColor": "#2c2c32", "backgroundColor": "#212127",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "fleet-header",
+      "type": "text",
+      "x": 20, "y": 124,
+      "text": "FLEET  (14 active)",
+      "fontSize": 12, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#6c6c74", "opacity": 100
+    },
+    {
+      "id": "train-card-1",
+      "type": "rectangle",
+      "x": 12, "y": 148, "width": 456, "height": 96,
+      "strokeColor": "#e2002a", "backgroundColor": "#2a1a1e",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "train-card-1-badge",
+      "type": "rectangle",
+      "x": 12, "y": 148, "width": 4, "height": 96,
+      "strokeColor": "#e2002a", "backgroundColor": "#e2002a",
+      "fillStyle": "solid", "strokeWidth": 0, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "train-card-1-label",
+      "type": "text",
+      "x": 28, "y": 160,
+      "text": "R5001C-031  ●ALERT\nVienna → Salzburg · Next: Linz 11:42\n──────────────────────────────────────\n[C1▓▓▓][C2▓▓][C3▓▓▓▓][C4▓▓▓▓!][C5▓▓]\n⚠ Inference offline · C4 luggage alert",
+      "fontSize": 12, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#f0f0f2", "opacity": 100
+    },
+    {
+      "id": "train-card-2",
+      "type": "rectangle",
+      "x": 12, "y": 256, "width": 456, "height": 88,
+      "strokeColor": "#c9871f", "backgroundColor": "#252018",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "train-card-2-badge",
+      "type": "rectangle",
+      "x": 12, "y": 256, "width": 4, "height": 88,
+      "strokeColor": "#c9871f", "backgroundColor": "#c9871f",
+      "fillStyle": "solid", "strokeWidth": 0, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "train-card-2-label",
+      "type": "text",
+      "x": 28, "y": 268,
+      "text": "R5001C-017  ●WATCH\nGraz → Vienna · Next: Bruck 12:05\n──────────────────────────────────────\n[C1▓▓][C2▓▓▓][C3▓▓▓▓][C4▓▓][C5▓]\n▲ Vestibule congestion C3",
+      "fontSize": 12, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#f0f0f2", "opacity": 100
+    },
+    {
+      "id": "train-card-3",
+      "type": "rectangle",
+      "x": 12, "y": 356, "width": 456, "height": 80,
+      "strokeColor": "#2c2c32", "backgroundColor": "#212127",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "train-card-3-badge",
+      "type": "rectangle",
+      "x": 12, "y": 356, "width": 4, "height": 80,
+      "strokeColor": "#1f8a4c", "backgroundColor": "#1f8a4c",
+      "fillStyle": "solid", "strokeWidth": 0, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "train-card-3-label",
+      "type": "text",
+      "x": 28, "y": 368,
+      "text": "R5001C-022  ●NORMAL\nInnsbruck → Vienna · Next: Jenbach 12:18\n──────────────────────────────────────\n[C1▓][C2▓▓][C3▓][C4▓▓][C5▓]",
+      "fontSize": 12, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#9c9ea0", "opacity": 100
+    },
+    {
+      "id": "train-card-more",
+      "type": "text",
+      "x": 20, "y": 450,
+      "text": "· · · 11 more trains (all NORMAL — collapsed)",
+      "fontSize": 12, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#6c6c74", "opacity": 100
+    },
+    {
+      "id": "coach-drill-in",
+      "type": "rectangle",
+      "x": 12, "y": 480, "width": 456, "height": 280,
+      "strokeColor": "#3a3a44", "backgroundColor": "#26262e",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 1, "opacity": 100
+    },
+    {
+      "id": "coach-drill-label",
+      "type": "text",
+      "x": 24, "y": 494,
+      "text": "R5001C-031 — Coach breakdown\n─────────────────────────────────────\nCoach  Actual  Reserved  Delta  Luggage  Access\nC1     42      40        +2     —        —\nC2     31      35        -4     —        —\nC3     58      48       +10⚠   —        —\nC4     67      48       +19🔴  ●High    ♿ ramp\nC5     29      32        -3     —        —\n─────────────────────────────────────\n⚠ Inference offline since 09:43\n   Occupancy: APC data only",
+      "fontSize": 12, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#f0f0f2", "opacity": 100
+    },
+    {
+      "id": "feed-col",
+      "type": "rectangle",
+      "x": 480, "y": 108, "width": 1440, "height": 972,
+      "strokeColor": "#2c2c32", "backgroundColor": "#1a1a1e",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "feed-header",
+      "type": "text",
+      "x": 500, "y": 124,
+      "text": "UNIFIED FEED  — severity sorted  ·  3 unacknowledged",
+      "fontSize": 12, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#6c6c74", "opacity": 100
+    },
+    {
+      "id": "feed-item-1",
+      "type": "rectangle",
+      "x": 492, "y": 148, "width": 1416, "height": 120,
+      "strokeColor": "#e2002a", "backgroundColor": "#2a1a1e",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "feed-item-1-stripe",
+      "type": "rectangle",
+      "x": 492, "y": 148, "width": 4, "height": 120,
+      "strokeColor": "#e2002a", "backgroundColor": "#e2002a",
+      "fillStyle": "solid", "strokeWidth": 0, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "feed-item-1-content",
+      "type": "text",
+      "x": 510, "y": 158,
+      "text": "🤖 AI  ●CRITICAL                                                                R5001C-031 · Coach C4 · 11:23\nUnattended item detected — 94% confidence · 8 min unattended\n[still frame thumbnail]                Conrad notified 11:23 · Response: \"Investigating — 2 min\"\n\n[ ACKNOWLEDGE ]   [ RESOLVE ▾ ]",
+      "fontSize": 13, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#f0f0f2", "opacity": 100
+    },
+    {
+      "id": "feed-item-2",
+      "type": "rectangle",
+      "x": 492, "y": 280, "width": 1416, "height": 88,
+      "strokeColor": "#c9871f", "backgroundColor": "#252018",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "feed-item-2-stripe",
+      "type": "rectangle",
+      "x": 492, "y": 280, "width": 4, "height": 88,
+      "strokeColor": "#c9871f", "backgroundColor": "#c9871f",
+      "fillStyle": "solid", "strokeWidth": 0, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "feed-item-2-content",
+      "type": "text",
+      "x": 510, "y": 292,
+      "text": "👤 Conrad  ●ESCALATION  ✓ Acknowledged                                          R5001C-017 · Coach C3 · 10:58\nVestibule congestion — third consecutive occurrence this route\n7-day trend attached · \"Same pattern every Friday 17:15\"\n[ VIEW DETAILS ]   [ RESOLVE ▾ ]",
+      "fontSize": 13, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#f0f0f2", "opacity": 100
+    },
+    {
+      "id": "feed-item-3",
+      "type": "rectangle",
+      "x": 492, "y": 380, "width": 1416, "height": 72,
+      "strokeColor": "#2c3a4a", "backgroundColor": "#1e2530",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "feed-item-3-stripe",
+      "type": "rectangle",
+      "x": 492, "y": 380, "width": 4, "height": 72,
+      "strokeColor": "#4a90d9", "backgroundColor": "#4a90d9",
+      "fillStyle": "solid", "strokeWidth": 0, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "feed-item-3-content",
+      "type": "text",
+      "x": 510, "y": 394,
+      "text": "🤖 AI  ●INFO                                                                     R5001C-017 · Coach C3 · 11:01\nOccupancy crossed amber threshold — 78% (threshold: 75%)\nAPC + camera fusion · No action required",
+      "fontSize": 13, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#9c9ea0", "opacity": 100
+    },
+    {
+      "id": "feed-item-4",
+      "type": "rectangle",
+      "x": 492, "y": 464, "width": 1416, "height": 72,
+      "strokeColor": "#2c2c32", "backgroundColor": "#212127",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "feed-item-4-stripe",
+      "type": "rectangle",
+      "x": 492, "y": 464, "width": 4, "height": 72,
+      "strokeColor": "#2c2c32", "backgroundColor": "#2c2c32",
+      "fillStyle": "solid", "strokeWidth": 0, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "feed-item-4-content",
+      "type": "text",
+      "x": 510, "y": 478,
+      "text": "🤖 AI  ●INFO                                                                     R5001C-022 · Coach C2 · 10:44\nLuggage density — rack approaching saturation (82%)\nNo alert raised — below threshold",
+      "fontSize": 13, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#6c6c74", "opacity": 100
+    },
+    {
+      "id": "resolve-expanded",
+      "type": "rectangle",
+      "x": 492, "y": 548, "width": 1416, "height": 140,
+      "strokeColor": "#e2002a", "backgroundColor": "#221820",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 1, "opacity": 100
+    },
+    {
+      "id": "resolve-expanded-label",
+      "type": "text",
+      "x": 510, "y": 558,
+      "text": "RESOLVE — Unattended item · R5001C-031 · C4\n──────────────────────────────────────────────────────\nOutcome  [Owner located, item retrieved by Conrad. No further action.          ]\nAction   [ ✓ Passenger assisted ]  [ Police alerted ]  [ Station notified ]  [ Other ]\n\n                                                              [ CANCEL ]  [ SUBMIT RESOLUTION ]",
+      "fontSize": 13, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#f0f0f2", "opacity": 100
+    },
+    {
+      "id": "staleness-banner",
+      "type": "rectangle",
+      "x": 492, "y": 700, "width": 1416, "height": 36,
+      "strokeColor": "#c9871f", "backgroundColor": "#2a2218",
+      "fillStyle": "solid", "strokeWidth": 1, "roughness": 0, "opacity": 100
+    },
+    {
+      "id": "staleness-label",
+      "type": "text",
+      "x": 510, "y": 712,
+      "text": "⚠  R5001C-031 — Inference offline since 09:43. Occupancy data from APC only. Camera alerts suspended.",
+      "fontSize": 12, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#c9871f", "opacity": 100
+    },
+    {
+      "id": "annotation-1",
+      "type": "text",
+      "x": 100, "y": 1020,
+      "text": "← Fleet list (480px)\nSorted: Alert → Watch → Normal\nNormal trains collapsed by default",
+      "fontSize": 11, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#6c6c74", "opacity": 100
+    },
+    {
+      "id": "annotation-2",
+      "type": "text",
+      "x": 800, "y": 1020,
+      "text": "← Unified feed (1440px)\nSeverity sorted: Critical AI → Staff escalations → AI info\nInline resolve expanded on feed item 1",
+      "fontSize": 11, "fontFamily": 2, "textAlign": "left",
+      "strokeColor": "#6c6c74", "opacity": 100
+    }
+  ],
+  "appState": {
+    "viewBackgroundColor": "#1a1a1e",
+    "gridSize": 8,
+    "zoom": { "value": 0.6 }
+  }
+}

@@ -1,0 +1,345 @@
+.dwell-time {
+  padding: 20px;
+  overflow-y: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dwell-bar-legend {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+.dwell-bar-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--obb-text-on-dark-4);
+}
+.dwell-bar-legend__sched-line {
+  display: inline-block;
+  width: 12px;
+  height: 2px;
+  background: var(--obb-text-on-dark-3);
+  border-radius: 1px;
+}
+.dwell-bar-legend__actual-block {
+  display: inline-block;
+  width: 12px;
+  height: 8px;
+  background: var(--obb-sev-warning);
+  border-radius: 2px;
+  opacity: 0.85;
+}
+
+.dwell-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dwell-bar-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  grid-template-rows: auto auto;
+  gap: 4px 12px;
+  align-items: center;
+}
+
+.dwell-bar-row__station {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--obb-text-on-dark-2);
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.dwell-bar-row__chart {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  height: 14px;
+  background: var(--obb-surface-3);
+  border-radius: 4px;
+  overflow: visible; /* allow scheduled tick to be visible */
+}
+
+/* P2 fix: actual bar is the full bar; scheduled shown as a dashed tick line */
+.dwell-bar-row__actual {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 4px;
+  opacity: 0.85;
+  transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
+}
+
+/* P2 fix: wide hover wrapper for scheduled tick */
+.dwell-bar-row__scheduled-wrap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  transform: translateX(-50%);
+  cursor: default;
+  z-index: 3;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+/* Scheduled shown as a vertical dashed tick mark at the scheduled proportion */
+.dwell-bar-row__scheduled {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--obb-text-on-dark-3);
+  border-radius: 1px;
+  z-index: 2;
+}
+
+.dwell-bar-row__values {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 2px;
+  font-size: 10px;
+}
+
+.dwell-bar-row__actual-val {
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.dwell-bar-row__sched-val {
+  color: var(--obb-text-on-dark-4);
+}
+
+.dwell-bar-row__excess {
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+/* P2 fix: under-schedule delta in green */
+.dwell-bar-row__under {
+  color: var(--obb-sev-normal);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.dwell-bar-row__cause {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  color: var(--obb-text-on-dark-4);
+  font-style: italic;
+  padding-left: 172px;
+  margin-top: -2px;
+}
+
+.dwell-bar-row__breaches {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  font-weight: 600;
+  padding-left: 172px;
+}
+
+/* P2 fix: scheduled tick fixed-position tooltip */
+.dwell-sched__tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: var(--obb-surface-4);
+  border: 1px solid var(--obb-border-bright);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--obb-text-on-dark-2);
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Empty state */
+.dwell-empty {
+  font-size: 12px;
+  color: var(--obb-text-on-dark-4);
+  text-align: center;
+  padding: 40px 0;
+}
+
+/* Scatter plot */
+.dwell-scatter__y-label {
+  font-size: 9px;
+  color: var(--obb-text-on-dark-4);
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-align: center;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.dwell-scatter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dwell-scatter__chart {
+  display: flex;
+  gap: 8px;
+  height: 200px;
+}
+
+/* P1 fix: Y-axis uses absolute tick positioning to match gridline bottom% */
+.dwell-scatter__y-axis {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  position: relative;
+  width: 36px;
+  flex-shrink: 0;
+}
+
+.dwell-scatter__y-ticks {
+  position: relative;
+  flex: 1;
+  width: 100%;
+}
+
+.dwell-scatter__y-tick {
+  position: absolute;
+  right: 0;
+  font-size: 9px;
+  color: var(--obb-text-on-dark-4);
+  font-family: var(--font-mono);
+  transform: translateY(50%);
+  white-space: nowrap;
+}
+
+.dwell-scatter__plot {
+  flex: 1;
+  position: relative;
+  border-left: 1px solid var(--obb-border-dark);
+  border-bottom: 1px solid var(--obb-border-dark);
+}
+
+.dwell-scatter__gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--obb-border-dark);
+}
+
+.dwell-scatter__dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--obb-blue-accent);
+  opacity: 0.75;
+  transform: translate(-50%, 50%);
+  transition: transform 120ms ease, opacity 120ms ease;
+  cursor: default;
+}
+
+.dwell-scatter__dot:hover {
+  opacity: 1;
+  transform: translate(-50%, 50%) scale(1.4);
+}
+
+/* P2 fix: custom scatter tooltip */
+.dwell-scatter__tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: var(--obb-surface-4);
+  border: 1px solid var(--obb-border-bright);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--obb-text-on-dark-2);
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.dwell-scatter__tooltip strong {
+  color: var(--obb-text-on-dark-1);
+}
+
+.dwell-scatter__trend-line {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* P3 fix: X-axis ticks absolutely positioned by value, not flex-spaced */
+.dwell-scatter__x-axis {
+  position: relative;
+  height: 16px;
+  padding-left: 44px; /* match y-axis width + gap */
+}
+
+.dwell-scatter__x-tick {
+  position: absolute;
+  font-size: 9px;
+  color: var(--obb-text-on-dark-4);
+  font-family: var(--font-mono);
+  transform: translateX(-50%);
+  top: 0;
+}
+
+.dwell-scatter__x-label {
+  font-size: 10px;
+  color: var(--obb-text-on-dark-4);
+  text-align: center;
+  padding-left: 40px;
+}
+
+.dwell-scatter__insight {
+  font-size: 11px;
+  color: var(--obb-text-on-dark-3);
+  background: var(--obb-surface-3);
+  border-left: 2px solid var(--obb-blue-accent);
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  font-style: italic;
+}
+
+/* P3 fix: station colour legend */
+.dwell-scatter__station-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 4px;
+}
+
+.dwell-scatter__station-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dwell-scatter__station-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.dwell-scatter__station-label {
+  font-size: 10px;
+  color: var(--obb-text-on-dark-4);
+}

@@ -1,0 +1,129 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--obb-surface-0);
+  overflow: hidden;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 52px;
+  background: var(--obb-surface-1);
+  border-bottom: 1px solid var(--obb-border-dark);
+  flex-shrink: 0;
+}
+
+.app-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-header__logo {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--obb-red);
+  letter-spacing: 0.06em;
+}
+
+.app-header__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--obb-text-on-dark-1);
+}
+
+.app-header__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-header__alert-hook {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: rgba(255, 59, 59, 0.15);
+  border: 1px solid rgba(255, 59, 59, 0.4);
+  border-radius: 12px;
+  color: var(--obb-sev-critical);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  animation: pulse-hook 1.2s ease-in-out infinite;
+}
+.app-header__alert-hook:hover { background: rgba(255, 59, 59, 0.25); }
+
+@keyframes pulse-hook {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+.app-header__env {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--obb-text-on-dark-3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tab-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 0 24px;
+  height: 40px;
+  background: var(--obb-surface-1);
+  border-bottom: 1px solid var(--obb-border-dark);
+  flex-shrink: 0;
+}
+
+.tab-bar__tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--obb-text-on-dark-3);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: color 120ms ease, border-color 120ms ease;
+  white-space: nowrap;
+}
+
+.tab-bar__tab:hover {
+  color: var(--obb-text-on-dark-1);
+}
+
+.tab-bar__tab--active {
+  color: var(--obb-text-on-dark-1);
+  border-bottom-color: var(--obb-red);
+}
+
+.tab-bar__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  margin-left: 6px;
+  background: var(--obb-sev-critical);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 8px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.app-main {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}

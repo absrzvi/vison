@@ -1,0 +1,979 @@
+/* ─── Root ─────────────────────────────────────────────────────────────────── */
+
+.occ-monitoring {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.occ-monitoring--loading {
+  align-items: center;
+  justify-content: center;
+}
+
+.occ-monitoring__loading-msg {
+  font-size: 13px;
+  color: var(--obb-text-on-dark-4);
+  font-weight: 500;
+}
+
+/* ─── KPI strip ────────────────────────────────────────────────────────────── */
+
+.occ-kpi-strip {
+  display: flex;
+  align-items: center;
+  background: var(--obb-surface-1);
+  border-bottom: 1px solid var(--obb-border-dark);
+  flex-shrink: 0;
+}
+
+.occ-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 10px 20px;
+  gap: 1px;
+  min-width: 130px;
+}
+
+.occ-kpi__value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--obb-text-on-dark-1);
+  line-height: 1.1;
+  font-family: var(--font-mono);
+}
+
+.occ-kpi__value--sm {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.occ-kpi__sub {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--obb-text-on-dark-3);
+  font-weight: 500;
+  margin-top: 1px;
+}
+
+.occ-kpi__label {
+  font-size: 10px;
+  color: var(--obb-text-on-dark-4);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.occ-kpi-divider {
+  width: 1px;
+  height: 32px;
+  background: var(--obb-border-dark);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* ─── Body layout ──────────────────────────────────────────────────────────── */
+
+.occ-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ─── Left panel ───────────────────────────────────────────────────────────── */
+
+.occ-left {
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--obb-border-dark);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.occ-left__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--obb-border-dark);
+  background: var(--obb-surface-1);
+  flex-shrink: 0;
+}
+
+.occ-left__title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--obb-text-on-dark-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.occ-left__count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--obb-text-on-dark-4);
+  background: var(--obb-surface-3);
+  border: 1px solid var(--obb-border-dark);
+  border-radius: 10px;
+  padding: 0 6px;
+  line-height: 1.6;
+}
+
+.occ-left__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+/* ─── Train list item ──────────────────────────────────────────────────────── */
+
+.occ-list-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 9px 14px;
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--obb-border-dark);
+  cursor: pointer;
+  text-align: left;
+  transition: background 100ms ease;
+}
+
+.occ-list-item:last-child {
+  border-bottom: none;
+}
+
+.occ-list-item:hover {
+  background: var(--obb-surface-2);
+}
+
+.occ-list-item--selected {
+  background: var(--obb-surface-3);
+  border-left-color: var(--obb-blue-accent);
+}
+
+.occ-list-item--critical {
+  border-left-color: var(--obb-sev-critical);
+}
+
+.occ-list-item--selected.occ-list-item--critical {
+  border-left-color: var(--obb-sev-critical);
+}
+
+.occ-list-item__top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.occ-list-item__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.occ-list-item__id {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--obb-text-on-dark-1);
+  font-family: var(--font-mono);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.occ-list-item__avg {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.occ-list-item__bottom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.occ-list-item__route {
+  font-size: 11px;
+  color: var(--obb-text-on-dark-4);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.occ-list-item__pills {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ─── Pills ────────────────────────────────────────────────────────────────── */
+
+.occ-pill {
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 3px;
+  padding: 1px 5px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.occ-pill--warn {
+  color: #FF6B00;
+  background: rgba(255, 107, 0, 0.12);
+  border: 1px solid rgba(255, 107, 0, 0.3);
+}
+
+.occ-pill--dwell {
+  color: var(--obb-sev-warning);
+  background: rgba(232, 160, 32, 0.12);
+  border: 1px solid rgba(232, 160, 32, 0.3);
+}
+
+.occ-pill--esc {
+  color: #FF3B3B;
+  background: rgba(255, 59, 59, 0.12);
+  border: 1px solid rgba(255, 59, 59, 0.3);
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
+}
+
+/* ─── Right panel ──────────────────────────────────────────────────────────── */
+
+.occ-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─── Detail view ──────────────────────────────────────────────────────────── */
+
+.occ-detail {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.occ-detail--empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.occ-detail__empty-msg {
+  font-size: 13px;
+  color: var(--obb-text-on-dark-4);
+  font-weight: 500;
+}
+
+/* Detail header */
+.occ-detail__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.occ-detail__header-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+}
+
+.occ-detail__sev-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.occ-detail__train-id {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--obb-text-on-dark-1);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.occ-detail__route {
+  font-size: 12px;
+  color: var(--obb-text-on-dark-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.occ-detail__header-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Badges */
+.occ-badge {
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 2px 7px;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.occ-badge--sev {
+  text-transform: uppercase;
+}
+
+.occ-badge--sev-red {
+  color: #FF3B3B;
+  background: rgba(255, 59, 59, 0.12);
+  border: 1px solid rgba(255, 59, 59, 0.3);
+}
+
+.occ-badge--sev-amber {
+  color: #F5A623;
+  background: rgba(245, 166, 35, 0.12);
+  border: 1px solid rgba(245, 166, 35, 0.3);
+}
+
+.occ-badge--sev-green {
+  color: #22C55E;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.occ-badge--esc {
+  color: #FF3B3B;
+  background: rgba(255, 59, 59, 0.1);
+  border: 1px solid rgba(255, 59, 59, 0.25);
+}
+
+.occ-badge--status {
+  color: var(--obb-text-on-dark-3);
+  background: var(--obb-surface-2);
+  border: 1px solid var(--obb-border-dark);
+  font-weight: 600;
+}
+
+.occ-badge__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ─── Dwell alert ──────────────────────────────────────────────────────────── */
+
+.occ-dwell-alert {
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(232, 160, 32, 0.08);
+  border: 1px solid rgba(232, 160, 32, 0.28);
+  border-radius: 6px;
+  align-items: flex-start;
+}
+
+.occ-dwell-alert__icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+.occ-dwell-alert__body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.occ-dwell-alert__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--obb-sev-warning);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.occ-dwell-alert__delay {
+  font-size: 11px;
+  font-weight: 600;
+  color: #FF6B00;
+  background: rgba(255, 107, 0, 0.12);
+  border: 1px solid rgba(255, 107, 0, 0.3);
+  border-radius: 3px;
+  padding: 0 5px;
+}
+
+.occ-dwell-alert__meta {
+  font-size: 11px;
+  color: var(--obb-text-on-dark-3);
+  font-family: var(--font-mono);
+}
+
+.occ-dwell-alert__crowding {
+  color: var(--obb-sev-warning);
+  font-weight: 600;
+}
+
+/* ─── Section label ────────────────────────────────────────────────────────── */
+
+.occ-detail__section-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--obb-text-on-dark-4);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: -6px;
+}
+
+/* ─── Coach grid ───────────────────────────────────────────────────────────── */
+
+.occ-coach-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.occ-coach-col {
+  /* flex-basis matches the old minmax so coaches still wrap naturally */
+  flex: 1 1 68px;
+  max-width: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  position: relative;
+}
+
+.occ-coach-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: var(--obb-surface-2);
+  border: 1px solid var(--obb-border-dark);
+  border-radius: 5px;
+  padding: 8px 8px 7px;
+  transition: border-color 150ms ease;
+}
+
+.occ-coach-card--alert {
+  border-color: rgba(255, 59, 59, 0.45);
+}
+
+.occ-coach-card__bar-track {
+  width: 100%;
+  height: 56px;
+  background: var(--obb-surface-4, rgba(255,255,255,0.06));
+  border-radius: 3px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.occ-coach-card__bar-fill {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  transition: height 400ms ease;
+}
+
+.occ-coach-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.occ-coach-card__id {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--obb-text-on-dark-4);
+  font-family: var(--font-mono);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.occ-coach-card__pct {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.occ-coach-card__alert-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #FF3B3B;
+  flex-shrink: 0;
+}
+
+/* ─── Coach column wrapper (card + flow lane) ──────────────────────────────── */
+
+/* The flow lane sits below the card, stretches to the right edge,
+   overlapping the gap between cards so dots visually cross the boundary */
+.occ-flow-lane {
+  height: 18px;
+  position: relative;
+  overflow: visible;
+  /* extend slightly beyond the card so dots reach the next card */
+  margin-right: -8px;
+}
+
+.occ-flow-lane--none {
+  /* empty spacer — keeps grid rows aligned */
+}
+
+/* Two tracks stacked vertically inside the lane */
+.occ-flow-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 6px;
+  overflow: visible;
+}
+
+.occ-flow-track--right {
+  top: 2px;
+}
+
+.occ-flow-track--left {
+  top: 10px;
+}
+
+/* Each animated dot */
+.occ-flow-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  top: 0;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+/* Right-moving dots: animate from left (0) to right (100%) */
+.occ-flow-track--right .occ-flow-dot {
+  background: rgba(255, 255, 255, 0.55);
+  animation-name: flow-right;
+}
+
+/* Left-moving dots: animate from right (100%) to left (0) */
+.occ-flow-track--left .occ-flow-dot {
+  background: rgba(255, 200, 80, 0.65);
+  animation-name: flow-left;
+}
+
+/* Speed by intensity */
+.occ-flow-lane--low  .occ-flow-dot { animation-duration: 2.2s; }
+.occ-flow-lane--mid  .occ-flow-dot { animation-duration: 1.5s; }
+.occ-flow-lane--high .occ-flow-dot { animation-duration: 0.9s; }
+
+@keyframes flow-right {
+  0%   { left: 0%;    opacity: 0; }
+  10%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { left: 100%;  opacity: 0; }
+}
+
+@keyframes flow-left {
+  0%   { left: 100%; opacity: 0; }
+  10%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { left: 0%;   opacity: 0; }
+}
+
+/* ─── Summary stats ────────────────────────────────────────────────────────── */
+
+.occ-summary-stats {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--obb-surface-2);
+  border: 1px solid var(--obb-border-dark);
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.occ-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 18px;
+  flex: 1;
+}
+
+.occ-stat__value {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--obb-text-on-dark-1);
+  line-height: 1.1;
+}
+
+.occ-stat__label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--obb-text-on-dark-4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.occ-stat-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--obb-border-dark);
+  flex-shrink: 0;
+}
+
+/* ─── Threshold bar ────────────────────────────────────────────────────────── */
+
+.occ-threshold-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 20px;
+  background: var(--obb-surface-1);
+  border-top: 1px solid var(--obb-border-dark);
+  flex-shrink: 0;
+}
+
+.occ-threshold-bar__label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--obb-text-on-dark-4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.occ-threshold-bar__slider {
+  width: 140px;
+  accent-color: var(--obb-blue-accent);
+  cursor: pointer;
+}
+
+.occ-threshold-bar__value {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  min-width: 34px;
+}
+
+/* ─── Coach card — metrics expansion ──────────────────────────────────────── */
+
+.occ-coach-card__divider {
+  height: 1px;
+  background: var(--obb-border-dark);
+  margin: 2px 0;
+  flex-shrink: 0;
+}
+
+.occ-coach-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 5px 0 2px;
+  gap: 3px 4px;
+}
+
+.occ-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.occ-metric__value {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--obb-text-on-dark-1);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.occ-metric__label {
+  font-size: 9px;
+  color: var(--obb-text-on-dark-4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+}
+
+.occ-metric--warn {
+  color: var(--obb-sev-warning);
+}
+
+.occ-metric--crit {
+  color: var(--obb-sev-critical);
+}
+
+.occ-coach-card__incident {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--obb-sev-critical);
+  background: rgba(255, 59, 59, 0.1);
+  border: 1px solid rgba(255, 59, 59, 0.3);
+  border-radius: 2px;
+  padding: 2px 0;
+  margin-top: 3px;
+}
+
+/* ─── Coach card selected state ────────────────────────────────────────────── */
+
+.occ-coach-card--selected {
+  border-color: var(--obb-blue-accent);
+  box-shadow: 0 0 0 1px var(--obb-blue-accent);
+}
+
+/* ─── Coach detail panel ───────────────────────────────────────────────────── */
+
+.occ-coach-detail {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  padding: 16px;
+  background: var(--obb-surface-2);
+  border: 1px solid var(--obb-border-dark);
+  border-radius: 6px;
+  overflow-y: auto;
+  animation: occ-detail-fade-in 200ms ease;
+  flex-shrink: 0;
+}
+
+@keyframes occ-detail-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.occ-coach-detail__left,
+.occ-coach-detail__right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.occ-coach-detail__col-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--obb-text-on-dark-4);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.occ-coach-detail__section-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--obb-text-on-dark-4);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: -4px;
+}
+
+/* Empty prompt */
+.occ-coach-detail__empty {
+  text-align: center;
+  font-size: 12px;
+  color: var(--obb-text-on-dark-4);
+  font-weight: 500;
+  padding: 20px 0;
+  border: 1px dashed var(--obb-border-dark);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+/* ─── Seat map ─────────────────────────────────────────────────────────────── */
+
+.occ-seat-map {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.occ-seat-map__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.occ-seat-map__pair {
+  display: flex;
+  gap: 3px;
+}
+
+.occ-seat-map__aisle {
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.occ-seat {
+  width: 14px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  transition: background 300ms ease;
+}
+
+.occ-seat-map__legend {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.occ-seat-map__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  color: var(--obb-text-on-dark-4);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.occ-seat-map__legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* ─── Door congestion bar ──────────────────────────────────────────────────── */
+
+.occ-door-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.occ-door-bar__marker {
+  font-size: 9px;
+  color: var(--obb-text-on-dark-4);
+  flex-shrink: 0;
+  /* Replace the ⬛ with a thin rect marker */
+  display: inline-block;
+  width: 6px;
+  height: 16px;
+  background: var(--obb-border-dark);
+  border-radius: 1px;
+  font-size: 0; /* hide the emoji text, show the block */
+}
+
+.occ-door-bar__track {
+  flex: 1;
+  height: 10px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 5px;
+  position: relative;
+  overflow: hidden;
+}
+
+.occ-door-bar__fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 400ms ease, background 300ms ease;
+}
+
+.occ-door-bar__label {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: rgba(255,255,255,0.75);
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* ─── Coach detail stats grid ──────────────────────────────────────────────── */
+
+/*
+ * 2×3 stat grid — mirrors occ-summary-stats surface/border/radius.
+ * Grid columns: stat | v-divider | stat | v-divider | stat
+ *               then a full-width h-divider row,
+ *               then the same pattern again.
+ * column template: 1fr 1px 1fr 1px 1fr
+ */
+.occ-coach-detail__stats {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr 1px 1fr;
+  grid-template-rows: auto 1px auto;
+  background: var(--obb-surface-2);
+  border: 1px solid var(--obb-border-dark);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.occ-coach-detail__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+}
+
+.occ-coach-detail__stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--obb-text-on-dark-1);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.occ-coach-detail__stat-label {
+  font-size: 10px;
+  color: var(--obb-text-on-dark-4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+/* Vertical divider between stats in same row */
+.occ-coach-detail__stat-divider--v {
+  width: 1px;
+  background: var(--obb-border-dark);
+  align-self: stretch;
+}
+
+/* Horizontal divider spanning all 5 columns between the two rows */
+.occ-coach-detail__stat-divider--h {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: var(--obb-border-dark);
+}
+
+/* ─── Sparkline ────────────────────────────────────────────────────────────── */
+
+.occ-sparkline {
+  display: block;
+  max-width: 100%;
+}

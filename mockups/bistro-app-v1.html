@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bistro Staff App</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f0f1a; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; }
+  h2 { font-size: 18px; color: #fff; margin-bottom: 6px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 24px; }
+
+  .device-frame { display: flex; gap: 40px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+
+  .phone {
+    width: 320px; background: #141428; border-radius: 36px;
+    border: 2px solid #333; padding: 16px;
+    box-shadow: 0 0 40px rgba(251,191,36,0.1);
+  }
+  .phone-notch { width: 80px; height: 20px; background: #1a1a30; border-radius: 10px; margin: 0 auto 12px; }
+  .status-bar { display: flex; justify-content: space-between; padding: 0 4px 10px; font-size: 11px; color: #666; }
+
+  /* Header */
+  .app-header {
+    background: #1e1e3a; border-radius: 16px; padding: 14px 16px;
+    margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .app-header .title { font-size: 16px; font-weight: 700; color: #fbbf24; }
+  .app-header .sub { font-size: 11px; color: #666; margin-top: 2px; }
+  .demand-pill {
+    padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 700;
+  }
+  .demand-pill.high { background: #2a1500; color: #f97316; border: 1px solid #f97316; }
+  .demand-pill.medium { background: #2a1e00; color: #fbbf24; border: 1px solid #fbbf24; }
+  .demand-pill.low { background: #0a2a14; color: #00c49f; border: 1px solid #00c49f; }
+
+  .section-label { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: #555; text-transform: uppercase; margin-bottom: 8px; padding-left: 4px; }
+
+  /* Big demand indicator */
+  .demand-card {
+    background: #1e1e3a; border-radius: 14px; padding: 16px; margin-bottom: 12px;
+  }
+  .demand-main {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
+  }
+  .demand-number { font-size: 56px; font-weight: 700; color: #f97316; line-height: 1; }
+  .demand-unit { font-size: 13px; color: #666; margin-top: 4px; }
+  .demand-context { text-align: right; }
+  .demand-context .ctx-label { font-size: 11px; color: #555; }
+  .demand-context .ctx-value { font-size: 18px; font-weight: 700; color: #fff; margin-top: 2px; }
+
+  /* 30 min sparkline (CSS) */
+  .sparkline { display: flex; align-items: flex-end; gap: 3px; height: 40px; margin-bottom: 4px; }
+  .spark-bar { flex: 1; border-radius: 2px 2px 0 0; background: #fbbf2444; border-top: 2px solid #fbbf24; }
+  .spark-label { display: flex; justify-content: space-between; font-size: 10px; color: #444; }
+
+  /* Queue */
+  .queue-card {
+    background: #1e1e3a; border-radius: 14px; padding: 14px; margin-bottom: 12px;
+  }
+  .queue-visual {
+    display: flex; gap: 6px; align-items: center; margin: 10px 0;
+    flex-wrap: wrap;
+  }
+  .queue-person { font-size: 20px; }
+  .queue-count { font-size: 36px; font-weight: 700; color: #fbbf24; margin-left: 8px; }
+  .queue-unit { font-size: 13px; color: #666; align-self: flex-end; margin-bottom: 6px; }
+  .queue-wait { font-size: 12px; color: #888; margin-top: 4px; }
+
+  /* Coach load strip */
+  .coach-strip {
+    background: #1e1e3a; border-radius: 14px; padding: 14px; margin-bottom: 12px;
+  }
+  .coaches { display: flex; gap: 5px; margin-top: 8px; }
+  .coach {
+    flex: 1; border-radius: 6px; padding: 8px 4px; text-align: center;
+    border: 1px solid transparent;
+  }
+  .coach.green { background: #0a2a14; border-color: #00c49f; }
+  .coach.amber { background: #2a1e00; border-color: #fbbf24; }
+  .coach.red { background: #2a0a0a; border-color: #ef4444; }
+  .coach.bistro { background: #1a1000; border-color: #fbbf24; border-width: 2px; }
+  .coach .c-num { font-size: 9px; color: #555; }
+  .coach .c-pct { font-size: 12px; font-weight: 700; margin: 2px 0; }
+  .coach.green .c-pct { color: #00c49f; }
+  .coach.amber .c-pct { color: #fbbf24; }
+  .coach.red .c-pct { color: #ef4444; }
+  .coach.bistro .c-pct { color: #fbbf24; }
+  .coach .c-arrow { font-size: 10px; }
+
+  /* Next stop boarding */
+  .boarding-card {
+    background: #1e1e3a; border-radius: 14px; padding: 14px; margin-bottom: 12px;
+  }
+  .boarding-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid #1a1a2e;
+  }
+  .boarding-row:last-child { border-bottom: none; }
+  .boarding-stop { font-size: 13px; color: #fff; font-weight: 600; }
+  .boarding-eta { font-size: 11px; color: #555; }
+  .boarding-vol {
+    font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 10px;
+  }
+  .boarding-vol.high { background: #2a1500; color: #f97316; }
+  .boarding-vol.medium { background: #2a1e00; color: #fbbf24; }
+  .boarding-vol.low { background: #0a2a14; color: #00c49f; }
+
+  /* Stock alert */
+  .stock-alert {
+    background: #1a0820; border: 1px solid #a855f7; border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 12px;
+  }
+  .stock-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .stock-title { font-size: 13px; font-weight: 700; color: #a855f7; }
+  .stock-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 5px 0; font-size: 12px; border-bottom: 1px solid #2a1040;
+  }
+  .stock-item:last-child { border-bottom: none; }
+  .stock-name { color: #ccc; }
+  .stock-remaining { color: #a855f7; font-weight: 700; }
+  .stock-action { font-size: 11px; color: #666; }
+
+  /* Bottom nav */
+  .bottom-nav {
+    display: flex; justify-content: space-around; background: #1e1e3a;
+    border-radius: 16px; padding: 10px 4px; margin-top: 8px;
+  }
+  .nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 9px; color: #666; padding: 4px 8px; border-radius: 8px; }
+  .nav-item.active { color: #fbbf24; background: #1a1400; }
+  .nav-item .nav-icon { font-size: 18px; }
+
+  /* Annotations */
+  .annotations { width: 200px; display: flex; flex-direction: column; gap: 16px; padding-top: 60px; }
+  .annotation { background: #1a1a2e; border-radius: 8px; padding: 12px; border-left: 3px solid #fbbf24; }
+  .annotation .ann-title { color: #fbbf24; font-weight: 700; margin-bottom: 4px; font-size: 11px; }
+  .annotation .ann-text { color: #888; font-size: 11px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<h2>Bistro Staff App — Demand Planning</h2>
+<p class="subtitle">Tablet or handheld · Passenger AI (Hailo-8 #1) + Bistro telemetry (VLAN 46/47/48) + APC (VLAN 8)</p>
+
+<div class="device-frame">
+
+  <div class="phone">
+    <div class="phone-notch"></div>
+    <div class="status-bar"><span>09:44</span><span>RJ 561 · Bistro</span><span>●●●● 5G</span></div>
+
+    <!-- Header -->
+    <div class="app-header">
+      <div>
+        <div class="title">Bistro Demand</div>
+        <div class="sub">RJ 561 · Wien → Salzburg</div>
+      </div>
+      <div class="demand-pill high">HIGH</div>
+    </div>
+
+    <!-- Big footfall number -->
+    <div class="section-label">Footfall — Last 30 min</div>
+    <div class="demand-card">
+      <div class="demand-main">
+        <div>
+          <div class="demand-number">47</div>
+          <div class="demand-unit">passengers past bistro</div>
+        </div>
+        <div class="demand-context">
+          <div class="ctx-label">vs last hour avg</div>
+          <div class="ctx-value" style="color:#f97316">↑ +31%</div>
+          <div class="ctx-label" style="margin-top:8px">train occupancy</div>
+          <div class="ctx-value">68%</div>
+        </div>
+      </div>
+      <!-- Sparkline -->
+      <div class="sparkline">
+        <div class="spark-bar" style="height:30%"></div>
+        <div class="spark-bar" style="height:45%"></div>
+        <div class="spark-bar" style="height:35%"></div>
+        <div class="spark-bar" style="height:55%"></div>
+        <div class="spark-bar" style="height:40%"></div>
+        <div class="spark-bar" style="height:65%"></div>
+        <div class="spark-bar" style="height:50%"></div>
+        <div class="spark-bar" style="height:75%"></div>
+        <div class="spark-bar" style="height:85%"></div>
+        <div class="spark-bar" style="height:100%"></div>
+      </div>
+      <div class="spark-label"><span>30 min ago</span><span>now</span></div>
+    </div>
+
+    <!-- Queue -->
+    <div class="section-label">Queue at Counter</div>
+    <div class="queue-card">
+      <div style="display:flex; align-items:baseline; gap:8px;">
+        <div class="queue-count">6</div>
+        <div class="queue-unit">people in queue</div>
+      </div>
+      <div class="queue-visual">
+        🧍🧍🧍🧍🧍🧍
+      </div>
+      <div class="queue-wait">⏱ Est. wait: ~4 min · Trending up</div>
+    </div>
+
+    <!-- Coach load -->
+    <div class="section-label">Coach Load · Toward Bistro</div>
+    <div class="coach-strip">
+      <div style="font-size:11px; color:#555; margin-bottom:6px;">Passengers walking from high-load coaches expected soon</div>
+      <div class="coaches">
+        <div class="coach green"><div class="c-num">C1</div><div class="c-pct">34%</div><div class="c-arrow">→</div></div>
+        <div class="coach green"><div class="c-num">C2</div><div class="c-pct">41%</div><div class="c-arrow">→</div></div>
+        <div class="coach amber"><div class="c-num">C3</div><div class="c-pct">67%</div><div class="c-arrow">→</div></div>
+        <div class="coach bistro"><div class="c-num">🍽️</div><div class="c-pct">—</div><div class="c-arrow">★</div></div>
+        <div class="coach red"><div class="c-num">C5</div><div class="c-pct">91%</div><div class="c-arrow">←</div></div>
+        <div class="coach amber"><div class="c-num">C6</div><div class="c-pct">58%</div><div class="c-arrow">←</div></div>
+      </div>
+    </div>
+
+    <!-- Next stop boarding -->
+    <div class="section-label">Expected Boarding — Next Stops</div>
+    <div class="boarding-card">
+      <div class="boarding-row">
+        <div>
+          <div class="boarding-stop">Linz Hbf</div>
+          <div class="boarding-eta">In 28 min</div>
+        </div>
+        <div class="boarding-vol high">+42 pax</div>
+      </div>
+      <div class="boarding-row">
+        <div>
+          <div class="boarding-stop">Wels</div>
+          <div class="boarding-eta">In 54 min</div>
+        </div>
+        <div class="boarding-vol medium">+18 pax</div>
+      </div>
+      <div class="boarding-row">
+        <div>
+          <div class="boarding-stop">Salzburg Hbf</div>
+          <div class="boarding-eta">In 82 min · Terminus</div>
+        </div>
+        <div class="boarding-vol low">Alighting only</div>
+      </div>
+    </div>
+
+    <!-- Stock alert -->
+    <div class="section-label">Stock Alert</div>
+    <div class="stock-alert">
+      <div class="stock-header">
+        <span>🔮</span>
+        <span class="stock-title">AI: restock recommended at Linz</span>
+      </div>
+      <div class="stock-item">
+        <span class="stock-name">☕ Coffee capsules</span>
+        <span class="stock-remaining">8 left</span>
+      </div>
+      <div class="stock-item">
+        <span class="stock-name">🥐 Croissants</span>
+        <span class="stock-remaining">4 left</span>
+      </div>
+      <div class="stock-action" style="margin-top:6px; color:#a855f7;">Based on current demand pace + 42 boarding at Linz</div>
+    </div>
+
+    <!-- Bottom nav -->
+    <div class="bottom-nav">
+      <div class="nav-item active"><div class="nav-icon">📊</div><span>Demand</span></div>
+      <div class="nav-item"><div class="nav-icon">🚆</div><span>Train</span></div>
+      <div class="nav-item"><div class="nav-icon">📦</div><span>Stock</span></div>
+      <div class="nav-item"><div class="nav-icon">🕐</div><span>History</span></div>
+    </div>
+  </div>
+
+  <!-- Annotations -->
+  <div class="annotations">
+    <div class="annotation">
+      <div class="ann-title">📊 Demand indicator</div>
+      <div class="ann-text">High/Medium/Low pill in header gives instant read. Footfall sparkline shows whether demand is rising or falling — not just current state.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">🧍 Live queue count</div>
+      <div class="ann-text">Camera detection of people queuing at the bistro counter. Visual person icons make it immediately scannable without reading numbers.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">🚆 Coach load direction</div>
+      <div class="ann-text">Arrows show which coaches are likely to send passengers toward the bistro car. High-load coaches on either side = incoming rush. Bistro car marked with star.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">🚉 Boarding predictions</div>
+      <div class="ann-text">APC + reservation data predicts how many passengers board at each upcoming stop. Bistro staff can prep before arrival, not after.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">📦 Stock alert</div>
+      <div class="ann-text">Cross-references current stock levels (VLAN 46 bistro telemetry) with predicted demand. Tells staff what to restock at next depot stop before they run out.</div>
+    </div>
+  </div>
+
+</div>
+
+<p style="text-align:center; color: #555; font-size: 12px; margin-top: 24px;">Mockup · Bistro Staff App · Let me know what to change in the terminal</p>
+
+</body>
+</html>

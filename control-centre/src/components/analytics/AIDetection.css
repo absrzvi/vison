@@ -1,0 +1,249 @@
+.ai-detection {
+  padding: 20px;
+  overflow-y: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ai-kpi-strip {
+  display: flex;
+  align-items: stretch;
+  background: var(--obb-surface-2);
+  border: 1px solid var(--obb-border-dark);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ai-kpi {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 24px;
+  gap: 4px;
+  flex: 1;
+}
+
+.ai-kpi__value {
+  font-size: 28px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--obb-text-on-dark-1);
+  line-height: 1;
+}
+
+.ai-kpi__label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--obb-text-on-dark-4);
+}
+
+.ai-kpi-divider {
+  width: 1px;
+  background: var(--obb-border-dark);
+  margin: 8px 0;
+}
+
+/* Bar chart */
+.detection-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detection-chart__legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* P3-B fix: FP note on its own line, not in legend flex row */
+.detection-fp-note {
+  margin-top: -4px;
+}
+
+.detection-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--obb-text-on-dark-3);
+}
+
+.detection-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* P2-B fix: min-height not fixed height — bars won't clip */
+.detection-chart__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  min-height: 180px;
+  padding-bottom: 4px;
+  position: relative;
+}
+
+.detection-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  cursor: default;
+}
+
+/* P2-A fix: zero-total column dims label, hides stub */
+.detection-bar-col--empty .detection-bar-col__total {
+  opacity: 0.35;
+}
+.detection-bar-col--empty .detection-bar-col__stack {
+  display: none;
+}
+
+.detection-bar-col__total {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--obb-text-on-dark-3);
+  font-family: var(--font-mono);
+}
+
+.detection-bar-col__stack {
+  display: flex;
+  flex-direction: column-reverse;
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
+  min-height: 4px;
+}
+
+.detection-bar-segment {
+  width: 100%;
+  transition: flex 600ms ease;
+}
+
+.detection-bar-col__fp {
+  font-size: 9px;
+  color: var(--obb-text-on-dark-4);
+  font-family: var(--font-mono);
+}
+
+.detection-bar-col__day {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--obb-text-on-dark-3);
+}
+
+/* P3-A fix: column hover tooltip */
+.detection-bar__tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: var(--obb-surface-4);
+  border: 1px solid var(--obb-border-bright);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--obb-text-on-dark-2);
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.detection-bar__tooltip strong {
+  color: var(--obb-text-on-dark-1);
+}
+.detection-bar__tooltip-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+/* P3 fix: incident definition note */
+.ai-uptime-note {
+  font-size: 11px;
+  color: var(--obb-text-on-dark-4);
+  margin-bottom: 6px;
+  font-style: italic;
+}
+
+/* P3-C fix: uptime axis showing 70–100% range */
+.uptime-axis {
+  position: relative;
+  height: 16px;
+  margin-bottom: 2px;
+  padding-left: 122px; /* match train label width + gap */
+  padding-right: 52px; /* match pct + incidents columns */
+}
+.uptime-axis__label {
+  position: absolute;
+  font-size: 9px;
+  color: var(--obb-text-on-dark-4);
+  transform: translateX(-50%);
+  top: 0;
+}
+.uptime-axis__threshold {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--obb-sev-warning);
+  opacity: 0.5;
+}
+
+/* Uptime list */
+.uptime-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.uptime-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.uptime-row__train {
+  width: 110px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--obb-text-on-dark-2);
+}
+
+.uptime-row__bar-wrap {
+  flex: 1;
+  height: 8px;
+  background: var(--obb-surface-3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.uptime-row__bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.uptime-row__pct {
+  width: 40px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+.uptime-row__incidents {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--obb-text-on-dark-4);
+}

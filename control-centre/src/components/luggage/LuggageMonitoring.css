@@ -1,0 +1,30 @@
+.luggage-monitoring {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.luggage-monitoring__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.luggage-monitoring__feed-row {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.luggage-monitoring--empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.luggage-monitoring__empty-msg {
+  font-size: 13px;
+  color: var(--obb-text-on-dark-4);
+  font-weight: 500;
+}

@@ -1,0 +1,29 @@
+Nutzungsbedingungen:
+
+ 
+
+Erstens:
+
+Wir, die ÖBB-Personenverkehr AG sowie unsere Partner im Kooperationsverkehr, ermöglichen Ihnen die Nutzung des Internets über WLAN im railjet innerhalb von Österreich und im Ausland. Das ist ein kostenloser, freiwilliger Dienst, der nicht im Ticketpreis enthalten ist.
+
+Zweitens bitten wir Sie, folgende Regeln einzuhalten:
+
+Sie nutzen das WLAN Service nur im railjet.
+
+Sie tun dabei nichts, was die Ordnung, Sicherheit oder die Sittlichkeit gefährden könnte, was gegen Gesetze verstößt oder andere Internetnutzer belästigt.
+
+Da Sie den Internetzugang mit anderen Nutzern teilen, verpflichten Sie sich dazu, die Bandbreite nicht exzessiv zu nutzen (z.B. Videostreaming, Voice Over IP-Dienste, Onlinegaming, File Sharing Programme etc.)
+
+Sie stimmen zu, dass wir die technischen Daten Ihres Endgerätes insbesondere die MAC-Adresse zum Zweck der Entstörung und Bandbreitensteuerung speichern. Wichtig für Sie: Durch diesen Vorgang kann kein Personenbezug hergestellt werden! Wir werden diese Daten nur dann an unsere technischen Dienstleister weitergeben, wenn sie für Analysen im Rahmen der Entstörung gebraucht werden. Wir werden dabei nur Ausschnitte aus Logfiles verwenden, die für den konkreten Entstörungsfall nötig sind. Die Daten werden 12 Monate gespeichert und danach gelöscht.
+
+Drittens: Wir wollen Konflikte vermeiden.
+
+Diese Nutzungsbedingungen unterliegen dem österreichischen Recht unter Ausschluss des UN-Kaufrechts und der Verweisungsnormen des Internationalen Privatrechts.
+
+Das angebotene WLAN Service ist ungesichert. Besonders sensible Daten (z.B. Gesundheitsdaten, Online-Banking, etc.) sollten daher über das WLAN Service nicht übermittelt werden.
+
+Wir übernehmen keine Haftung für Fehler, Störungen oder Schäden an Ihrem Endgerät, die durch die Nutzung des WLAN Services oder durch Konfigurationsänderungen des Endgeräts entstehen.
+
+Wir, die ÖBB-Personenverkehr AG, behalten uns vor, das WLAN für einzelne Endgeräte sowie bestimmte Ports zu sperren, wenn unsere Nutzungsbedingungen nicht eingehalten werden.
+
+Und zu guter Letzt: Der Ersatz von Schäden jeglicher Art, inklusive Folgeschäden Dritter und Schäden aus Ansprüchen Dritter, ist in jedem Fall, soweit gesetzlich zulässig, ausgeschlossen.

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Technician App Mockup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f0f1a; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; }
+  h2 { font-size: 18px; color: #fff; margin-bottom: 6px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 24px; }
+
+  .device-frame {
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .phone {
+    width: 320px;
+    background: #141428;
+    border-radius: 36px;
+    border: 2px solid #333;
+    padding: 16px;
+    box-shadow: 0 0 40px rgba(249,115,22,0.15);
+  }
+
+  .phone-notch {
+    width: 80px; height: 20px;
+    background: #1a1a30;
+    border-radius: 10px;
+    margin: 0 auto 12px;
+  }
+
+  .status-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 4px 10px;
+    font-size: 11px; color: #666;
+  }
+
+  .app-header {
+    background: #1e1e3a;
+    border-radius: 16px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .app-header .train-id { font-size: 18px; font-weight: 700; color: #f97316; }
+  .app-header .role { font-size: 11px; color: #888; margin-top: 2px; }
+  .app-header .health-score {
+    text-align: right;
+  }
+  .app-header .health-num { font-size: 28px; font-weight: 700; color: #ffaa00; }
+  .app-header .health-label { font-size: 10px; color: #666; }
+
+  .section-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 2px;
+    color: #555; text-transform: uppercase;
+    margin-bottom: 8px; padding-left: 4px;
+  }
+
+  /* Subsystem health grid */
+  .subsystem-grid {
+    background: #1e1e3a;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .subsystem-card {
+    background: #12122a;
+    border-radius: 8px;
+    padding: 10px;
+    border-left: 3px solid transparent;
+    cursor: pointer;
+  }
+  .subsystem-card.ok { border-color: #00c49f; }
+  .subsystem-card.warn { border-color: #ffaa00; }
+  .subsystem-card.fault { border-color: #ef4444; }
+  .subsystem-card .sys-name { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .subsystem-card .sys-status { font-size: 13px; font-weight: 700; }
+  .subsystem-card.ok .sys-status { color: #00c49f; }
+  .subsystem-card.warn .sys-status { color: #ffaa00; }
+  .subsystem-card.fault .sys-status { color: #ef4444; }
+  .subsystem-card .sys-alarms { font-size: 10px; color: #555; margin-top: 2px; }
+
+  /* Fault timeline */
+  .fault-timeline {
+    background: #1e1e3a;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .timeline-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .timeline-filter {
+    display: flex; gap: 6px;
+  }
+  .filter-chip {
+    background: #12122a; border: 1px solid #333;
+    border-radius: 20px; padding: 3px 10px;
+    font-size: 10px; color: #666; cursor: pointer;
+  }
+  .filter-chip.active { background: #1a0d00; border-color: #f97316; color: #f97316; }
+
+  .timeline-item {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: 1px solid #1a1a2e;
+  }
+  .timeline-item:last-child { border-bottom: none; }
+  .tl-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    margin-top: 4px; flex-shrink: 0;
+  }
+  .tl-dot.critical { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+  .tl-dot.warn { background: #ffaa00; }
+  .tl-dot.info { background: #4a9eff; }
+  .tl-body { flex: 1; }
+  .tl-title { font-size: 12px; color: #ddd; font-weight: 600; }
+  .tl-sub { font-size: 11px; color: #666; margin-top: 2px; }
+  .tl-code { font-size: 10px; color: #444; font-family: monospace; margin-top: 2px; }
+  .tl-time { font-size: 10px; color: #444; white-space: nowrap; }
+
+  /* Prediction banner */
+  .prediction-banner {
+    background: #1a0820;
+    border: 1px solid #a855f7;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .pred-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 8px;
+  }
+  .pred-header .pred-icon { font-size: 18px; }
+  .pred-header .pred-title { font-size: 13px; font-weight: 700; color: #a855f7; }
+  .pred-body { font-size: 12px; color: #ccc; line-height: 1.5; }
+  .pred-action {
+    margin-top: 8px;
+    background: #2a0a3a; border-radius: 6px; padding: 8px 10px;
+    font-size: 11px; color: #a855f7;
+  }
+
+  /* AI Chat */
+  .chat-section {
+    background: #1e1e3a;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .chat-history {
+    display: flex; flex-direction: column; gap: 8px;
+    margin-bottom: 8px;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  .chat-q {
+    background: #12122a; border-radius: 10px; padding: 8px 12px;
+    font-size: 12px; color: #ccc; border-left: 3px solid #a855f7;
+    align-self: flex-start;
+  }
+  .chat-a {
+    background: #0d1f1a; border-radius: 10px; padding: 8px 12px;
+    font-size: 12px; color: #00c49f; border-left: 3px solid #00c49f;
+    align-self: flex-start;
+  }
+  .chat-a .chat-source {
+    font-size: 10px; color: #444; margin-top: 4px;
+  }
+  .chat-input {
+    display: flex; gap: 8px;
+  }
+  .chat-input input {
+    flex: 1; background: #12122a; border: 1px solid #333;
+    border-radius: 20px; padding: 8px 12px;
+    color: #fff; font-size: 12px; outline: none;
+  }
+  .chat-input button {
+    background: #f97316; border: none; border-radius: 20px;
+    padding: 8px 14px; color: #fff; font-size: 12px; cursor: pointer;
+  }
+
+  /* Bottom nav */
+  .bottom-nav {
+    display: flex; justify-content: space-around;
+    background: #1e1e3a; border-radius: 16px; padding: 10px 4px;
+    margin-top: 8px;
+  }
+  .nav-item {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-size: 9px; color: #666; cursor: pointer; padding: 4px 8px;
+    border-radius: 8px;
+  }
+  .nav-item.active { color: #f97316; background: #1a0d00; }
+  .nav-item .nav-icon { font-size: 18px; }
+  .nav-badge {
+    background: #ef4444; color: #fff; font-size: 8px;
+    border-radius: 8px; padding: 1px 5px; margin-top: -6px; margin-left: 12px;
+  }
+
+  /* Annotations */
+  .annotations {
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-top: 60px;
+  }
+  .annotation {
+    background: #1a1a2e;
+    border-radius: 8px;
+    padding: 12px;
+    border-left: 3px solid #f97316;
+    font-size: 12px;
+  }
+  .annotation .ann-title { color: #f97316; font-weight: 700; margin-bottom: 4px; font-size: 11px; }
+  .annotation .ann-text { color: #888; font-size: 11px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<h2>Technician App — Diagnostics Home Screen</h2>
+<p class="subtitle">Handheld · Diagnostics AI (Hailo-8 #2) · Stadler alarm data via SNMP · RJ 561</p>
+
+<div class="device-frame">
+
+  <div class="phone">
+    <div class="phone-notch"></div>
+    <div class="status-bar">
+      <span>09:44</span>
+      <span>RJ 561 · T. Bauer</span>
+      <span>●●●● 5G</span>
+    </div>
+
+    <!-- Header with health score -->
+    <div class="app-header">
+      <div>
+        <div class="train-id">RJ 561</div>
+        <div class="role">Technician · Diagnostics View</div>
+      </div>
+      <div class="health-score">
+        <div class="health-num">74</div>
+        <div class="health-label">Health Score</div>
+      </div>
+    </div>
+
+    <!-- Subsystem grid -->
+    <div class="section-label">Subsystem Status</div>
+    <div class="subsystem-grid">
+      <div class="subsystem-card fault">
+        <div class="sys-name">HVAC</div>
+        <div class="sys-status">⚠ Fault</div>
+        <div class="sys-alarms">2 active alarms</div>
+      </div>
+      <div class="subsystem-card ok">
+        <div class="sys-name">Traction</div>
+        <div class="sys-status">✓ Normal</div>
+        <div class="sys-alarms">0 alarms</div>
+      </div>
+      <div class="subsystem-card warn">
+        <div class="sys-name">Brakes</div>
+        <div class="sys-status">△ Watch</div>
+        <div class="sys-alarms">1 warning</div>
+      </div>
+      <div class="subsystem-card ok">
+        <div class="sys-name">Doors</div>
+        <div class="sys-status">✓ Normal</div>
+        <div class="sys-alarms">0 alarms</div>
+      </div>
+      <div class="subsystem-card ok">
+        <div class="sys-name">Pantograph</div>
+        <div class="sys-status">✓ Normal</div>
+        <div class="sys-alarms">0 alarms</div>
+      </div>
+      <div class="subsystem-card warn">
+        <div class="sys-name">Passenger Info</div>
+        <div class="sys-status">△ Watch</div>
+        <div class="sys-alarms">1 warning</div>
+      </div>
+    </div>
+
+    <!-- Fault timeline -->
+    <div class="section-label">Fault Timeline</div>
+    <div class="fault-timeline">
+      <div class="timeline-header">
+        <div class="timeline-filter">
+          <div class="filter-chip active">All</div>
+          <div class="filter-chip">Critical</div>
+          <div class="filter-chip">Today</div>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="tl-dot critical"></div>
+        <div class="tl-body">
+          <div class="tl-title">HVAC recirculation fan fault</div>
+          <div class="tl-sub">Coach 3 · AI: bearing wear pattern detected</div>
+          <div class="tl-code">0x3A12 · Seen 3× in 14 days</div>
+        </div>
+        <div class="tl-time">09:33</div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="tl-dot warn"></div>
+        <div class="tl-body">
+          <div class="tl-title">Brake pressure variance</div>
+          <div class="tl-sub">Bogie 2 · Within tolerance, trending up</div>
+          <div class="tl-code">0x1B04 · First occurrence</div>
+        </div>
+        <div class="tl-time">08:51</div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="tl-dot info"></div>
+        <div class="tl-body">
+          <div class="tl-title">Passenger info display timeout</div>
+          <div class="tl-sub">Coach 5 · Screen 2 unresponsive</div>
+          <div class="tl-code">0x5C01 · Recurred after reset</div>
+        </div>
+        <div class="tl-time">07:12</div>
+      </div>
+    </div>
+
+    <!-- AI Prediction -->
+    <div class="section-label">AI Prediction</div>
+    <div class="prediction-banner">
+      <div class="pred-header">
+        <div class="pred-icon">🔮</div>
+        <div class="pred-title">Predicted failure · Next 48–72h</div>
+      </div>
+      <div class="pred-body">
+        HVAC Coach 3 fan bearing likely to fail within 48–72h based on alarm frequency pattern and vibration signature. Similar pattern preceded failure on RJ 544 on 2026-04-28.
+      </div>
+      <div class="pred-action">
+        Recommended: Schedule fan replacement at Salzburg depot tonight
+      </div>
+    </div>
+
+    <!-- Diagnostics Chat -->
+    <div class="section-label">Ask the Diagnostics Agent</div>
+    <div class="chat-section">
+      <div class="chat-history">
+        <div class="chat-q">Why does the HVAC keep faulting in coach 3?</div>
+        <div class="chat-a">
+          Alarm 0x3A12 has fired 3 times in 14 days on Coach 3. The pattern matches bearing wear — short bursts of vibration-induced fault, self-clearing. It escalated on RJ 544 to full failure after 5 occurrences. You're at 3. Replace at next depot visit.
+          <div class="chat-source">Sources: Stadler alarm log · Fleet history · AI pattern model</div>
+        </div>
+        <div class="chat-q">Is it safe to continue to Salzburg?</div>
+        <div class="chat-a">
+          Yes — HVAC remains operational on backup mode. Passenger comfort may degrade if coach temp rises. No safety risk. Flag for depot action tonight.
+          <div class="chat-source">Sources: Stadler subsystem status · Safety rulebook</div>
+        </div>
+      </div>
+      <div class="chat-input">
+        <input placeholder="Ask about any subsystem…" />
+        <button>→</button>
+      </div>
+    </div>
+
+    <!-- Bottom nav -->
+    <div class="bottom-nav">
+      <div class="nav-item active">
+        <div class="nav-icon">🔧</div>
+        <span>Overview</span>
+      </div>
+      <div class="nav-item">
+        <div class="nav-icon">📋</div>
+        <span>Alarms</span>
+        <div class="nav-badge">3</div>
+      </div>
+      <div class="nav-item">
+        <div class="nav-icon">📈</div>
+        <span>Trends</span>
+      </div>
+      <div class="nav-item">
+        <div class="nav-icon">🔮</div>
+        <span>Predict</span>
+      </div>
+      <div class="nav-item">
+        <div class="nav-icon">💬</div>
+        <span>Chat</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Annotations -->
+  <div class="annotations">
+    <div class="annotation">
+      <div class="ann-title">📊 Health Score</div>
+      <div class="ann-text">Single 0–100 score for overall train health, calculated from active alarm severity and frequency. Gives technician instant situational awareness.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">⬛ Subsystem grid</div>
+      <div class="ann-text">All Stadler subsystems polled via SNMP. Colour-coded at a glance. Tap any subsystem to drill into full alarm history and waveforms.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">📅 Fault timeline</div>
+      <div class="ann-text">Chronological alarm log with AI annotations — not just raw alarm codes but what the pattern means. Links recurring faults to fleet-wide history.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">🔮 AI Prediction</div>
+      <div class="ann-text">Hailo-8 #2 runs time-series inference on alarm patterns. Cites precedent from fleet history ("like RJ 544 before it failed"). Gives specific recommended action.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">💬 Diagnostic chat</div>
+      <div class="ann-text">Technician asks in plain language. Agent cites its sources (alarm log, fleet history, safety rulebook) so the technician can trust and verify the answer.</div>
+    </div>
+  </div>
+
+</div>
+
+<p style="text-align:center; color: #555; font-size: 12px; margin-top: 24px;">Mockup · Let me know what to change in the terminal</p>
+
+</body>
+</html>

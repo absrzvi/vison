@@ -1,0 +1,56 @@
+# ── Tool caches ───────────────────────────────────────────────────────────────
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+# ── Node / frontend ───────────────────────────────────────────────────────────
+node_modules/
+control-centre/dist/
+
+# ── Claude Code (machine-specific settings and installed framework skills) ─────
+.claude/settings.local.json
+.claude/launch.json
+.claude/skills/
+
+# ── BMAD agent runtime (installed tooling, not project artifacts) ──────────────
+_bmad/
+
+# ── Superpowers brainstorm scratchpad ─────────────────────────────────────────
+.superpowers/
+
+# ── Design upload artifacts (binary assets, not source) ───────────────────────
+claude-design-mockups/uploads/
+claude-design-mockups/preview/
+
+# ── ÖBB brand assets / portal design files (binary, not source) ───────────────
+current-portal-design/
+
+# ── Large binary / archive files ──────────────────────────────────────────────
+*.zip
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# ── OS noise ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Python virtual envs ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Secrets / env files ───────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── SQLite databases (runtime state, not source) ──────────────────────────────
+*.db
+*.sqlite
+*.sqlite3

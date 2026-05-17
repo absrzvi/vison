@@ -1,0 +1,144 @@
+.luggage-train-detail {
+  width: 300px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--obb-border-dark);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--obb-surface-2);
+}
+
+.luggage-train-detail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--obb-border-dark);
+  position: sticky;
+  top: 0;
+  background: var(--obb-surface-2);
+  z-index: 1;
+}
+
+.luggage-train-detail__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.luggage-td__occ-btn {
+  font-size: 10px;
+  padding: 3px 10px;
+  flex-shrink: 0;
+}
+
+.luggage-train-detail__id {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--obb-text-on-dark-1);
+  font-family: var(--font-mono);
+  margin: 0;
+}
+
+.luggage-train-detail__section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--obb-text-on-dark-4);
+  padding: 12px 16px 6px;
+}
+.luggage-train-detail__section-title--spaced { margin-top: 8px; }
+
+.luggage-coach-grid {
+  display: flex;
+  flex-direction: row;
+  gap: 5px;
+  padding: 0 16px 12px;
+  overflow-x: auto;
+}
+
+.luggage-coach-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 52px;
+  padding: 8px 6px;
+  background: var(--obb-surface-3);
+  border-radius: 6px;
+  border: 1px solid var(--obb-border-dark);
+  gap: 3px;
+}
+
+.luggage-coach-cell__id {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--obb-text-on-dark-3);
+  text-transform: uppercase;
+}
+
+.luggage-coach-cell__state {
+  font-size: 9px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.luggage-coach-cell__clear {
+  font-size: 10px;
+  color: var(--obb-text-on-dark-4);
+}
+
+.luggage-coach-cell__count {
+  font-size: 9px;
+  color: var(--obb-text-on-dark-4);
+}
+
+.luggage-train-detail__events {
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px 16px;
+  gap: 6px;
+}
+
+.luggage-train-detail__event-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--obb-border-dark);
+}
+.luggage-train-detail__event-row:last-child { border-bottom: none; }
+
+.luggage-train-detail__event-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.luggage-train-detail__event-coach {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--obb-blue-accent);
+  font-family: var(--font-mono);
+}
+
+.luggage-train-detail__event-title {
+  font-size: 11px;
+  color: var(--obb-text-on-dark-2);
+}
+
+.luggage-train-detail__event-time {
+  font-size: 10px;
+  color: var(--obb-text-on-dark-4);
+  font-family: var(--font-mono);
+}
+
+.luggage-train-detail__empty {
+  font-size: 12px;
+  color: var(--obb-text-on-dark-4);
+  margin: 0;
+}

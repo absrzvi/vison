@@ -1,0 +1,2054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ÖBB Smart Rail — Conductor App</title>
+<link rel="stylesheet" href="shared-tokens.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --oebb-red:      #E2002A;
+    --oebb-red-dim:  rgba(226,0,42,0.10);
+    --oebb-red-glow: rgba(226,0,42,0.18);
+    --oebb-blue:     #073D6E;
+    --oebb-blue-mid: #0A5298;
+    --oebb-blue-bright: #1A6FBF;
+    --surface-0:     #0E1117;
+    --surface-1:     #141820;
+    --surface-2:     #191E28;
+    --surface-3:     #1E2430;
+    --surface-4:     #242B38;
+    --surface-5:     #2A3242;
+    --border:        rgba(255,255,255,0.06);
+    --border-bright: rgba(255,255,255,0.10);
+    --text-primary:  #D8DCE8;
+    --text-secondary:#7A8499;
+    --text-muted:    #485060;
+    --green:         #00A876;
+    --green-dim:     rgba(0,168,118,0.10);
+    --green-glow:    rgba(0,168,118,0.18);
+    --amber:         #E09900;
+    --amber-dim:     rgba(224,153,0,0.10);
+    --amber-glow:    rgba(224,153,0,0.18);
+    --red:           #E2002A;
+    --red-dim:       rgba(226,0,42,0.10);
+    --blue-accent:   #4080D0;
+    --blue-dim:      rgba(64,128,208,0.10);
+    --purple:        #7C52D6;
+    --purple-dim:    rgba(124,82,214,0.10);
+  }
+
+  body {
+    background: radial-gradient(ellipse at 30% 0%, #0D1628 0%, var(--surface-0) 60%);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    padding: 40px 24px 64px;
+    min-height: 100vh;
+  }
+
+  /* ─── Page cover header ─── */
+  .cover {
+    max-width: 1100px;
+    margin: 0 auto 48px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cover-left {}
+  .cover-product {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--oebb-red);
+    margin-bottom: 8px;
+  }
+  .cover-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin-bottom: 6px;
+  }
+  .cover-sub {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .cover-right {
+    text-align: right;
+  }
+  .cover-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 12px;
+    margin-bottom: 8px;
+  }
+  .cover-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.8;
+  }
+
+  /* ÖBB Railnet logo (inline SVG) */
+  .oebb-logo svg { display: block; }
+
+  /* ─── Section divider ─── */
+  .section-divider {
+    max-width: 1100px;
+    margin: 48px auto 36px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .section-divider-line { flex: 1; height: 1px; background: var(--border); }
+  .section-divider-pill {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    background: var(--surface-2);
+    border: 1px solid var(--border-bright);
+    border-radius: 20px;
+    padding: 5px 14px;
+    white-space: nowrap;
+  }
+  .section-divider-num {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--oebb-blue);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* ─── Screen row ─── */
+  .screens-row {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .screen-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .screen-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* ─── Phone frame ─── */
+  .phone-wrap {
+    position: relative;
+    width: 300px;
+  }
+  /* Side buttons */
+  .phone-wrap::before {
+    content: '';
+    position: absolute;
+    left: -8px; top: 88px;
+    width: 4px; height: 32px;
+    background: #3A424F;
+    border-radius: 2px 0 0 2px;
+    box-shadow: 0 40px 0 #3A424F, 0 80px 0 #3A424F;
+  }
+  .phone-wrap::after {
+    content: '';
+    position: absolute;
+    right: -8px; top: 120px;
+    width: 4px; height: 48px;
+    background: #3A424F;
+    border-radius: 0 2px 2px 0;
+  }
+  .phone {
+    width: 300px;
+    background: linear-gradient(160deg, var(--surface-2) 0%, var(--surface-1) 100%);
+    border-radius: 42px;
+    border: 6px solid #3A424F;
+    padding: 12px 10px 16px;
+    box-shadow:
+      0 0 0 1px #2A303C,
+      0 4px 8px rgba(0,0,0,0.4),
+      0 24px 64px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.04);
+    overflow: hidden;
+    position: relative;
+  }
+  /* Inner screen bezel */
+  .phone::before {
+    content: '';
+    position: absolute;
+    inset: 14px;
+    border-radius: 30px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* Dynamic island */
+  .dynamic-island {
+    width: 90px; height: 26px;
+    background: #000;
+    border-radius: 13px;
+    margin: 0 auto 10px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .di-camera {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #111;
+    border: 1px solid #222;
+  }
+  .di-sensor {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: #1a1a1a;
+  }
+
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 6px 10px;
+    font-size: 10px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── App header (ÖBB blue) ─── */
+  .app-header {
+    background: linear-gradient(135deg, var(--oebb-blue) 0%, var(--oebb-blue-mid) 100%);
+    border-radius: 18px;
+    padding: 13px 15px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 16px rgba(7,61,110,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+    position: relative;
+    overflow: hidden;
+  }
+  .app-header::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  }
+  .train-id {
+    font-size: 22px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .route {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 3px;
+  }
+  .time-block { text-align: right; }
+  .time {
+    font-size: 22px;
+    font-weight: 200;
+    color: #fff;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+  .conductor-name {
+    font-size: 10px;
+    color: rgba(255,255,255,0.4);
+    margin-top: 3px;
+  }
+
+  /* ─── Section micro-label ─── */
+  .slabel {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin: 0 2px 6px;
+  }
+
+  /* ─── Alert banner ─── */
+  .alert-banner {
+    border-radius: 14px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid;
+    position: relative;
+    overflow: hidden;
+  }
+  .alert-banner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 14px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.03) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .ab-safety {
+    background: var(--red-dim);
+    border-color: rgba(226,0,42,0.4);
+    animation: pulse-red 2.4s ease-in-out infinite;
+  }
+  .ab-warning {
+    background: var(--amber-dim);
+    border-color: rgba(255,176,32,0.35);
+    animation: pulse-amber 2.4s ease-in-out infinite;
+  }
+  .ab-info {
+    background: var(--blue-dim);
+    border-color: rgba(75,142,240,0.3);
+  }
+  .ab-resolved {
+    background: var(--green-dim);
+    border-color: rgba(0,196,140,0.3);
+  }
+  @keyframes pulse-red {
+    0%,100% { box-shadow: 0 0 0 0 rgba(226,0,42,0); }
+    50%      { box-shadow: 0 0 12px 2px rgba(226,0,42,0.15); }
+  }
+  @keyframes pulse-amber {
+    0%,100% { box-shadow: 0 0 0 0 rgba(255,176,32,0); }
+    50%      { box-shadow: 0 0 12px 2px rgba(255,176,32,0.15); }
+  }
+  .banner-icon {
+    width: 34px; height: 34px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .bi-red    { background: rgba(226,0,42,0.18);   box-shadow: 0 0 8px rgba(226,0,42,0.2); }
+  .bi-amber  { background: rgba(255,176,32,0.18);  box-shadow: 0 0 8px rgba(255,176,32,0.2); }
+  .bi-blue   { background: rgba(75,142,240,0.18);  box-shadow: 0 0 8px rgba(75,142,240,0.15); }
+  .bi-green  { background: rgba(0,196,140,0.18);   box-shadow: 0 0 8px rgba(0,196,140,0.2); }
+  .banner-text  { font-size: 11px; font-weight: 700; color: var(--text-primary); line-height: 1.3; }
+  .banner-sub   { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+  .banner-arrow { margin-left: auto; color: var(--text-muted); font-size: 14px; flex-shrink: 0; }
+
+  /* ─── Train diagram ─── */
+  .train-diagram {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 12px;
+    margin-bottom: 10px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+  .coaches {
+    display: flex;
+    gap: 3px;
+    margin-bottom: 10px;
+  }
+  .coach {
+    flex: 1;
+    border-radius: 8px;
+    padding: 8px 2px;
+    text-align: center;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    position: relative;
+  }
+  .coach:hover { transform: translateY(-2px); }
+  .coach.green {
+    background: var(--green-dim);
+    border-color: rgba(0,196,140,0.3);
+  }
+  .coach.amber {
+    background: var(--amber-dim);
+    border-color: rgba(255,176,32,0.3);
+  }
+  .coach.red {
+    background: var(--red-dim);
+    border-color: rgba(226,0,42,0.4);
+  }
+  .coach.selected {
+    box-shadow: 0 0 0 2px var(--oebb-blue-bright), 0 0 12px rgba(26,111,191,0.3);
+  }
+  .coach-num  { font-size: 7px; color: var(--text-muted); margin-bottom: 3px; font-weight: 600; }
+  .coach-pct  { font-size: 11px; font-weight: 800; line-height: 1; }
+  .coach.green .coach-pct { color: var(--green); }
+  .coach.amber .coach-pct { color: var(--amber); }
+  .coach.red   .coach-pct { color: var(--red); }
+  .coach-bar {
+    height: 3px;
+    border-radius: 2px;
+    margin: 4px 3px 0;
+  }
+  .coach.green .coach-bar { background: var(--green); opacity: 0.5; }
+  .coach.amber .coach-bar { background: var(--amber); opacity: 0.6; }
+  .coach.red   .coach-bar { background: var(--red);   opacity: 0.7; }
+
+  /* Coach detail */
+  .coach-detail {
+    background: var(--surface-3);
+    border-radius: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+  }
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 11px;
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .dl { color: var(--text-secondary); }
+  .dv { font-weight: 700; color: var(--text-primary); }
+  .dv.red   { color: var(--red); }
+  .dv.amber { color: var(--amber); }
+  .dv.green { color: var(--green); }
+  .dv.blue  { color: var(--blue-accent); }
+
+  /* Rack bar */
+  .rack-wrap {
+    margin-top: 8px;
+    background: var(--surface-3);
+    border-radius: 10px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+  }
+  .rack-label-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .rack-track {
+    height: 5px;
+    background: var(--surface-5);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .rack-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+  .rack-fill.rf-low  { width: 38%; background: linear-gradient(90deg, var(--green), #00e0a0); }
+  .rack-fill.rf-mid  { width: 67%; background: linear-gradient(90deg, var(--amber), #ffc840); }
+  .rack-fill.rf-high { width: 94%; background: linear-gradient(90deg, var(--red), #ff3355); box-shadow: 0 0 6px rgba(226,0,42,0.4); }
+
+  /* ─── Heatmap ─── */
+  .heatmap-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .hm-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .hm-coach-label { font-size: 11px; font-weight: 700; color: var(--text-primary); }
+  .hm-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 20px;
+    border: 1px solid;
+  }
+  .hm-badge.amber { background: var(--amber-dim); color: var(--amber); border-color: rgba(255,176,32,0.3); }
+  .hm-badge.red   { background: var(--red-dim);   color: var(--red);   border-color: rgba(226,0,42,0.3); }
+  .hm-badge.green { background: var(--green-dim); color: var(--green); border-color: rgba(0,196,140,0.3); }
+
+  /* Heatmap visual */
+  .hm-visual {
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 8px;
+    border: 1px solid var(--border);
+  }
+  .hm-row {
+    display: flex;
+    height: 26px;
+    align-items: center;
+    border-bottom: 1px solid rgba(0,0,0,0.2);
+    position: relative;
+  }
+  .hm-row:last-child { border-bottom: none; }
+  .hm-row-label {
+    width: 42px;
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0 8px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+  }
+  .hm-row-label.alert { color: var(--red); }
+  .hm-row-label.ok    { color: var(--green); }
+  .hm-density {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 9px;
+    font-weight: 800;
+    color: rgba(255,255,255,0.7);
+  }
+  .hm-density.d-hot      { background: rgba(226,0,42,0.40); }
+  .hm-density.d-warm-hi  { background: rgba(255,176,32,0.30); }
+  .hm-density.d-warm-lo  { background: rgba(255,176,32,0.12); }
+  .hm-density.d-cool     { background: rgba(0,196,140,0.10); }
+  .hm-density.d-empty    { background: rgba(0,196,140,0.04); }
+  .hm-count {
+    width: 28px;
+    font-size: 9px;
+    font-weight: 800;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .hm-count.c-red   { color: var(--red); }
+  .hm-count.c-amber { color: var(--amber); }
+  .hm-count.c-green { color: var(--green); }
+  .hm-note {
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+
+  /* ─── Imbalance ─── */
+  .imbalance-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .ib-bar {
+    display: flex;
+    height: 22px;
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 10px 0 6px;
+    gap: 2px;
+  }
+  .ib-seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 800;
+    color: rgba(255,255,255,0.85);
+    border-radius: 6px;
+  }
+  .ib-red   { background: linear-gradient(90deg, #c00020, var(--red)); flex: 87; }
+  .ib-amber { background: linear-gradient(90deg, #cc8800, var(--amber)); flex: 58; }
+  .ib-green { background: linear-gradient(90deg, #009966, var(--green)); flex: 31; }
+  .ib-legend {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  /* ─── PA panel ─── */
+  .pa-panel {
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 11px 13px;
+    margin-bottom: 10px;
+  }
+  .pa-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 9px;
+  }
+  .pa-icon {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .pa-icon-red  { background: var(--red-dim); box-shadow: 0 0 8px var(--oebb-red-glow); }
+  .pa-icon-blue { background: var(--blue-dim); }
+  .pa-title { font-size: 11px; font-weight: 700; color: var(--text-primary); }
+  .pa-scope { font-size: 10px; color: var(--text-muted); margin-left: auto; }
+  .pa-text {
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.65;
+    background: var(--surface-4);
+    border-radius: 8px;
+    padding: 9px 11px;
+    margin-bottom: 9px;
+    border-left: 2px solid var(--oebb-red);
+    font-style: italic;
+  }
+  .pa-actions { display: flex; gap: 7px; }
+  .btn {
+    flex: 1;
+    border: none;
+    border-radius: 9px;
+    padding: 9px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: center;
+    letter-spacing: 0.02em;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--oebb-red), #c0001f);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(226,0,42,0.3);
+  }
+  .btn-secondary {
+    background: var(--surface-4);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-bright);
+  }
+  .btn-blue {
+    background: linear-gradient(135deg, var(--oebb-blue-mid), var(--oebb-blue));
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(7,61,110,0.3);
+  }
+
+  /* ─── PIS screen preview ─── */
+  .pis-preview {
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .pis-label {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .pis-screen {
+    background: #000;
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #222;
+  }
+  .pis-coaches-mini {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+  }
+  .pis-coach-mini {
+    width: 12px; height: 9px;
+    border-radius: 2px;
+  }
+  .pis-coach-mini.r { background: rgba(226,0,42,0.7); }
+  .pis-coach-mini.a { background: rgba(255,176,32,0.6); }
+  .pis-coach-mini.e { background: #1a1a22; }
+  .pis-coach-mini.g { background: rgba(0,196,140,0.7); }
+  .pis-text-block {}
+  .pis-headline { font-size: 10px; color: #fff; font-weight: 700; }
+  .pis-subline  { font-size: 9px; color: var(--green); margin-top: 2px; }
+
+  /* ─── Camera frame ─── */
+  .camera-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .camera-frame {
+    background: #000;
+    border-radius: 10px;
+    height: 116px;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 9px;
+    border: 1px solid #1a1a1a;
+  }
+  /* Environment */
+  .cf-bg {
+    position: absolute; inset: 0;
+    background: linear-gradient(170deg, #0e0e14 0%, #111218 50%, #0a0b0f 100%);
+  }
+  .cf-floor {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 36px;
+    background: linear-gradient(180deg, #181818, #121212);
+    border-top: 1px solid #252525;
+  }
+  .cf-wall-l {
+    position: absolute; top: 0; left: 0; width: 22px; height: 100%;
+    background: linear-gradient(90deg, #141414, #1a1a1a);
+    border-right: 1px solid #222;
+  }
+  .cf-wall-r {
+    position: absolute; top: 0; right: 0; width: 22px; height: 100%;
+    background: linear-gradient(270deg, #141414, #1a1a1a);
+    border-left: 1px solid #222;
+  }
+  /* Door outline */
+  .cf-door {
+    position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 48px; height: 80px;
+    border: 1px solid #2a2a2a;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+  }
+  /* Bag */
+  .cf-bag {
+    position: absolute;
+    bottom: 34px; left: 50%; transform: translateX(-50%);
+    width: 34px; height: 24px;
+    background: linear-gradient(160deg, #2e2e3e, #222230);
+    border-radius: 5px 5px 3px 3px;
+    border: 1px solid #3a3a4a;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+  .cf-bag::before {
+    content: '';
+    position: absolute;
+    top: -7px; left: 50%; transform: translateX(-50%);
+    width: 14px; height: 7px;
+    background: #1c1c28;
+    border-radius: 3px 3px 0 0;
+    border: 1px solid #333;
+    border-bottom: none;
+  }
+  /* Highlight box */
+  .cf-highlight {
+    position: absolute;
+    bottom: 24px; left: 50%; transform: translateX(-50%);
+    width: 52px; height: 42px;
+    border: 1.5px solid var(--oebb-red);
+    border-radius: 6px;
+    animation: cf-pulse 1.8s ease-in-out infinite;
+    box-shadow: 0 0 8px rgba(226,0,42,0.25);
+  }
+  @keyframes cf-pulse {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.25; }
+  }
+  /* Corner marks */
+  .cf-corner {
+    position: absolute;
+    width: 8px; height: 8px;
+    border-color: var(--oebb-red);
+    border-style: solid;
+    opacity: 0.8;
+  }
+  .cf-corner.tl { top: -1px; left: -1px; border-width: 2px 0 0 2px; border-radius: 2px 0 0 0; }
+  .cf-corner.tr { top: -1px; right: -1px; border-width: 2px 2px 0 0; border-radius: 0 2px 0 0; }
+  .cf-corner.bl { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; border-radius: 0 0 0 2px; }
+  .cf-corner.br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; border-radius: 0 0 2px 0; }
+  /* HUD overlays */
+  .cf-timestamp {
+    position: absolute; top: 7px; left: 9px;
+    font-size: 7px; color: rgba(255,255,255,0.35);
+    font-family: 'Courier New', monospace;
+  }
+  .cf-coach-tag {
+    position: absolute; top: 7px; right: 9px;
+    font-size: 7px; color: rgba(255,255,255,0.35);
+    font-family: 'Courier New', monospace;
+    background: rgba(0,0,0,0.5);
+    padding: 2px 5px;
+    border-radius: 3px;
+  }
+  .cf-rec {
+    position: absolute; bottom: 8px; right: 9px;
+    display: flex; align-items: center; gap: 4px;
+    font-size: 7px; color: rgba(255,255,255,0.4);
+    font-family: 'Courier New', monospace;
+  }
+  .cf-rec-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--oebb-red);
+    animation: cf-pulse 1.4s ease-in-out infinite;
+  }
+  .cam-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+  }
+  .cam-timer { color: var(--amber); font-weight: 700; }
+  .cam-note {
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+  .escalate-note {
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 10px;
+  }
+  .escalate-note strong { color: var(--blue-accent); }
+
+  /* ─── Alerts list ─── */
+  .alerts-list {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .alert-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--surface-3);
+    border-radius: 11px;
+    padding: 9px 10px;
+    border-left: 2.5px solid transparent;
+  }
+  .ai-safety  { border-color: var(--red); }
+  .ai-warning { border-color: var(--amber); }
+  .ai-info    { border-color: var(--blue-accent); }
+  .ai-fault   { border-color: var(--purple); }
+  .aicon {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .aicon-red    { background: var(--red-dim); }
+  .aicon-amber  { background: var(--amber-dim); }
+  .aicon-blue   { background: var(--blue-dim); }
+  .aicon-purple { background: var(--purple-dim); }
+  .atitle { font-size: 11px; font-weight: 700; color: var(--text-primary); }
+  .asub   { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+  .atime  { font-size: 9px; color: var(--text-muted); margin-left: auto; white-space: nowrap; padding-top: 1px; flex-shrink: 0; }
+
+  /* ─── Chat ─── */
+  .chat-section {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .chat-q {
+    background: var(--surface-4);
+    border-radius: 11px 11px 2px 11px;
+    padding: 9px 12px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    margin-left: 24px;
+  }
+  .chat-a {
+    background: linear-gradient(135deg, rgba(7,61,110,0.4), rgba(10,82,152,0.25));
+    border: 1px solid rgba(10,82,152,0.3);
+    border-radius: 2px 11px 11px 11px;
+    padding: 9px 12px;
+    font-size: 11px;
+    color: var(--text-primary);
+    line-height: 1.6;
+    margin-bottom: 8px;
+    margin-right: 24px;
+  }
+  .chat-a-label {
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: var(--blue-accent);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+  }
+  .chat-input {
+    display: flex;
+    gap: 7px;
+  }
+  .chat-input input {
+    flex: 1;
+    background: var(--surface-3);
+    border: 1px solid var(--border-bright);
+    border-radius: 22px;
+    padding: 8px 14px;
+    color: var(--text-primary);
+    font-size: 11px;
+    outline: none;
+  }
+  .chat-input input::placeholder { color: var(--text-muted); }
+  .chat-input button {
+    background: linear-gradient(135deg, var(--oebb-blue-mid), var(--oebb-blue));
+    border: none;
+    border-radius: 22px;
+    padding: 8px 16px;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(7,61,110,0.4);
+  }
+
+  /* ─── Bottom nav ─── */
+  .bottom-nav {
+    display: flex;
+    justify-content: space-around;
+    background: var(--surface-2);
+    border: 1px solid var(--border-bright);
+    border-radius: 20px;
+    padding: 9px 4px 7px;
+    margin-top: 10px;
+    box-shadow: 0 -1px 0 rgba(255,255,255,0.04);
+  }
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    font-size: 8px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 12px;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .nav-item.active {
+    color: var(--oebb-red);
+    background: var(--red-dim);
+  }
+  .nav-icon {
+    font-size: 15px;
+    line-height: 1;
+    margin-bottom: 1px;
+  }
+
+  /* SVG nav icons */
+  .nav-svg { width: 18px; height: 18px; margin-bottom: 2px; }
+
+  .nav-badge {
+    position: absolute;
+    top: 2px; right: 4px;
+    background: var(--oebb-red);
+    color: #fff;
+    font-size: 7px;
+    font-weight: 800;
+    border-radius: 7px;
+    padding: 1px 4px;
+    min-width: 14px;
+    text-align: center;
+    box-shadow: 0 0 6px rgba(226,0,42,0.5);
+  }
+
+  /* ─── Nav badge wrap (for emoji-icon navs) ─── */
+  .nav-badge-wrap { position: relative; display: inline-block; }
+  .nav-badge.nav-badge-red { background: #FF3B3B; color: #fff; box-shadow: none; }
+
+  /* ── Escalations raise modal ── */
+  .esc-modal {
+    background: var(--surface-2, #191E28);
+    border-radius: 16px 16px 0 0;
+    padding: 16px 14px 24px;
+    margin-top: 8px;
+  }
+  .esc-modal-handle {
+    width: 32px; height: 4px;
+    background: #3A3F4B;
+    border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+  .esc-modal-title {
+    font-size: 15px; font-weight: 700;
+    color: var(--text-primary, #F0F2F5);
+    margin-bottom: 4px;
+  }
+  .esc-modal-sub {
+    font-size: 11px; color: var(--text-tertiary, #6B7280);
+    margin-bottom: 16px;
+  }
+  .esc-category-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .esc-cat-section {
+    font-size: 9px; font-weight: 700;
+    color: var(--text-tertiary, #6B7280);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 6px;
+    grid-column: 1 / -1;
+  }
+  .esc-cat-btn {
+    background: #1E2128;
+    border: 1px solid #2A2D35;
+    border-radius: 8px;
+    padding: 10px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .esc-cat-btn:hover, .esc-cat-btn.selected {
+    border-color: #4A9EFF;
+    background: rgba(74,158,255,0.08);
+  }
+  .esc-cat-btn .cat-icon { font-size: 18px; margin-bottom: 4px; }
+  .esc-cat-btn .cat-label { font-size: 10px; font-weight: 600; color: #F0F2F5; }
+  .esc-cat-btn .cat-route { font-size: 9px; color: #6B7280; margin-top: 2px; }
+
+  .esc-form-row { margin-bottom: 12px; }
+  .esc-form-label {
+    font-size: 10px; font-weight: 700;
+    color: #6B7280; text-transform: uppercase; letter-spacing: 0.8px;
+    margin-bottom: 5px;
+  }
+  .esc-form-input {
+    width: 100%;
+    background: #1E2128;
+    border: 1px solid #2A2D35;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px; color: #F0F2F5;
+    font-family: inherit;
+  }
+  .esc-severity-row {
+    display: flex; gap: 8px;
+  }
+  .esc-sev-btn {
+    flex: 1;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid #2A2D35;
+    background: #1E2128;
+    font-size: 11px; font-weight: 700;
+    text-align: center; cursor: pointer;
+  }
+  .esc-sev-btn.urgent.selected   { border-color: #FF3B3B; background: rgba(255,59,59,0.08); color: #FF3B3B; }
+  .esc-sev-btn.advisory.selected { border-color: #4A9EFF; background: rgba(74,158,255,0.08); color: #4A9EFF; }
+
+  .esc-voice-btn {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: #4A9EFF;
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    margin: 0 auto 16px;
+    box-shadow: 0 0 0 6px rgba(74,158,255,0.15);
+  }
+  .esc-routing-preview {
+    background: rgba(74,158,255,0.06);
+    border: 1px solid rgba(74,158,255,0.2);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 11px; color: #9BA3AF;
+    margin-bottom: 14px;
+  }
+  .esc-routing-preview strong { color: #4A9EFF; }
+  .esc-submit-btn {
+    width: 100%;
+    background: #4A9EFF;
+    border: none; border-radius: 10px;
+    padding: 14px;
+    font-size: 14px; font-weight: 700; color: #fff;
+    cursor: pointer;
+  }
+
+  /* ── Escalation inbox status pills ── */
+  .esc-status-pill {
+    display: inline-block;
+    font-size: 9px; font-weight: 700;
+    padding: 1px 6px; border-radius: 10px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .esc-status-pill.new  { background: rgba(255,59,59,0.15); color: #FF3B3B; }
+  .esc-status-pill.ack  { background: rgba(245,166,35,0.15); color: #F5A623; }
+  .esc-status-pill.done { background: rgba(34,197,94,0.15);  color: #22C55E; }
+
+  /* ─── Annotations ─── */
+  .ann-col {
+    width: 186px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .annotation {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 11px 13px;
+    border-left: 3px solid var(--oebb-blue-mid);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+  }
+  .ann-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px; height: 16px;
+    background: var(--oebb-blue);
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 5px;
+  }
+  .ann-title { font-size: 10px; font-weight: 700; color: var(--blue-accent); margin-bottom: 4px; }
+  .ann-text  { font-size: 10px; color: var(--text-secondary); line-height: 1.6; }
+
+  /* ─── Page footer ─── */
+  .page-footer {
+    max-width: 1100px;
+    margin: 64px auto 0;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .footer-left { font-size: 11px; color: var(--text-muted); line-height: 1.8; }
+  .footer-left strong { color: var(--text-secondary); }
+  .footer-right { font-size: 10px; color: var(--text-muted); text-align: right; line-height: 1.8; }
+
+/* ── Coach detail panel v2 ── */
+.coach-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+.coach-metric {
+  background: #1E2128;
+  border-radius: 6px;
+  padding: 8px;
+  text-align: center;
+}
+.coach-metric-label {
+  font-size: 9px; font-weight: 700;
+  color: #6B7280; text-transform: uppercase;
+  letter-spacing: 0.8px; margin-bottom: 3px;
+}
+.coach-metric-value {
+  font-size: 18px; font-weight: 700; color: #F0F2F5;
+}
+.coach-metric-sub { font-size: 10px; color: #6B7280; }
+.coach-metric.warning .coach-metric-value { color: #FF6B00; }
+.coach-metric.critical .coach-metric-value { color: #FF3B3B; }
+.coach-metric.ok .coach-metric-value { color: #22C55E; }
+
+/* ── New alert type styles ── */
+.alert-type-fire {
+  background: rgba(255,59,59,0.08);
+  border: 1px solid rgba(255,59,59,0.4);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  animation: severity-pulse 1.2s ease-in-out infinite;
+}
+.alert-type-fire .alert-title { color: #FF3B3B; font-weight: 700; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════ COVER ═══════ -->
+<div class="cover">
+  <div class="cover-left">
+    <div class="cover-product">ÖBB Smart Rail — Concept Design</div>
+    <div class="cover-title">Conductor App</div>
+    <div class="cover-sub">Hailo-8 Passenger AI · Mobile handheld · Nomad Digital</div>
+  </div>
+  <div class="cover-right">
+    <!-- ÖBB Railnet logo — brightness filter makes it visible on dark background -->
+    <img src="../current-portal-design/Logos & Symbole/Logos railnet/OeBB_railnet.png"
+         alt="ÖBB railnet" height="48"
+         style="display:block;margin-bottom:10px;margin-left:auto;filter:brightness(0) invert(1);">
+    <!-- hidden SVG kept for reference only -->
+    <div style="display:none;"><svg viewBox="0 0 283.46 96.33" width="160" height="54" xmlns="http://www.w3.org/2000/svg">
+        <style>.st0{fill:#646464}.st1{fill:#AEAEAE}.st2{fill:#646464}.st3{fill:#E2002A}</style>
+        <path class="st0" d="M119.92,44.67c-0.09,0.42,0.72,0.64,1.6,0.64h8.93c0.81-0.02,1.64-0.25,1.73-0.65l0.41-1.83h-10.56c-0.83,0-1.76,0.26-1.84,0.62L119.92,44.67z M153.17,33.42c0.96,0,1.51,0.27,1.46,0.48l-3.37,14.95c-0.08,0.36-1.12,0.51-1.69,0.51h-4.4c-0.91,0-1.43-0.27-1.38-0.51l3.37-14.95c0.06-0.22,0.72-0.48,1.64-0.48H153.17z M154.61,27.26c0.91,0,1.46,0.26,1.41,0.48l-0.6,2.67c-0.08,0.36-1.12,0.52-1.69,0.51h-4.4c-0.91,0-1.43-0.28-1.38-0.51l0.6-2.67c0.06-0.22,0.72-0.48,1.64-0.48H154.61z M111.95,33.42c0.96,0,1.5,0.27,1.46,0.48l-0.6,2.67c-0.08,0.36-1.12,0.52-1.68,0.51h-3.92c-0.85,0-1.75,0.24-1.85,0.66l-2.5,11.1c-0.08,0.36-1.12,0.51-1.69,0.51h-4.4c-0.91,0-1.43-0.25-1.37-0.51l3.37-14.95c0.06-0.24,0.71-0.48,1.63-0.48H111.95z M137.09,49.36h-9.57h-10.2c-3.34-0.01-5.65-1.21-5.34-2.6l0.98-4.42c0.31-1.37,3.11-2.6,6.36-2.6h13.95l0.48-2.02c0.09-0.39-0.72-0.63-1.57-0.63h-14.58c-0.93,0-1.47-0.27-1.41-0.51l0.07-0.33c0.36-1.61,3.19-2.81,6.51-2.83h13.49c3.37,0,5.65,1.18,5.34,2.58l-2.9,12.86c-0.06,0.24-0.71,0.5-1.6,0.5H137.09z M167.11,27.26c0.97,0,1.51,0.26,1.47,0.48l-4.77,21.13c-0.06,0.26-0.71,0.48-1.62,0.48c-3.35,0-5.68-1.23-5.38-2.58l4.3-19.03c0.06-0.22,0.71-0.48,1.63-0.48H167.11z"/>
+        <path class="st1" d="M246.91,33.86l-0.61,2.7c-0.05,0.24-0.71,0.51-1.63,0.51h-1.8c-0.95,0.01-1.84,0.24-1.94,0.66l-2.5,11.11c-0.06,0.24-0.71,0.51-1.63,0.51h-4.46c-0.91,0-1.43-0.27-1.38-0.51l4.76-21.12c0.05-0.22,0.71-0.48,1.63-0.48h4.37c0.97,0,1.51,0.27,1.47,0.48l-1.28,5.66h3.54C246.41,33.39,246.96,33.65,246.91,33.86z"/>
+        <path class="st1" d="M174.56,49.36h-4.24c-0.86-0.01-1.36-0.27-1.3-0.51l3.44-14.93c0.07-0.22,0.69-0.48,1.57-0.48h18.78c3.19,0,5.39,1.21,5.06,2.61l-2.96,12.81c-0.05,0.24-0.68,0.51-1.56,0.51h-4.25c-0.86-0.01-1.36-0.27-1.3-0.51l2.56-11.1c0.1-0.42-0.66-0.66-1.47-0.66h-10.05l-2.71,11.76C176.07,49.09,175.44,49.36,174.56,49.36z"/>
+        <path class="st1" d="M224.71,33.48h-16.59c-3.28,0-6.19,1.19-6.5,2.52l-2.44,10.81c-0.3,1.35,1.95,2.55,5.21,2.55h21.09c0.92,0,1.57-0.27,1.62-0.5l0.7-3.05c0.04-0.2-0.44-0.47-1.4-0.48h-17.75c-0.85,0-1.64-0.24-1.53-0.7l0.4-1.76h19.44c0.92,0,1.57-0.27,1.64-0.55l1.42-6.31C230.33,34.62,227.97,33.49,224.71,33.48z M222.16,37.87l-0.44,1.92h-13.5l0.45-2.01c0.09-0.42,1-0.66,1.87-0.66h10.14C221.5,37.13,222.27,37.36,222.16,37.87z"/>
+        <g><path class="st2" d="M257.42,20.54c-3.21-3.72-7.25-5.98-10.84-6.42l-0.73,3.56c2.93,0.04,6.42,1.81,9.13,4.95c2.52,2.91,3.77,6.3,3.64,9.1l3.57-0.05C262.13,28.18,260.49,24.08,257.42,20.54z"/><path class="st2" d="M251.7,24.95c-1.83-2.11-4.16-3.47-6.52-3.99l-0.62,3.01c1.74,0.43,3.45,1.44,4.8,3.01c1.27,1.47,2.01,3.17,2.24,4.86l3.09-0.04C254.48,29.44,253.48,27.01,251.7,24.95z"/><path class="st2" d="M262.8,15.8c-4.22-4.88-9.61-7.89-14.76-8.73l-0.7,3.37c4.11,0.35,8.96,3.02,12.83,7.5c3.84,4.44,5.78,9.58,5.56,13.68l3.56-0.05C269.19,26.39,267,20.66,262.8,15.8z"/></g>
+        <path class="st3" d="M63.54,49.06h10.34c1.45,0,3.99-0.21,5.56-1.52c2.04-1.7,2.39-3.53,2.39-4.68c0-2.65-1.38-4.59-2.73-5.6c1.67-1.34,2.17-3.22,2.17-4.56c0-0.91-0.44-5.81-8.26-5.81h-9.46L63.54,49.06z M68.25,30.69h5.59c1.63,0,2.92,0.61,2.92,2.52c0,1.76-1.16,2.52-3.17,2.52h-5.34V30.69z M68.25,39.54h6.41c0.88,0,2.67,0.12,2.67,2.62c0,3.04-2.14,3.1-3.55,3.1h-5.53V39.54z"/>
+        <path class="st3" d="M41.76,49.06H52.1c1.45,0,3.99-0.21,5.56-1.52c2.04-1.7,2.39-3.53,2.39-4.68c0-2.65-1.38-4.59-2.73-5.6c1.67-1.34,2.17-3.22,2.17-4.56c0-0.91-0.44-5.81-8.26-5.81h-9.46V49.06z M46.48,30.69h5.59c1.63,0,2.92,0.61,2.92,2.52c0,1.76-1.16,2.52-3.17,2.52h-5.34V30.69z M46.48,39.54h6.41c0.88,0,2.67,0.12,2.67,2.62c0,3.04-2.14,3.1-3.55,3.1h-5.53V39.54z"/>
+        <polygon class="st3" points="31.39,26.9 31.39,26.88 23.26,35.74 28.71,35.74 36.82,26.9"/>
+        <path class="st3" d="M35.29,30.32l-3.14,3.43c0.85,1.19,1.32,2.62,1.32,4.11c0,1.9-0.74,3.69-2.08,5.03c-1.34,1.34-3.13,2.08-5.03,2.08c-1.9,0-3.69-0.74-5.03-2.08c-1.34-1.34-2.08-3.13-2.08-5.03c0-3.88,3.12-7.04,6.99-7.11l3.7-4.03c-1.14-0.36-2.34-0.57-3.57-0.57c-6.45,0-11.71,5.25-11.71,11.71c0,3.13,1.22,6.07,3.43,8.28c2.21,2.21,5.15,3.43,8.28,3.43c3.13,0,6.07-1.22,8.28-3.43c2.21-2.21,3.43-5.15,3.43-8.28C38.06,35.07,37.07,32.43,35.29,30.32"/>
+      </svg>
+    </div>
+    <div class="cover-badge">Concept · Not for production</div>
+    <div class="cover-meta">Interface 1 of 6 · Conductor / Train Manager<br>Hailo-8 M.2 Passenger AI · 3-month pilot</div>
+  </div>
+</div>
+
+
+<!-- ═══════ SCREEN 1: HOME / BOARDING ═══════ -->
+<div class="section-divider">
+  <div class="section-divider-line"></div>
+  <div class="section-divider-num">1</div>
+  <div class="section-divider-pill">Home screen — Boarding overview (Scenario 01)</div>
+  <div class="section-divider-line"></div>
+</div>
+
+<div class="screens-row">
+  <div class="screen-col">
+    <div class="screen-label">Home screen · T−8 min departure</div>
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="dynamic-island"><div class="di-camera"></div><div class="di-sensor"></div></div>
+        <div class="status-bar">
+          <span>09:42</span>
+          <span>RJ 561 · K. Müller</span>
+          <span>▲▲▲ 5G</span>
+        </div>
+
+        <div class="app-header">
+          <div>
+            <div class="train-id">RJ 561</div>
+            <div class="route">Wien Hbf → Salzburg Hbf</div>
+          </div>
+          <div class="time-block">
+            <div class="time">09:42</div>
+            <div class="conductor-name">K. Müller</div>
+          </div>
+        </div>
+
+        <div class="alert-banner ab-warning">
+          <div class="banner-icon bi-amber">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFB020" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div>
+            <div class="banner-text">Coach 3 — rack 94% full</div>
+            <div class="banner-sub">Large boarding expected at Linz · 8 min</div>
+          </div>
+          <div class="banner-arrow">›</div>
+        </div>
+
+        <div class="slabel">Coach Occupancy</div>
+        <div class="train-diagram">
+          <div class="coaches">
+            <div class="coach green"><div class="coach-num">1</div><div class="coach-pct">34%</div><div class="coach-bar"></div></div>
+            <div class="coach green"><div class="coach-num">2</div><div class="coach-pct">41%</div><div class="coach-bar"></div></div>
+            <div class="coach amber selected"><div class="coach-num">3</div><div class="coach-pct">67%</div><div class="coach-bar"></div></div>
+            <div class="coach red"><div class="coach-num">4</div><div class="coach-pct">91%</div><div class="coach-bar"></div></div>
+            <div class="coach amber"><div class="coach-num">5</div><div class="coach-pct">58%</div><div class="coach-bar"></div></div>
+            <div class="coach green"><div class="coach-num">6</div><div class="coach-pct">29%</div><div class="coach-bar"></div></div>
+            <div class="coach green"><div class="coach-num">7</div><div class="coach-pct">22%</div><div class="coach-bar"></div></div>
+            <div class="coach green"><div class="coach-num">8</div><div class="coach-pct">18%</div><div class="coach-bar"></div></div>
+            <div class="coach green"><div class="coach-num">9</div><div class="coach-pct">15%</div><div class="coach-bar"></div></div>
+            <div class="coach green"><div class="coach-num">10</div><div class="coach-pct">12%</div><div class="coach-bar"></div></div>
+          </div>
+          <div class="coach-detail">
+            <div class="detail-row"><span class="dl">Passengers</span><span class="dv amber">~54 / 80</span></div>
+            <div class="detail-row"><span class="dl">Luggage items</span><span class="dv">21 detected</span></div>
+            <div class="detail-row"><span class="dl">Rack capacity</span><span class="dv red">94%</span></div>
+            <div class="detail-row"><span class="dl">Accessibility</span><span class="dv">—</span></div>
+            <div class="coach-detail-grid">
+              <div class="coach-metric critical">
+                <div class="coach-metric-label">Actual pax</div>
+                <div class="coach-metric-value">98</div>
+                <div class="coach-metric-sub">counted by Hailo</div>
+              </div>
+              <div class="coach-metric warning">
+                <div class="coach-metric-label">Reserved</div>
+                <div class="coach-metric-value">50</div>
+                <div class="coach-metric-sub">+48 overboard</div>
+              </div>
+              <div class="coach-metric">
+                <div class="coach-metric-label">Luggage items</div>
+                <div class="coach-metric-value">7</div>
+                <div class="coach-metric-sub">in vestibule</div>
+              </div>
+              <div class="coach-metric warning">
+                <div class="coach-metric-label">Congestion</div>
+                <div class="coach-metric-value">74</div>
+                <div class="coach-metric-sub">score / 100</div>
+              </div>
+              <div class="coach-metric ok">
+                <div class="coach-metric-label">Bicycles</div>
+                <div class="coach-metric-value">0</div>
+                <div class="coach-metric-sub">detected</div>
+              </div>
+              <div class="coach-metric">
+                <div class="coach-metric-label">Access. flags</div>
+                <div class="coach-metric-value">1</div>
+                <div class="coach-metric-sub">♿ door 1</div>
+              </div>
+            </div>
+          </div>
+          <div class="rack-wrap">
+            <div class="rack-label-row">
+              <span>Rack occupancy — Coach 3</span>
+              <span style="color:var(--red)">94%</span>
+            </div>
+            <div class="rack-track"><div class="rack-fill rf-high"></div></div>
+          </div>
+        </div>
+
+        <div class="slabel">Active Alerts</div>
+        <div class="alerts-list">
+          <!-- Fire/smoke — critical, always at top -->
+          <div class="alert-type-fire">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <div class="alert-title">🔥 Smoke detected — Coach 5</div>
+                <div style="font-size:11px;color:#9BA3AF;margin-top:3px">All parties alerted · Emergency protocol active</div>
+              </div>
+              <div style="font-size:10px;color:#FF3B3B;white-space:nowrap">NOW</div>
+            </div>
+          </div>
+
+          <!-- Bicycle hazard — medium severity -->
+          <div style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #2A2D35">
+            <div style="width:8px;height:8px;border-radius:50%;background:#F5A623;margin-top:4px;flex-shrink:0"></div>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:600;color:#F0F2F5">🚲 Bicycle blocking door — Coach 3 D2L</div>
+              <div style="font-size:11px;color:#6B7280;margin-top:2px">Coach 3 · Vestibule · Luggage/bicycle module</div>
+            </div>
+            <div style="font-size:10px;color:#6B7280;white-space:nowrap">1m ago</div>
+          </div>
+
+          <!-- Vandalism — high severity -->
+          <div style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #2A2D35">
+            <div style="width:8px;height:8px;border-radius:50%;background:#FF6B00;margin-top:4px;flex-shrink:0"></div>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:600;color:#F0F2F5">🎨 Vandalism detected — Coach 6</div>
+              <div style="font-size:11px;color:#6B7280;margin-top:2px">Coach 6 · Window area · Vandalism detection module</div>
+            </div>
+            <div style="font-size:10px;color:#6B7280;white-space:nowrap">3m ago</div>
+          </div>
+
+          <div class="alert-item ai-warning">
+            <div class="aicon aicon-amber">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFB020" stroke-width="2.5" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-4 0v2M8 12h8M8 16h5"/></svg>
+            </div>
+            <div>
+              <div class="atitle">Rack saturation — Coach 3</div>
+              <div class="asub">94% · Large boarding at Linz</div>
+            </div>
+            <div class="atime">2m ago</div>
+          </div>
+          <div class="alert-item ai-fault">
+            <div class="aicon aicon-purple">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
+            </div>
+            <div>
+              <div class="atitle">HVAC alarm — Coach 3</div>
+              <div class="asub">Diagnostics AI · Low severity</div>
+            </div>
+            <div class="atime">11m ago</div>
+          </div>
+          <div class="alert-item ai-info">
+            <div class="aicon aicon-blue">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4B8EF0" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+            </div>
+            <div>
+              <div class="atitle">Wheelchair user boarding</div>
+              <div class="asub">Coach 4 · Next stop: Linz Hbf</div>
+            </div>
+            <div class="atime">Live</div>
+          </div>
+        </div>
+
+        <div class="slabel">Diagnostics Agent</div>
+        <div class="chat-section">
+          <div class="chat-q">What's wrong with the HVAC in coach 3?</div>
+          <div class="chat-a">
+            <div class="chat-a-label">Diagnostics AI</div>
+            Recirculation fan fault (0x3A12) — triggered 11 min ago. Pattern seen twice in 14 days. Likely bearing wear. Not safety-critical now; flag for maintenance at Salzburg.
+          </div>
+          <div class="chat-input">
+            <input placeholder="Ask about any fault…" />
+            <button>Send</button>
+          </div>
+        </div>
+
+        <div class="bottom-nav">
+          <div class="nav-item active">
+            <div class="nav-icon">⌂</div>
+            <span>Home</span>
+          </div>
+          <div class="nav-item">
+            <div class="nav-icon">🚂</div>
+            <span>Train</span>
+          </div>
+          <div class="nav-item">
+            <div class="nav-icon nav-badge-wrap">🔔<span class="nav-badge">3</span></div>
+            <span>Alerts</span>
+          </div>
+          <div class="nav-item">
+            <div class="nav-icon nav-badge-wrap">⚡<span class="nav-badge nav-badge-red">1</span></div>
+            <span>Escalate</span>
+          </div>
+          <div class="nav-item">
+            <div class="nav-icon">💬</div>
+            <span>Chat</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ann-col" style="padding-top:140px;">
+    <div class="annotation">
+      <div class="ann-title">Active alert banner</div>
+      <div class="ann-text">Highest-priority alert always pinned at top. Pulses softly. Tap navigates directly to the affected coach.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">10-coach diagram</div>
+      <div class="ann-text">Full train at a glance — green / amber / red at configurable thresholds. Tap any coach to expand the detail panel below.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">Rack occupancy bar</div>
+      <div class="ann-text">Luggage rack fill shown as a secondary layer — alerts Conrad before a boarding stop creates aisle congestion.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">Unified alert feed</div>
+      <div class="ann-text">Passenger AI and Diagnostics AI feed one prioritised list. No switching between apps.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">Diagnostics agent</div>
+      <div class="ann-text">Plain-language query to Diagnostics AI. Responds with fault context, history, and recommended action in under 3 seconds.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════ SCREEN 2: VESTIBULE CONGESTION ═══════ -->
+<div class="section-divider">
+  <div class="section-divider-line"></div>
+  <div class="section-divider-num">2</div>
+  <div class="section-divider-pill">Vestibule congestion — mid-journey (Scenario 02)</div>
+  <div class="section-divider-line"></div>
+</div>
+
+<div class="screens-row">
+  <!-- State A: alert -->
+  <div class="screen-col">
+    <div class="screen-label">Alert received</div>
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="dynamic-island"><div class="di-camera"></div><div class="di-sensor"></div></div>
+        <div class="status-bar"><span>10:14</span><span>RJ 561 · K. Müller</span><span>▲▲▲ 5G</span></div>
+        <div class="app-header">
+          <div><div class="train-id">RJ 561</div><div class="route">Wien Hbf → Salzburg Hbf</div></div>
+          <div class="time-block"><div class="time">10:14</div><div class="conductor-name">Next stop: Linz 12 min</div></div>
+        </div>
+
+        <div class="alert-banner ab-warning">
+          <div class="banner-icon bi-amber">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFB020" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          </div>
+          <div>
+            <div class="banner-text">Vestibule crowding — Coach 4</div>
+            <div class="banner-sub">11 pax in door zone · 12 min to stop</div>
+          </div>
+          <div class="banner-arrow">›</div>
+        </div>
+
+        <div class="slabel">Vestibule Heatmap — Coach 4</div>
+        <div class="heatmap-card">
+          <div class="hm-header">
+            <span class="hm-coach-label">Coach 4 · Door zone density</span>
+            <span class="hm-badge amber">11 pax bunching</span>
+          </div>
+          <div class="hm-visual">
+            <div class="hm-row" style="background:#111828;">
+              <div class="hm-row-label ok">Seats</div>
+              <div class="hm-density d-cool">Underused — 8 free seats visible</div>
+              <div class="hm-count c-green">3</div>
+            </div>
+            <div class="hm-row" style="background:#111828;">
+              <div class="hm-row-label">Aisle</div>
+              <div class="hm-density d-warm-lo">Moving through</div>
+              <div class="hm-count c-amber">4</div>
+            </div>
+            <div class="hm-row" style="background:#111828;">
+              <div class="hm-row-label">Door</div>
+              <div class="hm-density d-warm-hi">Crowding building</div>
+              <div class="hm-count c-amber">6</div>
+            </div>
+            <div class="hm-row" style="background:#111828;">
+              <div class="hm-row-label alert">Vstb</div>
+              <div class="hm-density d-hot">Dense — early queueing</div>
+              <div class="hm-count c-red">11</div>
+            </div>
+          </div>
+          <div class="hm-note">Passengers pre-positioning for stop 12 min away. Seats visible but unused toward coach centre.</div>
+        </div>
+
+        <div class="slabel">Quick Action</div>
+        <div class="pa-panel">
+          <div class="pa-header">
+            <div class="pa-icon pa-icon-red">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E2002A" stroke-width="2.5" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>
+            </div>
+            <div class="pa-title">PA Announcement</div>
+            <div class="pa-scope">Coach 4 only</div>
+          </div>
+          <div class="pa-text">"Passengers in coach 4 — the next stop is still 12 minutes away. Please move away from the doors and use available seating."</div>
+          <div class="pa-actions">
+            <div class="btn btn-primary">Send PA</div>
+            <div class="btn btn-secondary">Edit first</div>
+          </div>
+        </div>
+
+        <div class="bottom-nav">
+          <div class="nav-item"><div class="nav-icon">⌂</div><span>Home</span></div>
+          <div class="nav-item active"><div class="nav-icon">🚂</div><span>Train</span></div>
+          <div class="nav-item"><div class="nav-icon nav-badge-wrap">🔔<span class="nav-badge">1</span></div><span>Alerts</span></div>
+          <div class="nav-item"><div class="nav-icon nav-badge-wrap">⚡<span class="nav-badge nav-badge-red">1</span></div><span>Escalate</span></div>
+          <div class="nav-item"><div class="nav-icon">💬</div><span>Chat</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- State B: resolved -->
+  <div class="screen-col">
+    <div class="screen-label">After PA — auto-resolved</div>
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="dynamic-island"><div class="di-camera"></div><div class="di-sensor"></div></div>
+        <div class="status-bar"><span>10:16</span><span>RJ 561 · K. Müller</span><span>▲▲▲ 5G</span></div>
+        <div class="app-header">
+          <div><div class="train-id">RJ 561</div><div class="route">Wien Hbf → Salzburg Hbf</div></div>
+          <div class="time-block"><div class="time">10:16</div><div class="conductor-name">Next stop: Linz 10 min</div></div>
+        </div>
+
+        <div class="alert-banner ab-resolved">
+          <div class="banner-icon bi-green">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00C48C" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div>
+            <div class="banner-text" style="color:var(--green);">Vestibule cleared — Coach 4</div>
+            <div class="banner-sub">Resolved via PA · 1 min 48 sec</div>
+          </div>
+        </div>
+
+        <div class="slabel">Vestibule Heatmap — Coach 4</div>
+        <div class="heatmap-card">
+          <div class="hm-header">
+            <span class="hm-coach-label">Coach 4 · Door zone density</span>
+            <span class="hm-badge green">Cleared</span>
+          </div>
+          <div class="hm-visual">
+            <div class="hm-row" style="background:#111828;">
+              <div class="hm-row-label ok">Seats</div>
+              <div class="hm-density d-warm-lo">Passengers redistributed</div>
+              <div class="hm-count c-amber">9</div>
+            </div>
+            <div class="hm-row" style="background:#111828;">
+              <div class="hm-row-label ok">Aisle</div>
+              <div class="hm-density d-cool">Normal</div>
+              <div class="hm-count c-green">3</div>
+            </div>
+            <div class="hm-row" style="background:#111828;">
+              <div class="hm-row-label ok">Door</div>
+              <div class="hm-density d-empty">Clear</div>
+              <div class="hm-count c-green">1</div>
+            </div>
+            <div class="hm-row" style="background:#111828;">
+              <div class="hm-row-label ok">Vstb</div>
+              <div class="hm-density d-empty">Clear</div>
+              <div class="hm-count c-green">2</div>
+            </div>
+          </div>
+          <div class="hm-note" style="color:var(--green);">Alert auto-resolved on sensor change — no manual close required.</div>
+        </div>
+
+        <div class="slabel">Coach 4 Summary</div>
+        <div class="train-diagram">
+          <div class="coach-detail">
+            <div class="detail-row"><span class="dl">Vestibule zone</span><span class="dv green">Clear (2 pax)</span></div>
+            <div class="detail-row"><span class="dl">Alert resolved</span><span class="dv green">Auto · 1m 48s</span></div>
+            <div class="detail-row"><span class="dl">PA sent</span><span class="dv">Coach 4 · 10:14</span></div>
+            <div class="detail-row"><span class="dl">Action logged</span><span class="dv">Resolved via PA</span></div>
+          </div>
+        </div>
+
+        <div class="bottom-nav">
+          <div class="nav-item active"><div class="nav-icon">⌂</div><span>Home</span></div>
+          <div class="nav-item"><div class="nav-icon">🚂</div><span>Train</span></div>
+          <div class="nav-item"><div class="nav-icon">🔔</div><span>Alerts</span></div>
+          <div class="nav-item"><div class="nav-icon nav-badge-wrap">⚡<span class="nav-badge nav-badge-red">1</span></div><span>Escalate</span></div>
+          <div class="nav-item"><div class="nav-icon">💬</div><span>Chat</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ann-col" style="padding-top:120px;">
+    <div class="annotation">
+      <div class="ann-title">Zone-level heatmap</div>
+      <div class="ann-text">Density by zone (vestibule / door / aisle / seats) with live counts. Conrad reads the situation without walking to the coach.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">PA pre-filled per coach</div>
+      <div class="ann-text">Draft targets Coach 4 automatically. Conrad reviews and sends in one tap — no navigation to a separate PA screen.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">Auto-resolve on sensor change</div>
+      <div class="ann-text">Alert closes when the zone clears — no manual dismissal. Reduces admin burden and keeps the feed clean.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">Alert not fired near stop</div>
+      <div class="ann-text">Alert suppressed within 3 min of a scheduled stop — passengers legitimately gather at doors then. Keeps false positives low.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════ SCREEN 3: OCCUPANCY IMBALANCE ═══════ -->
+<div class="section-divider">
+  <div class="section-divider-line"></div>
+  <div class="section-divider-num">3</div>
+  <div class="section-divider-pill">Occupancy imbalance — rebalance via PA + PIS screens (Scenario 02b)</div>
+  <div class="section-divider-line"></div>
+</div>
+
+<div class="screens-row">
+  <div class="screen-col">
+    <div class="screen-label">Imbalance detected</div>
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="dynamic-island"><div class="di-camera"></div><div class="di-sensor"></div></div>
+        <div class="status-bar"><span>10:31</span><span>RJ 561 · K. Müller</span><span>▲▲▲ 5G</span></div>
+        <div class="app-header">
+          <div><div class="train-id">RJ 561</div><div class="route">Wien Hbf → Salzburg Hbf</div></div>
+          <div class="time-block"><div class="time">10:31</div><div class="conductor-name">En route</div></div>
+        </div>
+
+        <div class="alert-banner ab-warning">
+          <div class="banner-icon bi-amber">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFB020" stroke-width="2.5" stroke-linecap="round"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+          </div>
+          <div>
+            <div class="banner-text">Occupancy imbalance detected</div>
+            <div class="banner-sub">C1–4 avg 87% · C7–10 avg 31%</div>
+          </div>
+          <div class="banner-arrow">›</div>
+        </div>
+
+        <div class="slabel">Train Load Distribution</div>
+        <div class="imbalance-card">
+          <div style="font-size:10px;color:var(--text-secondary);">End-to-end occupancy split</div>
+          <div class="ib-bar">
+            <div class="ib-seg ib-red">87%</div>
+            <div class="ib-seg ib-amber">58%</div>
+            <div class="ib-seg ib-green">31%</div>
+          </div>
+          <div class="ib-legend">
+            <span>Coaches 1–4 (heavy)</span>
+            <span>5–6 (mid)</span>
+            <span>7–10 (light)</span>
+          </div>
+          <div class="coach-detail">
+            <div class="detail-row"><span class="dl">Free seats — C8 & C9</span><span class="dv green">38 available</span></div>
+            <div class="detail-row"><span class="dl">C10 reserved — no-show</span><span class="dv amber">4 seats</span></div>
+            <div class="detail-row"><span class="dl">Est. passengers to move</span><span class="dv">~14 pax</span></div>
+          </div>
+        </div>
+
+        <div class="slabel">Rebalance Action</div>
+        <div class="pa-panel">
+          <div class="pa-header">
+            <div class="pa-icon pa-icon-red">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E2002A" stroke-width="2.5" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>
+            </div>
+            <div class="pa-title">PA + Interior Screens</div>
+            <div class="pa-scope">Coaches 1–4</div>
+          </div>
+          <div class="pa-text">"Passengers in coaches 1 to 4 — coaches 8, 9 and 10 have plenty of available seating and are a short walk through the train."</div>
+          <div class="pa-actions">
+            <div class="btn btn-primary">Announce + Screens</div>
+            <div class="btn btn-secondary">Edit</div>
+          </div>
+        </div>
+
+        <div class="pis-preview">
+          <div class="pis-label">PIS Interior Screen — Coaches 1–4</div>
+          <div class="pis-screen">
+            <div class="pis-coaches-mini">
+              <div class="pis-coach-mini r"></div>
+              <div class="pis-coach-mini r"></div>
+              <div class="pis-coach-mini a"></div>
+              <div class="pis-coach-mini a"></div>
+              <div class="pis-coach-mini e"></div>
+              <div class="pis-coach-mini e"></div>
+              <div class="pis-coach-mini g"></div>
+              <div class="pis-coach-mini g"></div>
+              <div class="pis-coach-mini g"></div>
+              <div class="pis-coach-mini g"></div>
+            </div>
+            <div class="pis-text-block">
+              <div class="pis-headline">Coaches 8 – 10</div>
+              <div class="pis-subline">38 seats available  →</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-nav">
+          <div class="nav-item active"><div class="nav-icon">⌂</div><span>Home</span></div>
+          <div class="nav-item"><div class="nav-icon">🚂</div><span>Train</span></div>
+          <div class="nav-item"><div class="nav-icon nav-badge-wrap">🔔<span class="nav-badge">1</span></div><span>Alerts</span></div>
+          <div class="nav-item"><div class="nav-icon nav-badge-wrap">⚡<span class="nav-badge nav-badge-red">1</span></div><span>Escalate</span></div>
+          <div class="nav-item"><div class="nav-icon">💬</div><span>Chat</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ann-col" style="padding-top:120px;">
+    <div class="annotation">
+      <div class="ann-title">Visual load split</div>
+      <div class="ann-text">The gradient bar shows heavy vs. light ends of the train at a glance — Conrad doesn't need to read individual coach numbers.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">Single combined action</div>
+      <div class="ann-text">"Announce + Screens" fires PA and PIS interior displays simultaneously. Two separate actions means the screens get skipped under pressure.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">PIS screen preview</div>
+      <div class="ann-text">Conrad sees exactly what passengers will see before sending — a simple coach colour bar and seat count. Builds confidence in the action.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════ SCREEN 4: UNATTENDED BAG ═══════ -->
+<div class="section-divider">
+  <div class="section-divider-line"></div>
+  <div class="section-divider-num">4</div>
+  <div class="section-divider-pill">Unattended item — camera still + one-tap escalation (Scenario 02d)</div>
+  <div class="section-divider-line"></div>
+</div>
+
+<div class="screens-row">
+  <div class="screen-col">
+    <div class="screen-label">Review required</div>
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="dynamic-island"><div class="di-camera"></div><div class="di-sensor"></div></div>
+        <div class="status-bar"><span>11:03</span><span>RJ 561 · K. Müller</span><span>▲▲▲ 5G</span></div>
+        <div class="app-header">
+          <div><div class="train-id">RJ 561</div><div class="route">Wien Hbf → Salzburg Hbf</div></div>
+          <div class="time-block"><div class="time">11:03</div><div class="conductor-name">En route</div></div>
+        </div>
+
+        <!-- Blue alert — "review required" distinct from operational alerts -->
+        <div class="alert-banner ab-info">
+          <div class="banner-icon bi-blue">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4B8EF0" stroke-width="2.5" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+          <div>
+            <div class="banner-text">Unattended item — Coach 6 vestibule</div>
+            <div class="banner-sub">Stationary 7 min · Area now empty · Review required</div>
+          </div>
+          <div class="banner-arrow">›</div>
+        </div>
+
+        <div class="slabel">Camera Still — Coach 6 Vestibule</div>
+        <div class="camera-card">
+          <div class="camera-frame">
+            <div class="cf-bg"></div>
+            <div class="cf-wall-l"></div>
+            <div class="cf-wall-r"></div>
+            <div class="cf-floor"></div>
+            <div class="cf-door"></div>
+            <div class="cf-bag"></div>
+            <div class="cf-highlight">
+              <div class="cf-corner tl"></div>
+              <div class="cf-corner tr"></div>
+              <div class="cf-corner bl"></div>
+              <div class="cf-corner br"></div>
+            </div>
+            <div class="cf-timestamp">2026-05-14  11:03:22</div>
+            <div class="cf-coach-tag">C6 · VESTIBULE</div>
+            <div class="cf-rec"><div class="cf-rec-dot"></div>STILL</div>
+          </div>
+          <div class="cam-meta">
+            <span>Bag detected 10:56 · Area cleared 10:56</span>
+            <span class="cam-timer">7 min stationary</span>
+          </div>
+          <div class="cam-note">Medium backpack · Floor, door 2 area. Surrounding seats vacated 7 min ago. No person has returned.</div>
+        </div>
+
+        <div class="slabel">Actions</div>
+        <div class="pa-panel">
+          <div class="pa-header">
+            <div class="pa-icon pa-icon-blue">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4B8EF0" stroke-width="2.5" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>
+            </div>
+            <div class="pa-title">PA — Owner Request</div>
+            <div class="pa-scope">All coaches</div>
+          </div>
+          <div class="pa-text">"Attention passengers — has anyone left a bag in coach 6 near the doors? Please return to collect it immediately."</div>
+          <div class="pa-actions">
+            <div class="btn btn-primary">Send PA</div>
+            <div class="btn btn-blue">Escalate to Control</div>
+          </div>
+        </div>
+
+        <div class="escalate-note">
+          <strong>Escalate</strong> sends this still-frame, coach location, and 7-min timer automatically to Claudia at Control Centre — no verbal description needed.
+        </div>
+
+        <div class="bottom-nav">
+          <div class="nav-item active"><div class="nav-icon">⌂</div><span>Home</span></div>
+          <div class="nav-item"><div class="nav-icon">🚂</div><span>Train</span></div>
+          <div class="nav-item"><div class="nav-icon nav-badge-wrap">🔔<span class="nav-badge">1</span></div><span>Alerts</span></div>
+          <div class="nav-item"><div class="nav-icon nav-badge-wrap">⚡<span class="nav-badge nav-badge-red">1</span></div><span>Escalate</span></div>
+          <div class="nav-item"><div class="nav-icon">💬</div><span>Chat</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ann-col" style="padding-top:120px;">
+    <div class="annotation">
+      <div class="ann-title">Blue = "review required"</div>
+      <div class="ann-text">Visually distinct from amber (warning) and red (act now). Conrad reads the severity level before tapping — no alarm is caused.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">Camera still-frame</div>
+      <div class="ann-text">Loads in under 3 seconds. Still image only — simpler infrastructure, lower privacy risk, sufficient for Conrad to triage without walking to the coach.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">One-tap escalation</div>
+      <div class="ann-text">Still-frame, location, and timer transmitted to Claudia automatically — Conrad doesn't need to describe what he sees while standing in a public vestibule.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">PA language</div>
+      <div class="ann-text">Pre-fill avoids alarm-inducing words. Resolves routine forgotten-bag cases without disturbing other passengers.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════ SECTION 03: ESCALATE SCREEN ═══════ -->
+<div class="section-divider">
+  <div class="section-divider-line"></div>
+  <div class="section-divider-pill">03 — Escalate Screen</div>
+  <div class="section-divider-num">5</div>
+  <div class="section-divider-line"></div>
+</div>
+
+<div class="screens-row">
+  <div class="screen-col">
+    <div class="screen-label">Raise Escalation — Form</div>
+    <div class="phone-wrap">
+      <div class="phone">
+        <!-- App header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px 12px;border-bottom:1px solid #2A2D35">
+          <div style="font-size:11px;color:#6B7280">← Back</div>
+          <div style="font-size:13px;font-weight:700;color:#F0F2F5">Raise Escalation</div>
+          <div style="width:32px"></div>
+        </div>
+
+        <div style="overflow-y:auto;padding:12px">
+          <!-- Category selector -->
+          <div class="esc-form-label">Category</div>
+          <div class="esc-category-grid">
+            <div class="esc-cat-section">Operational → Claudia</div>
+            <div class="esc-cat-btn selected">
+              <div class="cat-icon">🚨</div>
+              <div class="cat-label">Medical emergency</div>
+              <div class="cat-route">→ Claudia</div>
+            </div>
+            <div class="esc-cat-btn">
+              <div class="cat-icon">⚠️</div>
+              <div class="cat-label">Disruptive passenger</div>
+              <div class="cat-route">→ Claudia</div>
+            </div>
+            <div class="esc-cat-btn">
+              <div class="cat-icon">👥</div>
+              <div class="cat-label">Overcrowding</div>
+              <div class="cat-route">→ Claudia</div>
+            </div>
+            <div class="esc-cat-btn">
+              <div class="cat-icon">♿</div>
+              <div class="cat-label">Accessibility assist</div>
+              <div class="cat-route">→ Claudia</div>
+            </div>
+
+            <div class="esc-cat-section">Technical → Roland</div>
+            <div class="esc-cat-btn">
+              <div class="cat-icon">🚪</div>
+              <div class="cat-label">Door fault</div>
+              <div class="cat-route">→ Roland</div>
+            </div>
+            <div class="esc-cat-btn">
+              <div class="cat-icon">🌡️</div>
+              <div class="cat-label">HVAC / temperature</div>
+              <div class="cat-route">→ Roland</div>
+            </div>
+          </div>
+
+          <!-- Location -->
+          <div class="esc-form-row">
+            <div class="esc-form-label">Location</div>
+            <div class="esc-form-input" style="display:flex;justify-content:space-between;align-items:center">
+              <span>Coach 4</span>
+              <span style="color:#6B7280">▾</span>
+            </div>
+          </div>
+
+          <!-- Severity -->
+          <div class="esc-form-row">
+            <div class="esc-form-label">Severity</div>
+            <div class="esc-severity-row">
+              <div class="esc-sev-btn urgent selected">🔴 Urgent</div>
+              <div class="esc-sev-btn advisory">🔵 Advisory</div>
+            </div>
+          </div>
+
+          <!-- Voice note -->
+          <div class="esc-form-label" style="text-align:center;margin-bottom:10px">Add voice note or text</div>
+          <div class="esc-voice-btn">🎙️</div>
+
+          <!-- Routing preview -->
+          <div class="esc-routing-preview">
+            This escalation will go to <strong>Claudia — Vienna Control</strong><br>
+            <span style="font-size:10px;color:#555">Medical emergencies route to Control Centre for emergency services coordination</span>
+          </div>
+
+          <!-- Submit -->
+          <button class="esc-submit-btn">Submit Escalation</button>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item"><div class="nav-icon">⌂</div><span>Home</span></div>
+          <div class="nav-item"><div class="nav-icon">🚂</div><span>Train</span></div>
+          <div class="nav-item"><div class="nav-icon nav-badge-wrap">🔔<span class="nav-badge">3</span></div><span>Alerts</span></div>
+          <div class="nav-item active"><div class="nav-icon nav-badge-wrap">⚡<span class="nav-badge nav-badge-red">1</span></div><span>Escalate</span></div>
+          <div class="nav-item"><div class="nav-icon">💬</div><span>Chat</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen-col">
+    <div class="screen-label">Escalations Tab — My Open Items</div>
+    <div class="phone-wrap">
+      <div class="phone">
+        <div style="padding:10px 12px;border-bottom:1px solid #2A2D35">
+          <div style="font-size:14px;font-weight:700;color:#F0F2F5">My Escalations</div>
+          <div style="font-size:11px;color:#6B7280">2 open · 1 resolved</div>
+        </div>
+        <div style="padding:12px">
+
+          <!-- Open escalation 1 -->
+          <div style="background:#1E2128;border-radius:10px;padding:12px;margin-bottom:10px;border-left:3px solid #FF3B3B">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <div style="font-size:12px;font-weight:700;color:#F0F2F5">Medical emergency</div>
+                <div style="font-size:11px;color:#6B7280;margin-top:2px">Coach 4 · Urgent · Claudia</div>
+              </div>
+              <div class="esc-status-pill ack">Ack'd</div>
+            </div>
+            <div style="margin-top:8px;padding:8px;background:#111318;border-radius:6px;font-size:11px;color:#9BA3AF">
+              💬 <em>"Claudia acknowledged · Medical team alerted at Salzburg Hbf · ETA 4 min"</em>
+            </div>
+            <div style="font-size:10px;color:#444;margin-top:6px">Raised 7m ago · Ref #4821</div>
+          </div>
+
+          <!-- Open escalation 2 -->
+          <div style="background:#1E2128;border-radius:10px;padding:12px;margin-bottom:10px;border-left:3px solid #F5A623">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <div style="font-size:12px;font-weight:700;color:#F0F2F5">Overcrowding — Coach 3</div>
+                <div style="font-size:11px;color:#6B7280;margin-top:2px">Coach 3 · Advisory · Claudia</div>
+              </div>
+              <div class="esc-status-pill new">New</div>
+            </div>
+            <div style="font-size:10px;color:#444;margin-top:8px">Raised 2m ago · Ref #4822 · Awaiting acknowledgement</div>
+          </div>
+
+          <!-- Resolved escalation -->
+          <div style="background:#1E2128;border-radius:10px;padding:12px;opacity:0.5">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <div style="font-size:12px;font-weight:600;color:#9BA3AF;text-decoration:line-through">Door fault — Coach 2</div>
+                <div style="font-size:11px;color:#555;margin-top:2px">Roland · Technical</div>
+              </div>
+              <div class="esc-status-pill done">Resolved</div>
+            </div>
+            <div style="margin-top:6px;font-size:11px;color:#555">Roland: Door sensor reset remotely, safe to continue</div>
+          </div>
+
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item"><div class="nav-icon">⌂</div><span>Home</span></div>
+          <div class="nav-item"><div class="nav-icon">🚂</div><span>Train</span></div>
+          <div class="nav-item"><div class="nav-icon nav-badge-wrap">🔔<span class="nav-badge">3</span></div><span>Alerts</span></div>
+          <div class="nav-item active"><div class="nav-icon nav-badge-wrap">⚡<span class="nav-badge nav-badge-red">1</span></div><span>Escalate</span></div>
+          <div class="nav-item"><div class="nav-icon">💬</div><span>Chat</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ FOOTER ═══════ -->
+<div class="page-footer">
+  <div class="footer-left">
+    <strong>ÖBB Smart Rail — Conductor App</strong><br>
+    Concept design · Nomad Digital · 2026<br>
+    Interface 1 of 6
+  </div>
+  <div class="footer-right">
+    Hailo-8 M.2 Passenger AI<br>
+    6-interface system · 3-month pilot<br>
+    Not for production use
+  </div>
+</div>
+
+</body>
+</html>

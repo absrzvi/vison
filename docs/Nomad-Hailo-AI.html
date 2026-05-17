@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OEBB Smart Rail — Product Briefing · Nomad Digital</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --oebb-red: #E2002A;
+    --oebb-blue: #073D6E;
+    --oebb-blue-mid: #0A5298;
+    --surface-0: #0A0C10;
+    --surface-1: #111318;
+    --surface-2: #181B22;
+    --surface-3: #1E2128;
+    --border: rgba(255,255,255,0.07);
+    --border-subtle: rgba(255,255,255,0.04);
+    --text-primary: #F0F2F5;
+    --text-secondary: #9BA3AF;
+    --text-muted: #6B7280;
+    --green: #22C55E;
+    --amber: #F5A623;
+    --red: #FF3B3B;
+    --orange: #FF6B00;
+    --blue: #4A9EFF;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--surface-0);
+    color: var(--text-primary);
+    line-height: 1.6;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    background: linear-gradient(160deg, #0D1628 0%, var(--surface-0) 50%);
+    border-bottom: 1px solid var(--border);
+    padding: 56px 48px 48px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(7,61,110,0.25) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-inner { max-width: 860px; margin: 0 auto; }
+  .hero-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .oebb-badge {
+    background: var(--oebb-red);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 900;
+    padding: 4px 9px;
+    border-radius: 4px;
+    letter-spacing: -0.3px;
+  }
+  .nomad-badge {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .hero-title {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 16px;
+    color: var(--text-primary);
+  }
+  .hero-title span { color: var(--oebb-red); }
+  .hero-subtitle {
+    font-size: 16px;
+    color: var(--text-secondary);
+    max-width: 560px;
+    line-height: 1.6;
+    margin-bottom: 32px;
+  }
+  .hero-meta {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .meta-item {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .meta-item strong {
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+
+  /* ── Section layout ── */
+  .section {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 48px;
+  }
+  .section + .section {
+    border-top: 1px solid var(--border-subtle);
+  }
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--oebb-red);
+    margin-bottom: 12px;
+  }
+  .section-title {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+  }
+  .section-body {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    max-width: 700px;
+  }
+
+  /* ── Hailo confirmation box ── */
+  .confirm-box {
+    background: rgba(34,197,94,0.06);
+    border: 1px solid rgba(34,197,94,0.25);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-top: 24px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .confirm-icon {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: rgba(34,197,94,0.12);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .confirm-content {}
+  .confirm-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 6px;
+  }
+  .confirm-body {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  /* ── Capability table ── */
+  .cap-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 24px;
+  }
+  .cap-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .cap-icon { font-size: 20px; margin-bottom: 8px; }
+  .cap-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+  .cap-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  /* ── Interface previews ── */
+  .interface-section {
+    border-top: 1px solid var(--border-subtle);
+    padding: 48px;
+  }
+  .interface-inner { max-width: 860px; margin: 0 auto; }
+  .interface-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .interface-tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-bottom: 10px;
+  }
+  .tag-onboard { background: rgba(74,158,255,0.12); color: var(--blue); border: 1px solid rgba(74,158,255,0.25); }
+  .tag-landside { background: rgba(124,82,214,0.12); color: #a855f7; border: 1px solid rgba(124,82,214,0.25); }
+  .tag-passenger { background: rgba(34,197,94,0.10); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+  .interface-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+  .interface-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    max-width: 480px;
+    line-height: 1.6;
+  }
+
+  /* ── Mockup preview frame ── */
+  .preview-frame {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .preview-bar {
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .preview-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .preview-bar-title { font-size: 11px; color: var(--text-muted); margin-left: 8px; }
+  .preview-bar-badge {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(74,158,255,0.10);
+    color: var(--blue);
+  }
+  .preview-content { padding: 24px; }
+
+  /* ── Conductor app mockup ── */
+  .cond-phone {
+    width: 260px;
+    margin: 0 auto;
+    background: #141820;
+    border-radius: 36px;
+    border: 5px solid #2A303C;
+    padding: 10px 8px 14px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  }
+  .cond-island {
+    width: 80px; height: 22px;
+    background: #000;
+    border-radius: 11px;
+    margin: 0 auto 8px;
+  }
+  .cond-status { display: flex; justify-content: space-between; padding: 0 6px 8px; font-size: 9px; color: #485060; }
+  .cond-header {
+    background: linear-gradient(135deg, #073D6E 0%, #0A5298 100%);
+    border-radius: 14px;
+    padding: 11px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .cond-train { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
+  .cond-route { font-size: 9px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+  .cond-time { font-size: 20px; font-weight: 200; color: #fff; }
+  .cond-name { font-size: 9px; color: rgba(255,255,255,0.35); text-align: right; margin-top: 2px; }
+
+  .cond-alert {
+    border-radius: 12px;
+    padding: 9px 10px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid;
+  }
+  .cond-alert.safety { background: rgba(226,0,42,0.10); border-color: rgba(226,0,42,0.35); }
+  .cond-alert.warning { background: rgba(245,166,35,0.10); border-color: rgba(245,166,35,0.30); }
+  .cond-alert.info { background: rgba(74,158,255,0.08); border-color: rgba(74,158,255,0.25); }
+  .cond-alert-icon {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+  }
+  .cond-alert.safety .cond-alert-icon { background: rgba(226,0,42,0.15); }
+  .cond-alert.warning .cond-alert-icon { background: rgba(245,166,35,0.15); }
+  .cond-alert.info .cond-alert-icon { background: rgba(74,158,255,0.12); }
+  .cond-alert-title { font-size: 10px; font-weight: 700; color: #D8DCE8; line-height: 1.3; }
+  .cond-alert-sub { font-size: 9px; color: #7A8499; margin-top: 1px; }
+  .cond-arrow { margin-left: auto; color: #485060; font-size: 12px; flex-shrink: 0; }
+
+  .cond-diag {
+    background: #191E28;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 10px;
+    margin-top: 4px;
+  }
+  .cond-slabel { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #485060; margin-bottom: 6px; }
+  .cond-coaches { display: flex; gap: 3px; margin-bottom: 8px; }
+  .cond-coach {
+    flex: 1; border-radius: 6px; padding: 6px 2px; text-align: center;
+    border: 1px solid transparent;
+  }
+  .cond-coach.g { background: rgba(0,168,118,0.10); border-color: rgba(0,168,118,0.3); }
+  .cond-coach.a { background: rgba(224,153,0,0.10); border-color: rgba(224,153,0,0.3); }
+  .cond-coach.r { background: rgba(226,0,42,0.10); border-color: rgba(226,0,42,0.35); }
+  .cond-coach .cn { font-size: 7px; color: #485060; font-weight: 600; }
+  .cond-coach.g .cp { font-size: 10px; font-weight: 800; color: #00A876; }
+  .cond-coach.a .cp { font-size: 10px; font-weight: 800; color: #E09900; }
+  .cond-coach.r .cp { font-size: 10px; font-weight: 800; color: #E2002A; }
+
+  /* ── Control centre mockup ── */
+  .cc-topbar {
+    background: #0d0d1f;
+    border-bottom: 1px solid #1e1e3a;
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .cc-brand { font-size: 13px; font-weight: 700; color: #4a9eff; }
+  .cc-context { font-size: 10px; color: #555; }
+  .cc-live { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #00c49f; }
+  .cc-dot { width: 6px; height: 6px; border-radius: 50%; background: #00c49f; animation: blink 1.5s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .cc-body { background: #0d0d1f; padding: 14px; }
+  .cc-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+  .cc-kpi {
+    background: #12122a;
+    border-radius: 8px;
+    padding: 10px 12px;
+    border-top: 3px solid transparent;
+  }
+  .cc-kpi.blue { border-color: #4a9eff; }
+  .cc-kpi.green { border-color: #00c49f; }
+  .cc-kpi.red { border-color: #ef4444; }
+  .cc-kpi.amber { border-color: #ffaa00; }
+  .cc-kpi-label { font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .cc-kpi-value { font-size: 22px; font-weight: 700; color: #fff; }
+  .cc-kpi-sub { font-size: 9px; color: #444; margin-top: 2px; }
+
+  .cc-grid { display: grid; grid-template-columns: 1fr 220px; gap: 12px; }
+  .cc-panel-title { font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; }
+
+  .cc-trains { background: #12122a; border-radius: 8px; padding: 12px; }
+  .cc-train {
+    border-radius: 6px; padding: 8px 10px; margin-bottom: 6px;
+    border-left: 3px solid transparent;
+  }
+  .cc-train.alert { border-color: #ef4444; background: #0d0d20; }
+  .cc-train.warn  { border-color: #ffaa00; background: #0d0d20; }
+  .cc-train.ok    { border-color: #00c49f; background: #0d0d20; }
+  .cc-train-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+  .cc-train-name { font-size: 12px; font-weight: 700; color: #fff; }
+  .cc-train-route { font-size: 9px; color: #555; }
+  .cc-badge { font-size: 9px; padding: 2px 6px; border-radius: 8px; font-weight: 700; }
+  .cc-badge.alert { background: #2a0a0a; color: #ef4444; }
+  .cc-badge.warn  { background: #2a1e00; color: #ffaa00; }
+  .cc-badge.ok    { background: #0a2a14; color: #00c49f; }
+  .cc-mini { display: flex; gap: 2px; }
+  .cc-mc { flex: 1; height: 6px; border-radius: 2px; }
+  .cc-mc.g { background: #00c49f44; border: 1px solid #00c49f; }
+  .cc-mc.a { background: #ffaa0044; border: 1px solid #ffaa00; }
+  .cc-mc.r { background: #ef444444; border: 1px solid #ef4444; }
+
+  .cc-incidents { background: #12122a; border-radius: 8px; padding: 12px; }
+  .cc-inc { display: flex; gap: 8px; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid #1a1a2e; }
+  .cc-inc:last-child { border-bottom: none; }
+  .cc-inc-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .cc-inc-dot.r { background: #ef4444; }
+  .cc-inc-dot.a { background: #ffaa00; }
+  .cc-inc-dot.b { background: #4a9eff; }
+  .cc-inc-title { font-size: 11px; color: #ddd; font-weight: 600; }
+  .cc-inc-sub { font-size: 10px; color: #555; margin-top: 1px; }
+  .cc-inc-time { font-size: 9px; color: #444; white-space: nowrap; }
+
+  /* ── Passenger portal mockup ── */
+  .portal-phone {
+    width: 260px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 36px;
+    border: 6px solid #1a1a1a;
+    overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+  }
+  .prt-status {
+    background: #fff;
+    padding: 10px 16px 4px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px; font-weight: 600; color: #111;
+  }
+  .prt-cna {
+    background: #F9FAFB;
+    border-bottom: 1px solid #E5E7EB;
+    padding: 5px 14px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px; color: #6B7280;
+  }
+  .prt-cna-cancel { color: #E2002A; font-weight: 600; }
+  .prt-header {
+    padding: 10px 14px 8px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid #F3F4F6;
+    background: #fff;
+  }
+  .prt-logo { display: flex; align-items: center; gap: 5px; }
+  .prt-oebb { background: #E2002A; color: #fff; font-size: 10px; font-weight: 900; padding: 3px 6px; border-radius: 3px; }
+  .prt-railnet { font-size: 13px; font-weight: 300; color: #111; }
+  .prt-railnet span { font-weight: 700; }
+  .prt-hero {
+    background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+    padding: 16px 14px;
+  }
+  .prt-hero-eyebrow { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(255,255,255,0.5); margin-bottom: 4px; }
+  .prt-hero-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .prt-hero-sub { font-size: 10px; color: rgba(255,255,255,0.5); margin-bottom: 12px; }
+  .prt-hero-pills { display: flex; gap: 6px; margin-bottom: 12px; }
+  .prt-pill { background: rgba(255,255,255,0.12); border-radius: 20px; padding: 3px 8px; font-size: 10px; color: rgba(255,255,255,0.8); }
+  .prt-connect-btn { background: #E2002A; color: #fff; border: none; border-radius: 7px; padding: 8px 16px; font-size: 12px; font-weight: 700; }
+
+  .prt-coach-panel {
+    background: #fff;
+    border-top: 3px solid #E2002A;
+    padding: 12px 14px;
+  }
+  .prt-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .prt-panel-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: #6B7280; }
+  .prt-fresh { font-size: 9px; color: #9BA3AF; display: flex; align-items: center; gap: 3px; }
+  .prt-live-dot { width: 5px; height: 5px; border-radius: 50%; background: #22C55E; }
+  .prt-coaches { display: flex; gap: 3px; margin-bottom: 8px; }
+  .prt-coach { flex: 1; height: 30px; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+  .prt-coach span { font-size: 9px; font-weight: 700; color: #fff; }
+  .prt-c-low  { background: #22C55E; }
+  .prt-c-mid  { background: #F5A623; }
+  .prt-c-high { background: #FF6B00; }
+  .prt-guidance {
+    background: rgba(34,197,94,0.08);
+    border: 1px solid rgba(34,197,94,0.3);
+    border-radius: 7px;
+    padding: 9px 10px;
+  }
+  .prt-g-arrow { font-size: 16px; font-weight: 700; color: #22C55E; }
+  .prt-g-primary { font-size: 13px; font-weight: 700; color: #111318; margin-top: 1px; }
+  .prt-g-sub { font-size: 11px; color: #6B7280; }
+
+  .prt-gdpr {
+    background: #F9FAFB;
+    padding: 12px 14px;
+    border-top: 1px solid #E5E7EB;
+  }
+  .prt-gdpr-title { font-size: 13px; font-weight: 700; color: #111; margin-bottom: 5px; }
+  .prt-gdpr-body { font-size: 11px; color: #6B7280; line-height: 1.5; margin-bottom: 10px; }
+  .prt-verbinden { background: #E2002A; color: #fff; border: none; border-radius: 7px; width: 100%; padding: 11px; font-size: 12px; font-weight: 700; }
+
+  /* ── Feature callouts ── */
+  .callouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 24px; }
+  .callout {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .callout-num {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--oebb-red);
+    margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .callout-title { font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+  .callout-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+  /* ── Privacy & tech strip ── */
+  .tech-strip {
+    background: var(--surface-1);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .tech-strip-inner {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 32px 48px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+  }
+  .tech-item-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); margin-bottom: 6px; }
+  .tech-item-value { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+
+  /* ── Architecture diagram ── */
+  .arch-diagram {
+    background: #080A10;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-top: 28px;
+    font-size: 11px;
+  }
+
+  /* Zone rows */
+  .arch-zone {
+    display: flex;
+    align-items: stretch;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .arch-zone:last-child { border-bottom: none; }
+
+  .arch-zone-label {
+    width: 120px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 8px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-align: center;
+    border-right: 1px solid rgba(255,255,255,0.05);
+    line-height: 1.4;
+  }
+  .zone-hardware  { background: rgba(255,107,0,0.07); color: #FF6B00; }
+  .zone-containers { background: rgba(74,158,255,0.06); color: var(--blue); }
+  .zone-shared   { background: rgba(124,82,214,0.06); color: #a855f7; }
+  .zone-ifaces   { background: rgba(34,197,94,0.05); color: var(--green); }
+  .zone-cloud    { background: rgba(255,255,255,0.03); color: var(--text-muted); }
+
+  .arch-zone-content {
+    flex: 1;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* Nodes */
+  .arch-node {
+    border-radius: 8px;
+    padding: 10px 12px;
+    min-width: 130px;
+    border: 1px solid;
+    position: relative;
+  }
+  .arch-node-title {
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 3px;
+    line-height: 1.2;
+  }
+  .arch-node-desc {
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+  .arch-node-tag {
+    display: inline-block;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-bottom: 4px;
+  }
+
+  /* Node colour variants */
+  .node-orange {
+    background: rgba(255,107,0,0.08);
+    border-color: rgba(255,107,0,0.25);
+  }
+  .node-orange .arch-node-title { color: #FF6B00; }
+  .node-orange .arch-node-tag { background: rgba(255,107,0,0.15); color: #FF6B00; }
+
+  .node-blue {
+    background: rgba(74,158,255,0.07);
+    border-color: rgba(74,158,255,0.2);
+  }
+  .node-blue .arch-node-title { color: var(--blue); }
+  .node-blue .arch-node-tag { background: rgba(74,158,255,0.12); color: var(--blue); }
+
+  .node-teal {
+    background: rgba(0,168,118,0.07);
+    border-color: rgba(0,168,118,0.2);
+  }
+  .node-teal .arch-node-title { color: #00A876; }
+  .node-teal .arch-node-tag { background: rgba(0,168,118,0.12); color: #00A876; }
+
+  .node-purple {
+    background: rgba(124,82,214,0.07);
+    border-color: rgba(124,82,214,0.2);
+  }
+  .node-purple .arch-node-title { color: #a855f7; }
+  .node-purple .arch-node-tag { background: rgba(124,82,214,0.12); color: #a855f7; }
+
+  .node-red {
+    background: rgba(226,0,42,0.07);
+    border-color: rgba(226,0,42,0.2);
+  }
+  .node-red .arch-node-title { color: #E2002A; }
+  .node-red .arch-node-tag { background: rgba(226,0,42,0.12); color: #E2002A; }
+
+  .node-green {
+    background: rgba(34,197,94,0.07);
+    border-color: rgba(34,197,94,0.2);
+  }
+  .node-green .arch-node-title { color: var(--green); }
+  .node-green .arch-node-tag { background: rgba(34,197,94,0.12); color: var(--green); }
+
+  .node-grey {
+    background: rgba(255,255,255,0.03);
+    border-color: rgba(255,255,255,0.08);
+  }
+  .node-grey .arch-node-title { color: var(--text-secondary); }
+  .node-grey .arch-node-tag { background: rgba(255,255,255,0.07); color: var(--text-muted); }
+
+  /* Flow arrows between zones */
+  .arch-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 20px 6px 140px;
+    gap: 8px;
+    font-size: 10px;
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.015);
+    border-bottom: 1px dashed rgba(255,255,255,0.04);
+  }
+  .arch-arrow:last-child { border-bottom: none; }
+  .arch-arrow-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.15), rgba(255,255,255,0.06));
+    position: relative;
+  }
+  .arch-arrow-line::after {
+    content: '▶';
+    position: absolute;
+    right: -6px;
+    top: -6px;
+    font-size: 8px;
+    color: rgba(255,255,255,0.2);
+  }
+  .arch-arrow-label {
+    font-size: 9px;
+    color: rgba(255,255,255,0.2);
+    white-space: nowrap;
+    font-style: italic;
+  }
+
+  /* VLANs key */
+  .vlan-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .vlan-pill {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid;
+  }
+  .vlan-pill.v2  { background: rgba(245,166,35,0.08); border-color: rgba(245,166,35,0.25); color: #F5A623; }
+  .vlan-pill.v5  { background: rgba(74,158,255,0.08); border-color: rgba(74,158,255,0.25); color: var(--blue); }
+  .vlan-pill.v7  { background: rgba(255,107,0,0.08); border-color: rgba(255,107,0,0.25); color: #FF6B00; }
+  .vlan-pill.v8  { background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.25); color: var(--green); }
+  .vlan-pill.v10 { background: rgba(124,82,214,0.08); border-color: rgba(124,82,214,0.25); color: #a855f7; }
+  .vlan-pill.v30 { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12); color: var(--text-secondary); }
+
+  /* Wide node override */
+  .arch-node.wide { min-width: 180px; }
+
+  /* ── Footer ── */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 48px;
+    text-align: center;
+  }
+  .footer-inner { max-width: 860px; margin: 0 auto; }
+  .footer p { font-size: 12px; color: var(--text-muted); line-height: 1.7; }
+  .footer a { color: var(--blue); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════ HERO ═══════════════════════ -->
+<div class="hero">
+  <div class="hero-inner">
+    <div class="hero-eyebrow">
+      <span class="oebb-badge">ÖBB</span>
+      <span class="nomad-badge">Nomad Digital · Smart Rail</span>
+    </div>
+    <h1 class="hero-title">Passenger Intelligence<br>on the <span>Hailo-8</span></h1>
+    <p class="hero-subtitle">
+      A fully managed AI insights service that turns the Nomad Digital R5001C into a real-time
+      situational awareness layer for every ÖBB train — for onboard staff, landside operations,
+      and passengers.
+    </p>
+    <div class="hero-meta">
+      <div class="meta-item"><strong>Pilot:</strong> Single-vehicle, 3-month PoC</div>
+      <div class="meta-item"><strong>Hardware:</strong> Hailo-8 M.2 on R5001C SYS2</div>
+      <div class="meta-item"><strong>Privacy:</strong> All inference onboard — no raw video leaves the train</div>
+      <div class="meta-item"><strong>Date:</strong> May 2026</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ HAILO CONFIRMATION ═══════════════════════ -->
+<div class="section">
+  <div class="section-label">Device Support</div>
+  <h2 class="section-title">Yes — we support the Hailo-8</h2>
+  <p class="section-body">
+    We have confirmed full support for the Hailo-8 M.2 accelerator on the Nomad Digital R5001C CCU.
+    Our onboard inference stack is built on HailoRT 4.23 and TAPPAS 5.1.0, running inside a Docker
+    container on the CCU's SYS2 compute partition. We reuse Hailo's open-source <code style="font-size:12px;background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;color:#9BA3AF">hailo-apps</code>
+    library for RTSP ingestion, YOLO detection, and multi-object tracking — which means the highest-risk
+    custom engineering is already solved.
+  </p>
+
+  <div class="confirm-box">
+    <div class="confirm-icon">✓</div>
+    <div class="confirm-content">
+      <div class="confirm-title">Hailo-8 M.2 — Confirmed Compatible</div>
+      <div class="confirm-body">
+        HailoRT 4.23 · TAPPAS 5.1.0 · YOLO object detection · BYTETracker multi-object tracking ·
+        Pose estimation · RTSP multi-source ingest · All running within the existing R5001C Docker stack.
+        No additional hardware required.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ CAPABILITIES ═══════════════════════ -->
+<div class="section">
+  <div class="section-label">What the system does</div>
+  <h2 class="section-title">6 AI capabilities, day one</h2>
+  <p class="section-body">
+    The Passenger Intelligence Service runs continuously during each journey,
+    producing structured, anonymised events that flow to staff interfaces and the cloud.
+  </p>
+  <div class="cap-grid">
+    <div class="cap-card">
+      <div class="cap-icon">🧍</div>
+      <div class="cap-title">Live Occupancy</div>
+      <div class="cap-desc">Real-time passenger headcount per coach. Colour-coded (green / amber / red) against configurable thresholds.</div>
+    </div>
+    <div class="cap-card">
+      <div class="cap-icon">🧳</div>
+      <div class="cap-title">Luggage Detection</div>
+      <div class="cap-desc">Item count per zone. Configurable timer triggers unattended bag alert when no owner detected nearby.</div>
+    </div>
+    <div class="cap-card">
+      <div class="cap-icon">⬡</div>
+      <div class="cap-title">Congestion Mapping</div>
+      <div class="cap-desc">Vestibule and aisle congestion scoring. Alerts when movement is obstructed — especially near doors.</div>
+    </div>
+    <div class="cap-card">
+      <div class="cap-icon">🚪</div>
+      <div class="cap-title">Door Safety</div>
+      <div class="cap-desc">Obstruction detection at all doors during boarding and departure. Direct alert to conductor with coach + door reference.</div>
+    </div>
+    <div class="cap-card">
+      <div class="cap-icon">♿</div>
+      <div class="cap-title">Accessibility Detection</div>
+      <div class="cap-desc">Wheelchair and pushchair detection. Automatic conductor alert + passenger portal update. Ramp coordination loop.</div>
+    </div>
+    <div class="cap-card">
+      <div class="cap-icon">🔕</div>
+      <div class="cap-title">Maintenance Suppression</div>
+      <div class="cap-desc">Alert suppression when in depot maintenance mode — prevents false positives during servicing.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ INTERFACE 1: CONDUCTOR APP ═══════════════════════ -->
+<div class="interface-section">
+  <div class="interface-inner">
+    <div class="interface-header">
+      <div>
+        <div class="interface-tag tag-onboard">Onboard · Conductor</div>
+        <h2 class="interface-title">Conductor App</h2>
+        <p class="interface-desc">
+          Conrad's primary tool — a mobile-first app served from the R5001C over the onboard VLAN.
+          Real-time alerts, train-wide occupancy diagram, per-coach heatmap, and accessibility coordination.
+          No internet required. Responds in under 200ms.
+        </p>
+      </div>
+    </div>
+
+    <div class="preview-frame">
+      <div class="preview-bar">
+        <div class="preview-dot" style="background:#ff5f57"></div>
+        <div class="preview-dot" style="background:#febc2e"></div>
+        <div class="preview-dot" style="background:#28c840"></div>
+        <span class="preview-bar-title">ÖBB Smart Rail — Conductor App · Mobile · VLAN-served</span>
+        <span class="preview-bar-badge">Interactive mockup: mockups/conductor-app-v2.html</span>
+      </div>
+      <div class="preview-content" style="background:#0E1117; display:flex; justify-content:center; padding: 32px 24px;">
+
+        <div class="cond-phone">
+          <div class="cond-island"></div>
+          <div class="cond-status"><span>09:41</span><span>●●● LTE 🔋</span></div>
+
+          <div class="cond-header">
+            <div>
+              <div class="cond-train">RJ 561</div>
+              <div class="cond-route">Wien Hbf → Salzburg · Next: Linz 10:12</div>
+            </div>
+            <div>
+              <div class="cond-time">10:09</div>
+              <div class="cond-name">Conrad Müller</div>
+            </div>
+          </div>
+
+          <div class="cond-alert safety">
+            <div class="cond-alert-icon">🧳</div>
+            <div>
+              <div class="cond-alert-title">Unattended bag — 8 min stationary</div>
+              <div class="cond-alert-sub">Coach 4 · Vestibule rack · 3 items</div>
+            </div>
+            <div class="cond-arrow">›</div>
+          </div>
+
+          <div class="cond-alert warning">
+            <div class="cond-alert-icon">⬡</div>
+            <div>
+              <div class="cond-alert-title">Vestibule congestion</div>
+              <div class="cond-alert-sub">Coach 3 · Score 74 · Approaching Linz</div>
+            </div>
+            <div class="cond-arrow">›</div>
+          </div>
+
+          <div class="cond-alert info">
+            <div class="cond-alert-icon">♿</div>
+            <div>
+              <div class="cond-alert-title">Wheelchair passenger boarding</div>
+              <div class="cond-alert-sub">Coach 2 · Door 1 · Ramp needed at Linz</div>
+            </div>
+            <div class="cond-arrow">›</div>
+          </div>
+
+          <div class="cond-diag">
+            <div class="cond-slabel">Train occupancy</div>
+            <div class="cond-coaches">
+              <div class="cond-coach g"><div class="cn">C1</div><div class="cp">42%</div></div>
+              <div class="cond-coach g"><div class="cn">C2</div><div class="cp">38%</div></div>
+              <div class="cond-coach a"><div class="cn">C3</div><div class="cp">74%</div></div>
+              <div class="cond-coach r"><div class="cn">C4</div><div class="cp">96%</div></div>
+              <div class="cond-coach a"><div class="cn">C5</div><div class="cp">62%</div></div>
+              <div class="cond-coach g"><div class="cn">C6</div><div class="cp">36%</div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="callouts">
+      <div class="callout">
+        <div class="callout-num">01</div>
+        <div class="callout-title">Proactive alerts</div>
+        <div class="callout-desc">Alerts reach Conrad before the situation escalates — not after. Ordered by severity, auto-resolved on sensor change.</div>
+      </div>
+      <div class="callout">
+        <div class="callout-num">02</div>
+        <div class="callout-title">Train-wide visibility</div>
+        <div class="callout-desc">Colour-coded occupancy for every coach at a glance — without walking the entire train.</div>
+      </div>
+      <div class="callout">
+        <div class="callout-num">03</div>
+        <div class="callout-title">Accessibility coordination</div>
+        <div class="callout-desc">Wheelchair detection fires silently → Conrad is notified with coach + door + ramp status before the passenger boards.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ INTERFACE 2: CONTROL CENTRE ═══════════════════════ -->
+<div class="interface-section">
+  <div class="interface-inner">
+    <div class="interface-header">
+      <div>
+        <div class="interface-tag tag-landside">Landside · Fleet Operations</div>
+        <h2 class="interface-title">Control Centre Dashboard</h2>
+        <p class="interface-desc">
+          A web dashboard for ÖBB operations staff in Vienna — real-time view across the entire active fleet.
+          Fleet health KPIs, per-train drill-down, escalations inbox, and live incident feed.
+          Manages every Hailo-equipped train from a single screen.
+        </p>
+      </div>
+    </div>
+
+    <div class="preview-frame">
+      <div class="preview-bar">
+        <div class="preview-dot" style="background:#ff5f57"></div>
+        <div class="preview-dot" style="background:#febc2e"></div>
+        <div class="preview-dot" style="background:#28c840"></div>
+        <span class="preview-bar-title">OEBB Smart Rail — Control Centre · Web · 1920×1080</span>
+        <span class="preview-bar-badge">Interactive mockup: mockups/control-centre-v2.html</span>
+      </div>
+      <div class="preview-content" style="background:#080814; padding: 0;">
+
+        <div class="cc-topbar">
+          <div>
+            <div class="cc-brand">OEBB Smart Rail · Control Centre</div>
+            <div class="cc-context">Vienna Operations · Shift: 06:00–14:00 · Operator: M. Wagner</div>
+          </div>
+          <div class="cc-live"><div class="cc-dot"></div> LIVE · Last update 3s ago</div>
+        </div>
+
+        <div class="cc-body">
+          <div class="cc-kpis">
+            <div class="cc-kpi blue">
+              <div class="cc-kpi-label">Active Trains</div>
+              <div class="cc-kpi-value">14</div>
+              <div class="cc-kpi-sub">of 18 scheduled</div>
+            </div>
+            <div class="cc-kpi green">
+              <div class="cc-kpi-label">Avg Occupancy</div>
+              <div class="cc-kpi-value">61%</div>
+              <div class="cc-kpi-sub">↓ 4% vs yesterday</div>
+            </div>
+            <div class="cc-kpi red">
+              <div class="cc-kpi-label">Active Incidents</div>
+              <div class="cc-kpi-value">3</div>
+              <div class="cc-kpi-sub">2 safety · 1 fault</div>
+            </div>
+            <div class="cc-kpi amber">
+              <div class="cc-kpi-label">Open Escalations</div>
+              <div class="cc-kpi-value">2</div>
+              <div class="cc-kpi-sub">1 operational · 1 technical</div>
+            </div>
+          </div>
+
+          <div class="cc-grid">
+            <div class="cc-trains">
+              <div class="cc-panel-title">Fleet Status · 14 Active Trains</div>
+
+              <div class="cc-train alert">
+                <div class="cc-train-top">
+                  <div>
+                    <div class="cc-train-name">RJ 561</div>
+                    <div class="cc-train-route">Wien Hbf → Salzburg · Next: Linz 10:12</div>
+                  </div>
+                  <div class="cc-badge alert">⚠ Alert</div>
+                </div>
+                <div class="cc-mini">
+                  <div class="cc-mc g"></div><div class="cc-mc g"></div>
+                  <div class="cc-mc a"></div><div class="cc-mc r"></div>
+                  <div class="cc-mc a"></div><div class="cc-mc g"></div>
+                </div>
+              </div>
+
+              <div class="cc-train warn">
+                <div class="cc-train-top">
+                  <div>
+                    <div class="cc-train-name">ICE 724</div>
+                    <div class="cc-train-route">Salzburg → Wien · Next: Wels 09:58</div>
+                  </div>
+                  <div class="cc-badge warn">△ Watch</div>
+                </div>
+                <div class="cc-mini">
+                  <div class="cc-mc r"></div><div class="cc-mc r"></div>
+                  <div class="cc-mc a"></div><div class="cc-mc a"></div>
+                  <div class="cc-mc g"></div><div class="cc-mc g"></div>
+                </div>
+              </div>
+
+              <div class="cc-train ok">
+                <div class="cc-train-top">
+                  <div>
+                    <div class="cc-train-name">RJ 847</div>
+                    <div class="cc-train-route">Graz → Wien · All systems OK</div>
+                  </div>
+                  <div class="cc-badge ok">✓ Normal</div>
+                </div>
+                <div class="cc-mini">
+                  <div class="cc-mc g"></div><div class="cc-mc g"></div>
+                  <div class="cc-mc g"></div><div class="cc-mc a"></div>
+                  <div class="cc-mc g"></div><div class="cc-mc g"></div>
+                </div>
+              </div>
+
+              <div style="text-align:center; padding: 8px 0; font-size: 10px; color: #333;">+ 11 more trains · All normal</div>
+            </div>
+
+            <div class="cc-incidents">
+              <div class="cc-panel-title">Live Incident Feed</div>
+              <div class="cc-inc">
+                <div class="cc-inc-dot r"></div>
+                <div style="flex:1">
+                  <div class="cc-inc-title">Door obstruction · D2L</div>
+                  <div class="cc-inc-sub">ICE 47 · Coach 3</div>
+                </div>
+                <div class="cc-inc-time">1m ago</div>
+              </div>
+              <div class="cc-inc">
+                <div class="cc-inc-dot a"></div>
+                <div style="flex:1">
+                  <div class="cc-inc-title">Unattended luggage · 8m</div>
+                  <div class="cc-inc-sub">RJ 789 · Coach 5</div>
+                </div>
+                <div class="cc-inc-time">3m ago</div>
+              </div>
+              <div class="cc-inc">
+                <div class="cc-inc-dot b"></div>
+                <div style="flex:1">
+                  <div class="cc-inc-title">Wheelchair user detected</div>
+                  <div class="cc-inc-sub">EC 163 · Coach 1</div>
+                </div>
+                <div class="cc-inc-time">9m ago</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="callouts">
+      <div class="callout">
+        <div class="callout-num">01</div>
+        <div class="callout-title">Fleet-wide view</div>
+        <div class="callout-desc">All active Hailo-equipped trains on one screen — KPIs, per-train status, coach-level drill-down.</div>
+      </div>
+      <div class="callout">
+        <div class="callout-num">02</div>
+        <div class="callout-title">Escalations inbox</div>
+        <div class="callout-desc">AI-raised and staff-raised escalations in a single feed. Operational and technical routes clearly separated.</div>
+      </div>
+      <div class="callout">
+        <div class="callout-num">03</div>
+        <div class="callout-title">Scales with the fleet</div>
+        <div class="callout-desc">Each new Hailo CCU added to the fleet appears automatically. No per-train configuration required in the dashboard.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ INTERFACE 3: PASSENGER PORTAL ═══════════════════════ -->
+<div class="interface-section">
+  <div class="interface-inner">
+    <div class="interface-header">
+      <div>
+        <div class="interface-tag tag-passenger">Passenger-facing · CNA Portal</div>
+        <h2 class="interface-title">Passenger Portal</h2>
+        <p class="interface-desc">
+          Added to the existing ÖBB Railnet captive network portal — the page passengers see when their
+          phone joins the train WiFi. A coach guidance panel shows real-time occupancy and recommends
+          the least crowded coach. Accessibility passengers see ramp status live.
+        </p>
+      </div>
+    </div>
+
+    <div class="preview-frame">
+      <div class="preview-bar">
+        <div class="preview-dot" style="background:#ff5f57"></div>
+        <div class="preview-dot" style="background:#febc2e"></div>
+        <div class="preview-dot" style="background:#28c840"></div>
+        <span class="preview-bar-title">ÖBB Railnet — CNA Portal · iPhone · 8 interactive states</span>
+        <span class="preview-bar-badge">Interactive mockup: mockups/passenger-portal-v1.html</span>
+      </div>
+      <div class="preview-content" style="background:#F3F4F6; display:flex; justify-content:center; padding: 32px 24px;">
+
+        <div class="portal-phone">
+          <div class="prt-status"><span>12:15</span><span>●●● LTE 🔋</span></div>
+          <div class="prt-cna">
+            <span>Captive WLAN · railnet.at</span>
+            <span class="prt-cna-cancel">Abbrechen</span>
+          </div>
+
+          <div class="prt-header">
+            <div class="prt-logo">
+              <div class="prt-oebb">ÖBB</div>
+              <div class="prt-railnet">rail<span>net</span></div>
+            </div>
+            <span style="font-size:11px;color:#6B7280">🇩🇪 ▾</span>
+          </div>
+
+          <div class="prt-hero">
+            <div class="prt-hero-eyebrow">Top Inhalte für Sie</div>
+            <div class="prt-hero-title">Filme, Serien & Magazines</div>
+            <div class="prt-hero-sub">Kostenlos im ÖBB Railnet</div>
+            <div class="prt-hero-pills">
+              <div class="prt-pill">🎬 Filme</div>
+              <div class="prt-pill">📺 Serien</div>
+              <div class="prt-pill">📰 News</div>
+            </div>
+            <button class="prt-connect-btn">WLAN Verbinden</button>
+          </div>
+
+          <div class="prt-coach-panel">
+            <div class="prt-panel-header">
+              <span class="prt-panel-title">Zugauslastung · Wagen 1–8</span>
+              <span class="prt-fresh"><span class="prt-live-dot"></span> Vor 8 Sek.</span>
+            </div>
+            <div class="prt-coaches">
+              <div class="prt-coach prt-c-high"><span>W1</span></div>
+              <div class="prt-coach prt-c-high"><span>W2</span></div>
+              <div class="prt-coach prt-c-mid"><span>W3</span></div>
+              <div class="prt-coach prt-c-high"><span>W4</span></div>
+              <div class="prt-coach prt-c-low"><span>W5</span></div>
+              <div class="prt-coach prt-c-low"><span>W6</span></div>
+              <div class="prt-coach prt-c-low"><span>W7</span></div>
+              <div class="prt-coach prt-c-mid"><span>W8</span></div>
+            </div>
+            <div class="prt-guidance">
+              <div class="prt-g-arrow">→</div>
+              <div class="prt-g-primary">Gehen Sie zu Wagen 6</div>
+              <div class="prt-g-sub">Viel Platz · Gepäckfach frei</div>
+            </div>
+          </div>
+
+          <div class="prt-gdpr">
+            <div class="prt-gdpr-title">Gratis WLAN am Zug</div>
+            <div class="prt-gdpr-body">Durch das Verbinden stimmen Sie den Nutzungsbedingungen zu.</div>
+            <button class="prt-verbinden">VERBINDEN</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="callouts">
+      <div class="callout">
+        <div class="callout-num">01</div>
+        <div class="callout-title">No app install</div>
+        <div class="callout-desc">Passengers see the guidance panel the moment their phone joins the WiFi — no download, no login, no friction.</div>
+      </div>
+      <div class="callout">
+        <div class="callout-num">02</div>
+        <div class="callout-title">Reduces dwell time</div>
+        <div class="callout-desc">Passengers board the right coach first time. Directional arrow accounts for train orientation at each station.</div>
+      </div>
+      <div class="callout">
+        <div class="callout-num">03</div>
+        <div class="callout-title">Accessibility loop</div>
+        <div class="callout-desc">Wheelchair passengers see ramp status live. Conrad is silently alerted in the background when the portal loads.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ TECH STRIP ═══════════════════════ -->
+<div class="tech-strip">
+  <div class="tech-strip-inner">
+    <div>
+      <div class="tech-item-label">Inference hardware</div>
+      <div class="tech-item-value">Hailo-8 M.2 on R5001C SYS2</div>
+    </div>
+    <div>
+      <div class="tech-item-label">Video stays onboard</div>
+      <div class="tech-item-value">Raw frames never leave the train</div>
+    </div>
+    <div>
+      <div class="tech-item-label">Cloud sync</div>
+      <div class="tech-item-value">Structured anonymised events only</div>
+    </div>
+    <div>
+      <div class="tech-item-label">GDPR status</div>
+      <div class="tech-item-value">Privacy-by-design · No PII stored</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ ARCHITECTURE ═══════════════════════ -->
+<div class="section">
+  <div class="section-label">System Architecture</div>
+  <h2 class="section-title">5 containers · edge-first · privacy-by-design</h2>
+  <p class="section-body">
+    All AI inference runs onboard the R5001C CCU (SYS2). Five Docker containers form a pipeline
+    from raw camera streams to structured events. Raw video never leaves the train — only anonymised,
+    timestamped events are synced to the cloud.
+  </p>
+
+  <div class="arch-diagram">
+
+    <!-- ── Zone 1: Physical inputs ── -->
+    <div class="arch-zone">
+      <div class="arch-zone-label zone-hardware">Physical<br>Inputs</div>
+      <div class="arch-zone-content">
+        <div class="arch-node node-blue">
+          <div class="arch-node-tag">VLAN 5</div>
+          <div class="arch-node-title">CCTV Cameras</div>
+          <div class="arch-node-desc">Coach interior · vestibule · door cameras. RTSP streams per coach.</div>
+        </div>
+        <div class="arch-node node-orange">
+          <div class="arch-node-tag">VLAN 7</div>
+          <div class="arch-node-title">TCMS (Stadler)</div>
+          <div class="arch-node-desc">Train control alarms via SNMP. Journey ID · door state · speed · alerts.</div>
+        </div>
+        <div class="arch-node node-green">
+          <div class="arch-node-tag">VLAN 8</div>
+          <div class="arch-node-title">APC Counters</div>
+          <div class="arch-node-desc">Automatic Passenger Counting — door-level boarding/alighting ground truth.</div>
+        </div>
+        <div class="arch-node node-grey">
+          <div class="arch-node-tag">VLAN 2</div>
+          <div class="arch-node-title">ZFR (Door System)</div>
+          <div class="arch-node-desc">Door open/close state. Corroborates vision-based obstruction detection.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- flow arrow -->
+    <div class="arch-arrow">
+      <div class="arch-arrow-line"></div>
+      <div class="arch-arrow-label">RTSP streams + SNMP polls + door state</div>
+      <div class="arch-arrow-line"></div>
+    </div>
+
+    <!-- ── Zone 2: Onboard containers ── -->
+    <div class="arch-zone">
+      <div class="arch-zone-label zone-containers">Onboard<br>Containers<br><span style="font-size:8px;opacity:0.6">R5001C · SYS2<br>Debian 12 · Docker</span></div>
+      <div class="arch-zone-content" style="flex-direction:column; align-items:stretch; gap:8px;">
+
+        <!-- Row 1: ingest + pollers -->
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <div class="arch-node node-blue wide">
+            <div class="arch-node-tag">Container 1</div>
+            <div class="arch-node-title">rtsp-ingest</div>
+            <div class="arch-node-desc">Receives RTSP streams from all CCTV cameras. Manages stream lifecycle and camera priority scheduling (P1 doors 10 fps · P2 interior 5 fps · P3 exterior 8 fps station-only). Passes decoded frames to <em>inference</em>.</div>
+          </div>
+          <div class="arch-node node-orange wide">
+            <div class="arch-node-tag">Container 2</div>
+            <div class="arch-node-title">vlan-pollers</div>
+            <div class="arch-node-desc">Polls TCMS via SNMP (alarms, door state, speed). Polls APC counters. Tracks journey ID — records <code style="font-size:9px;opacity:0.8">journey_start_date</code> when trip number first appears to prevent midnight-crossing bugs. Posts events to <em>event-store</em>.</div>
+          </div>
+        </div>
+
+        <!-- Row 2: inference -->
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <div class="arch-node node-red wide" style="min-width:300px;">
+            <div class="arch-node-tag">Container 3 · Hailo-8 M.2</div>
+            <div class="arch-node-title">inference</div>
+            <div class="arch-node-desc">
+              Runs on the Hailo-8 accelerator (26 TOPS) via HailoRT 4.23 + TAPPAS 5.1.0.<br>
+              Reuses <strong>hailo-apps</strong> (MIT) for YOLO detection, BYTETracker multi-object tracking, and pose estimation.<br>
+              Outputs: headcount · luggage items · congestion score · door obstruction · wheelchair/pushchair detection · pose anomalies.
+              Posts structured detection events to <em>event-store</em>.
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 3: fusion -->
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <div class="arch-node node-purple wide" style="min-width:300px;">
+            <div class="arch-node-tag">Container 4</div>
+            <div class="arch-node-title">fusion</div>
+            <div class="arch-node-desc">
+              Merges vision detections with APC ground truth and TCMS alarm state.<br>
+              Runs the <strong>suppression state machine</strong> — suppresses alerts during maintenance mode, depot coupling, GPS-invalid windows.<br>
+              Applies configurable alert thresholds (dwell timer for unattended bag, congestion score threshold, occupancy %).<br>
+              Posts final fused events to <em>event-store</em>.
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 4: event-store -->
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <div class="arch-node node-teal wide" style="min-width:460px; max-width:100%;">
+            <div class="arch-node-tag">Container 5 · Single writer · REST + WebSocket API</div>
+            <div class="arch-node-title">event-store</div>
+            <div class="arch-node-desc">
+              The only container with an HTTP port. All other containers write events via <code style="font-size:9px;opacity:0.8">POST /api/v1/events</code> — never direct DB access.<br>
+              Persists to <strong>SQLite WAL</strong> (journey-scoped). Serves REST + WebSocket to all onboard interfaces (VLAN 30 staff · VLAN 10 passenger portal).<br>
+              Maintains a <code style="font-size:9px;opacity:0.8">sync_cursor</code> — batches confirmed events for cloud sync via SYS1, then truncates safely. Keeps last 3 journeys as debug buffer.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- flow arrow -->
+    <div class="arch-arrow">
+      <div class="arch-arrow-line"></div>
+      <div class="arch-arrow-label">REST · WebSocket · onboard VLAN 30 (staff) / VLAN 10 (passenger)</div>
+      <div class="arch-arrow-line"></div>
+    </div>
+
+    <!-- ── Zone 3: Onboard interfaces ── -->
+    <div class="arch-zone">
+      <div class="arch-zone-label zone-ifaces">Onboard<br>Interfaces</div>
+      <div class="arch-zone-content">
+        <div class="arch-node node-blue">
+          <div class="arch-node-tag">VLAN 30 · Mobile</div>
+          <div class="arch-node-title">Conductor App</div>
+          <div class="arch-node-desc">PWA served from SYS2. Offline capable. WebSocket push for live alerts.</div>
+        </div>
+        <div class="arch-node node-green">
+          <div class="arch-node-tag">VLAN 10 · CNA</div>
+          <div class="arch-node-title">Passenger Portal</div>
+          <div class="arch-node-desc">Coach load guidance on the Railnet captive portal. Polls REST every 30 s.</div>
+        </div>
+        <div class="arch-node node-grey">
+          <div class="arch-node-tag">L2 write · PIS</div>
+          <div class="arch-node-title">PIS Screens</div>
+          <div class="arch-node-desc">Exterior + interior displays. Push via L2 write API (pending Stadler network access).</div>
+        </div>
+        <div class="arch-node node-grey">
+          <div class="arch-node-tag">VLAN 30 · Cab</div>
+          <div class="arch-node-title">Driver Display</div>
+          <div class="arch-node-desc">Read-only safety passthrough. Static HTML, minimal JS.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- flow arrow -->
+    <div class="arch-arrow">
+      <div class="arch-arrow-line"></div>
+      <div class="arch-arrow-label">Structured anonymised events only · via SYS1 · confirmed ack before truncate</div>
+      <div class="arch-arrow-line"></div>
+    </div>
+
+    <!-- ── Zone 4: Cloud ── -->
+    <div class="arch-zone">
+      <div class="arch-zone-label zone-cloud">Cloud<br>Backend</div>
+      <div class="arch-zone-content">
+        <div class="arch-node node-grey wide">
+          <div class="arch-node-tag">FastAPI · PostgreSQL</div>
+          <div class="arch-node-title">Cloud Ingestion API</div>
+          <div class="arch-node-desc">Idempotent event ingestion. Handles out-of-order delivery from tunnel reconnects. PostgreSQL: <code style="font-size:9px;opacity:0.8">journeys</code> + <code style="font-size:9px;opacity:0.8">events</code> tables.</div>
+        </div>
+        <div class="arch-node node-grey wide">
+          <div class="arch-node-tag">React + Vite · WebSocket</div>
+          <div class="arch-node-title">Control Centre Dashboard</div>
+          <div class="arch-node-desc">Fleet-wide view. Live WebSocket feed. 50-event reconnect replay. Cloud-dependent by design — degrades gracefully when offline.</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /arch-diagram -->
+
+  <!-- VLAN key -->
+  <div style="margin-top:20px;">
+    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:var(--text-muted);margin-bottom:8px;">Network isolation (onboard VLANs)</div>
+    <div class="vlan-row">
+      <div class="vlan-pill v2">VLAN 2 · ZFR door system</div>
+      <div class="vlan-pill v5">VLAN 5 · CCTV cameras</div>
+      <div class="vlan-pill v7">VLAN 7 · TCMS (Stadler)</div>
+      <div class="vlan-pill v8">VLAN 8 · APC counters</div>
+      <div class="vlan-pill v10">VLAN 10 · Passenger WiFi / CNA portal</div>
+      <div class="vlan-pill v30">VLAN 30 · Staff network (conductor / driver)</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════ FOOTER ═══════════════════════ -->
+<div class="footer">
+  <div class="footer-inner">
+    <p>
+      <strong style="color:var(--text-secondary)">Nomad Digital · OEBB Smart Rail</strong><br>
+      Confidential — prepared for Roland · May 2026<br>
+      Interactive mockups available at <code style="font-size:11px;background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:3px">mockups/conductor-app-v2.html</code> ·
+      <code style="font-size:11px;background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:3px">mockups/control-centre-v2.html</code> ·
+      <code style="font-size:11px;background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:3px">mockups/passenger-portal-v1.html</code><br>
+      Contact: <a href="mailto:abbas.rizvi@nomadrail.com">abbas.rizvi@nomadrail.com</a>
+    </p>
+  </div>
+</div>
+
+</body>
+</html>

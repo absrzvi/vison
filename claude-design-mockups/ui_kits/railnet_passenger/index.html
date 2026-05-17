@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>ÖBB Railnet · Passenger Portal mit Wagen-Empfehlung</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../../colors_and_type.css" />
+
+  <style>
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: radial-gradient(ellipse at top, #f3f3f5 0%, #dcdde2 100%);
+      color: var(--obb-ink);
+      min-height: 100vh;
+      padding: 28px 24px 60px;
+      box-sizing: border-box;
+    }
+    #root {
+      display: flex; flex-direction: column; align-items: center; gap: 18px;
+    }
+    .stage {
+      display: flex; gap: 32px; align-items: flex-start;
+      justify-content: center; flex-wrap: wrap;
+    }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 8px 14px 8px 8px;
+      background: #fff;
+      border: 1px solid var(--obb-line);
+      border-radius: 999px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .badge img { height: 22px; }
+    .badge-text { font-size: 11px; color: var(--obb-graphite); letter-spacing: .04em; }
+    .badge-text b { color: var(--obb-ink); margin-right: 6px; }
+
+    @keyframes rn-spin     { to { transform: rotate(360deg); } }
+    @keyframes rn-liveblink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @keyframes rn-rise     { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes rn-pulse-rec {
+      0%,100% { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--obb-red), 0 0 12px rgba(226,0,42,.35); }
+      50%      { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--obb-red), 0 0 20px rgba(226,0,42,.55); }
+    }
+  </style>
+
+  <!-- React + Babel -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="icons.js"></script>
+  <script src="scenarios.js"></script>
+</head>
+<body>
+
+  <div class="badge">
+    <img src="../../assets/logos/OeBB_railnet.png" alt="ÖBB Railnet" />
+    <span class="badge-text"><b>Captive Portal v2</b>· Mit Wagen-Empfehlung · Interactive Prototype</span>
+  </div>
+
+  <div id="root"></div>
+
+  <script type="text/babel" src="Icon.jsx"></script>
+  <script type="text/babel" src="CoachDiagram.jsx"></script>
+  <script type="text/babel" src="GuidanceBox.jsx"></script>
+  <script type="text/babel" src="AccessibilityPanel.jsx"></script>
+  <script type="text/babel" src="CoachGuidancePanel.jsx"></script>
+  <script type="text/babel" src="Hero.jsx"></script>
+  <script type="text/babel" src="PortalHeader.jsx"></script>
+  <script type="text/babel" src="TermsBlock.jsx"></script>
+  <script type="text/babel" src="PhoneShell.jsx"></script>
+  <script type="text/babel" src="PassengerPortal.jsx"></script>
+  <script type="text/babel" src="StateControls.jsx"></script>
+  <script type="text/babel" src="App.jsx"></script>
+
+</body>
+</html>

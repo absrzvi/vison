@@ -1,0 +1,155 @@
+.live-monitoring {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.live-monitoring__body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+.live-monitoring__left {
+  width: 300px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--obb-border-dark);
+  overflow-y: auto;
+  transition: width 200ms ease;
+}
+
+.live-monitoring__left--narrow {
+  width: 220px;
+}
+
+.live-monitoring__right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.live-monitoring__feed-row {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.live-monitoring--loading {
+  align-items: center;
+  justify-content: center;
+}
+
+.live-monitoring__loading-msg {
+  font-size: 13px;
+  color: var(--obb-text-on-dark-4);
+  font-weight: 500;
+}
+
+.live-monitoring__stale-banner {
+  background: rgba(232, 160, 32, 0.12);
+  border-bottom: 1px solid rgba(232, 160, 32, 0.3);
+  color: var(--obb-sev-medium);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 16px;
+  flex-shrink: 0;
+}
+
+/* Feed column: unified feed stacked above luggage alert strip */
+.live-monitoring__feed-col {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Luggage alert strip — compact section below the escalation feed */
+.luggage-alert-strip {
+  flex-shrink: 0;
+  border-top: 1px solid var(--obb-border-dark);
+  background: var(--obb-surface-1);
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.luggage-alert-strip__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--obb-border-dark);
+  position: sticky;
+  top: 0;
+  background: var(--obb-surface-1);
+  z-index: 1;
+}
+
+.luggage-alert-strip__title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--obb-text-on-dark-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.luggage-alert-strip__count {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--obb-sev-warning);
+  background: rgba(232, 160, 32, 0.12);
+  border: 1px solid rgba(232, 160, 32, 0.3);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.luggage-alert-strip__view-all {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--obb-blue-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.luggage-alert-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--obb-border-dark);
+  cursor: pointer;
+  transition: background 100ms ease;
+}
+
+.luggage-alert-row:last-child { border-bottom: none; }
+.luggage-alert-row:hover { background: var(--obb-surface-2); }
+
+.luggage-alert-row__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.luggage-alert-row__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--obb-text-on-dark-1);
+  flex: 1;
+}
+
+.luggage-alert-row__meta {
+  font-size: 11px;
+  color: var(--obb-text-on-dark-4);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}

@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ÖBB Railnet — Captive Portal</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+    background: #F3F4F6;
+    color: #111318;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 0;
+  }
+
+  /* Phone frame wrapper for presentation */
+  .phone-wrapper {
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+    padding: 32px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .phone-frame {
+    width: 375px;
+    background: #fff;
+    border-radius: 40px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    overflow: hidden;
+    border: 8px solid #1a1a1a;
+    position: relative;
+  }
+
+  .phone-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #6B7280;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  /* Status bar */
+  .status-bar {
+    background: #fff;
+    padding: 12px 20px 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: #111;
+  }
+  .status-bar .time { font-weight: 700; }
+  .status-bar .icons { display: flex; gap: 4px; align-items: center; font-size: 11px; }
+
+  /* CNA system bar */
+  .cna-bar {
+    background: #F9FAFB;
+    border-bottom: 1px solid #E5E7EB;
+    padding: 6px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: #6B7280;
+  }
+  .cna-bar .cna-title { font-weight: 500; }
+  .cna-bar .cna-cancel { color: #E2002A; font-weight: 600; }
+
+  /* Portal scroll area */
+  .portal-scroll {
+    background: #fff;
+    overflow-y: auto;
+    max-height: 680px;
+  }
+
+  /* ÖBB Railnet header */
+  .portal-header {
+    background: #fff;
+    padding: 12px 16px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #F3F4F6;
+  }
+  .railnet-logo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .oebb-badge {
+    background: #E2002A;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 900;
+    padding: 3px 7px;
+    border-radius: 3px;
+    letter-spacing: -0.3px;
+  }
+  .railnet-text {
+    font-size: 15px;
+    font-weight: 300;
+    color: #111;
+    letter-spacing: -0.3px;
+  }
+  .railnet-text span { font-weight: 700; }
+  .portal-lang {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #6B7280;
+  }
+  .flag { font-size: 14px; }
+
+  /* Hero promo (existing — unchanged) */
+  .hero-promo {
+    position: relative;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    padding: 20px 16px 16px;
+    overflow: hidden;
+    min-height: 160px;
+  }
+  .hero-promo::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Ccircle cx='30' cy='30' r='20' fill='none' stroke='rgba(255,255,255,0.03)' stroke-width='1'/%3E%3C/svg%3E") repeat;
+  }
+  .hero-eyebrow {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 6px;
+  }
+  .hero-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.25;
+    margin-bottom: 6px;
+    max-width: 220px;
+  }
+  .hero-sub {
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    line-height: 1.5;
+    max-width: 200px;
+    margin-bottom: 14px;
+  }
+  .hero-icons {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .hero-icon-pill {
+    background: rgba(255,255,255,0.12);
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.8);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .connect-btn {
+    background: #E2002A;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-block;
+  }
+
+  /* ── COACH GUIDANCE PANEL (NEW) ── */
+  .coach-panel {
+    background: #fff;
+    border-top: 3px solid #E2002A;
+    padding: 14px 16px 16px;
+  }
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: #6B7280;
+  }
+  .freshness-pill {
+    font-size: 10px;
+    color: #9BA3AF;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .freshness-pill.stale { color: #F5A623; }
+  .live-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: #22C55E;
+    animation: liveblink 1.5s ease-in-out infinite;
+  }
+  @keyframes liveblink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* Coach diagram */
+  .coach-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+  .coach-block {
+    flex: 1;
+    height: 36px;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: default;
+  }
+  .coach-block .coach-num {
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+  }
+  .coach-block .coach-icon {
+    font-size: 7px;
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    line-height: 1;
+  }
+  .c-low   { background: #22C55E; }
+  .c-mid   { background: #F5A623; }
+  .c-high  { background: #FF6B00; }
+  .c-crit  { background: #FF3B3B; }
+  .c-low .coach-num, .c-mid .coach-num,
+  .c-high .coach-num, .c-crit .coach-num { color: #fff; }
+
+  /* Guidance instruction */
+  .guidance-box {
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .guidance-box.recommend {
+    background: rgba(34,197,94,0.08);
+    border: 1px solid rgba(34,197,94,0.3);
+  }
+  .guidance-box.warn {
+    background: rgba(245,166,35,0.08);
+    border: 1px solid rgba(245,166,35,0.3);
+  }
+  .guidance-box.info {
+    background: rgba(74,158,255,0.08);
+    border: 1px solid rgba(74,158,255,0.25);
+  }
+  .guidance-arrow {
+    font-size: 18px;
+    font-weight: 700;
+    color: #22C55E;
+    margin-bottom: 2px;
+  }
+  .guidance-warn-icon {
+    font-size: 16px;
+    margin-bottom: 2px;
+  }
+  .guidance-primary {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111318;
+    line-height: 1.2;
+    margin-bottom: 2px;
+  }
+  .guidance-sub {
+    font-size: 12px;
+    color: #6B7280;
+    line-height: 1.4;
+  }
+
+  /* Accessibility panel */
+  .access-panel {
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .access-panel.free {
+    background: rgba(74,158,255,0.07);
+    border: 1px solid rgba(74,158,255,0.3);
+  }
+  .access-panel.occupied {
+    background: rgba(245,166,35,0.07);
+    border: 1px solid rgba(245,166,35,0.3);
+  }
+  .access-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .access-icon { font-size: 16px; }
+  .access-status {
+    font-size: 14px;
+    font-weight: 700;
+    color: #111318;
+  }
+  .access-detail {
+    font-size: 12px;
+    color: #6B7280;
+    margin-bottom: 3px;
+    padding-left: 22px;
+  }
+  .access-ramp {
+    font-size: 11px;
+    color: #9BA3AF;
+    font-style: italic;
+    padding-left: 22px;
+  }
+  .access-ramp.ready {
+    color: #22C55E;
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  /* Stale / no data */
+  .no-data-msg {
+    font-size: 12px;
+    color: #9BA3AF;
+    text-align: center;
+    padding: 12px 0 4px;
+  }
+
+  /* Existing GDPR / connect section */
+  .gdpr-section {
+    background: #F9FAFB;
+    padding: 14px 16px;
+    border-top: 1px solid #E5E7EB;
+  }
+  .gdpr-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111;
+    margin-bottom: 6px;
+  }
+  .gdpr-body {
+    font-size: 12px;
+    color: #6B7280;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+  .gdpr-body a { color: #E2002A; text-decoration: none; font-weight: 500; }
+  .verbinden-btn {
+    background: #E2002A;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    width: 100%;
+    padding: 13px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+  }
+
+  /* State toggle tabs (for presentation) */
+  .state-tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    justify-content: center;
+  }
+  .state-tab {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    cursor: pointer;
+    border: 1px solid #D1D5DB;
+    background: #fff;
+    color: #6B7280;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .state-tab.active {
+    background: #111318;
+    color: #fff;
+    border-color: #111318;
+  }
+
+  /* Page bg label */
+  .page-bg {
+    background: #F3F4F6;
+    padding: 24px 0 32px;
+    min-height: 100vh;
+    width: 100%;
+  }
+  .page-title {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .page-subtitle {
+    text-align: center;
+    font-size: 11px;
+    color: #9BA3AF;
+    margin-bottom: 24px;
+  }
+
+</style>
+</head>
+<body>
+<div class="page-bg">
+  <div style="text-align:center; padding: 0 16px 20px;">
+    <div class="page-title">ÖBB Railnet — CNA Portal</div>
+    <div class="page-subtitle">Passenger guidance panel · Below existing promo · Pre-login · German only</div>
+
+    <!-- State switcher -->
+    <div class="state-tabs" id="stateTabs">
+      <div class="state-tab active" onclick="setState('normal')">Gemischte Auslastung</div>
+      <div class="state-tab" onclick="setState('directed')">Empfehlung →</div>
+      <div class="state-tab" onclick="setState('full')">Zug voll</div>
+      <div class="state-tab" onclick="setState('access-free')">Barrierefreiheit frei</div>
+      <div class="state-tab" onclick="setState('access-occupied')">Barrierefreiheit belegt</div>
+      <div class="state-tab" onclick="setState('ramp-ready')">Rampe bereit</div>
+      <div class="state-tab" onclick="setState('stale')">Daten veraltet</div>
+      <div class="state-tab" onclick="setState('nodata')">Keine Daten</div>
+    </div>
+  </div>
+
+  <div class="phone-wrapper">
+    <div>
+      <div class="phone-label">iPhone · iOS CNA Popup</div>
+      <div class="phone-frame">
+        <!-- Status bar -->
+        <div class="status-bar">
+          <span class="time">12:15</span>
+          <div class="icons">
+            <span>●●●</span>
+            <span>LTE</span>
+            <span>🔋</span>
+          </div>
+        </div>
+
+        <!-- CNA system bar -->
+        <div class="cna-bar">
+          <span class="cna-title">Captive WLAN · railnet.at</span>
+          <span class="cna-cancel">Abbrechen</span>
+        </div>
+
+        <!-- Portal scroll area -->
+        <div class="portal-scroll" id="portalScroll">
+
+          <!-- EXISTING: ÖBB Railnet header -->
+          <div class="portal-header">
+            <div class="railnet-logo">
+              <div class="oebb-badge">ÖBB</div>
+              <div class="railnet-text">rail<span>net</span></div>
+            </div>
+            <div class="portal-lang">
+              <span class="flag">🇩🇪</span>
+              <span>▾</span>
+            </div>
+          </div>
+
+          <!-- EXISTING: Hero entertainment promo (unchanged) -->
+          <div class="hero-promo">
+            <div class="hero-eyebrow">Top Inhalte für Sie</div>
+            <div class="hero-title">Filme, Serien & Magazines</div>
+            <div class="hero-sub">Kostenlos im ÖBB Railnet — keine Verbindung zum Internet nötig</div>
+            <div class="hero-icons">
+              <div class="hero-icon-pill">🎬 Filme</div>
+              <div class="hero-icon-pill">📺 Serien</div>
+              <div class="hero-icon-pill">📰 News</div>
+            </div>
+            <button class="connect-btn">WLAN Verbinden</button>
+          </div>
+
+          <!-- ══════════════════════════════════ -->
+          <!-- NEW: Coach Guidance Panel          -->
+          <!-- ══════════════════════════════════ -->
+          <div class="coach-panel">
+
+            <div class="panel-header">
+              <span class="panel-title">Zugauslastung</span>
+              <span class="freshness-pill" id="freshnessPill">
+                <span class="live-dot" id="liveDot"></span>
+                <span id="freshnessText">Vor 8 Sek.</span>
+              </span>
+            </div>
+
+            <!-- Coach diagram -->
+            <div class="coach-row" id="coachRow">
+              <!-- populated by JS -->
+            </div>
+
+            <!-- Guidance instruction (conditional) -->
+            <div id="guidanceBox"></div>
+
+            <!-- Accessibility panel (conditional) -->
+            <div id="accessPanel"></div>
+
+            <!-- No data fallback -->
+            <div id="noDataMsg" class="no-data-msg" style="display:none">
+              Auslastungsdaten nicht verfügbar
+            </div>
+
+          </div>
+          <!-- END Coach Guidance Panel -->
+
+          <!-- EXISTING: GDPR / Connect section (unchanged) -->
+          <div class="gdpr-section">
+            <div class="gdpr-title">Gratis WLAN am Zug</div>
+            <div class="gdpr-body">
+              Durch das Verbinden stimmen Sie den <a href="#">Nutzungsbedingungen</a> zu.
+              Zur Nutzung mit Android-Geräten bitte die <a href="#">railnet.at</a> Seite in Ihrem Browser öffnen.
+            </div>
+            <button class="verbinden-btn">VERBINDEN</button>
+          </div>
+
+        </div><!-- /portal-scroll -->
+      </div><!-- /phone-frame -->
+    </div>
+  </div>
+</div>
+
+<script>
+const STATES = {
+  'normal': {
+    coaches: [
+      {pct:45,label:'W1'}, {pct:72,label:'W2'}, {pct:38,label:'W3'},
+      {pct:80,label:'W4'}, {pct:55,label:'W5'}, {pct:68,label:'W6'},
+      {pct:42,label:'W7'}, {pct:60,label:'W8'}
+    ],
+    guidance: null,
+    access: null,
+    stale: false,
+    noData: false
+  },
+  'directed': {
+    coaches: [
+      {pct:88,label:'W1'}, {pct:92,label:'W2'}, {pct:85,label:'W3'},
+      {pct:90,label:'W4'}, {pct:32,label:'W5',luggage:true}, {pct:28,label:'W6'},
+      {pct:35,label:'W7'}, {pct:87,label:'W8'}
+    ],
+    guidance: {
+      type: 'recommend',
+      arrow: '→',
+      primary: 'Gehen Sie zu Wagen 6',
+      sub: 'Viel Platz · Gepäckfach frei'
+    },
+    access: null,
+    stale: false,
+    noData: false
+  },
+  'full': {
+    coaches: [
+      {pct:95,label:'W1'}, {pct:102,label:'W2'}, {pct:88,label:'W3'},
+      {pct:97,label:'W4'}, {pct:91,label:'W5'}, {pct:98,label:'W6'},
+      {pct:86,label:'W7'}, {pct:94,label:'W8'}
+    ],
+    guidance: {
+      type: 'warn',
+      primary: 'Zug stark besetzt',
+      sub: 'Wagen 3 am wenigsten voll'
+    },
+    access: null,
+    stale: false,
+    noData: false
+  },
+  'access-free': {
+    coaches: [
+      {pct:45,label:'W1'}, {pct:38,label:'W2',prm:true}, {pct:60,label:'W3'},
+      {pct:72,label:'W4'}, {pct:55,label:'W5'}, {pct:48,label:'W6'},
+      {pct:65,label:'W7'}, {pct:50,label:'W8'}
+    ],
+    guidance: null,
+    access: {
+      type: 'free',
+      status: 'Rollstuhlplatz frei',
+      detail: 'Wagen 2 · Tür 1',
+      ramp: 'Rampe wird vorbereitet …',
+      rampReady: false
+    },
+    stale: false,
+    noData: false
+  },
+  'access-occupied': {
+    coaches: [
+      {pct:45,label:'W1'}, {pct:88,label:'W2',prm:true,prmFull:true}, {pct:60,label:'W3'},
+      {pct:72,label:'W4'}, {pct:55,label:'W5'}, {pct:48,label:'W6'},
+      {pct:65,label:'W7'}, {pct:50,label:'W8'}
+    ],
+    guidance: null,
+    access: {
+      type: 'occupied',
+      status: 'Rollstuhlplatz belegt',
+      detail: 'Bitte Schaffner kontaktieren'
+    },
+    stale: false,
+    noData: false
+  },
+  'ramp-ready': {
+    coaches: [
+      {pct:45,label:'W1'}, {pct:38,label:'W2',prm:true}, {pct:60,label:'W3'},
+      {pct:72,label:'W4'}, {pct:55,label:'W5'}, {pct:48,label:'W6'},
+      {pct:65,label:'W7'}, {pct:50,label:'W8'}
+    ],
+    guidance: null,
+    access: {
+      type: 'free',
+      status: 'Rollstuhlplatz frei',
+      detail: 'Wagen 2 · Tür 1',
+      ramp: '✓ Rampe bereit',
+      rampReady: true
+    },
+    stale: false,
+    noData: false
+  },
+  'stale': {
+    coaches: [
+      {pct:45,label:'W1'}, {pct:72,label:'W2'}, {pct:38,label:'W3'},
+      {pct:80,label:'W4'}, {pct:55,label:'W5'}, {pct:68,label:'W6'},
+      {pct:42,label:'W7'}, {pct:60,label:'W8'}
+    ],
+    guidance: null,
+    access: null,
+    stale: true,
+    noData: false
+  },
+  'nodata': {
+    coaches: [],
+    guidance: null,
+    access: null,
+    stale: false,
+    noData: true
+  }
+};
+
+function coachClass(pct) {
+  if (pct > 100) return 'c-crit';
+  if (pct > 85) return 'c-high';
+  if (pct > 60) return 'c-mid';
+  return 'c-low';
+}
+
+function setState(key) {
+  // Update tab styles
+  document.querySelectorAll('.state-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+
+  const s = STATES[key];
+
+  const coachRow = document.getElementById('coachRow');
+  const guidanceBox = document.getElementById('guidanceBox');
+  const accessPanel = document.getElementById('accessPanel');
+  const noDataMsg = document.getElementById('noDataMsg');
+  const freshnessPill = document.getElementById('freshnessPill');
+  const liveDot = document.getElementById('liveDot');
+
+  // Reset
+  coachRow.innerHTML = '';
+  guidanceBox.innerHTML = '';
+  accessPanel.innerHTML = '';
+  noDataMsg.style.display = 'none';
+  coachRow.style.opacity = '1';
+
+  if (s.noData) {
+    noDataMsg.style.display = 'block';
+    liveDot.style.background = '#6B7280';
+    document.getElementById('freshnessText').textContent = '—';
+    return;
+  }
+
+  // Stale treatment
+  if (s.stale) {
+    freshnessPill.classList.add('stale');
+    liveDot.style.animation = 'none';
+    liveDot.style.background = '#F5A623';
+    document.getElementById('freshnessText').textContent = 'Daten veraltet';
+    coachRow.style.opacity = '0.6';
+    // Add updating note
+    guidanceBox.innerHTML = '<div style="font-size:11px;color:#9BA3AF;text-align:center;padding:4px 0">Wird aktualisiert …</div>';
+  } else {
+    freshnessPill.classList.remove('stale');
+    liveDot.style.animation = '';
+    liveDot.style.background = '#22C55E';
+    document.getElementById('freshnessText').textContent = 'Vor 8 Sek.';
+  }
+
+  // Build coach blocks
+  s.coaches.forEach(c => {
+    const block = document.createElement('div');
+    block.className = `coach-block ${coachClass(c.pct)}`;
+    let icons = '';
+    if (c.luggage) icons += '<span class="coach-icon">🧳</span>';
+    if (c.prm) icons += '<span class="coach-icon">♿</span>';
+    block.innerHTML = `<span class="coach-num">${c.label}</span>${icons}`;
+
+    // Tooltip on hover
+    const labels = {
+      'c-low': 'Viel Platz', 'c-mid': 'Mäßig besetzt',
+      'c-high': 'Stark besetzt', 'c-crit': 'Überfüllt'
+    };
+    const cls = coachClass(c.pct);
+    block.title = `${c.label}: ${labels[cls]} (${Math.min(c.pct,100)}%)`;
+
+    coachRow.appendChild(block);
+  });
+
+  // Guidance instruction
+  if (!s.stale && s.guidance) {
+    const g = s.guidance;
+    if (g.type === 'recommend') {
+      guidanceBox.innerHTML = `
+        <div class="guidance-box recommend">
+          <div class="guidance-arrow">${g.arrow}</div>
+          <div class="guidance-primary">${g.primary}</div>
+          <div class="guidance-sub">${g.sub}</div>
+        </div>`;
+    } else if (g.type === 'warn') {
+      guidanceBox.innerHTML = `
+        <div class="guidance-box warn">
+          <div class="guidance-warn-icon">⚠</div>
+          <div class="guidance-primary">${g.primary}</div>
+          <div class="guidance-sub">${g.sub}</div>
+        </div>`;
+    }
+  }
+
+  // Accessibility panel
+  if (s.access) {
+    const a = s.access;
+    if (a.type === 'free') {
+      accessPanel.innerHTML = `
+        <div class="access-panel free">
+          <div class="access-header">
+            <span class="access-icon">♿</span>
+            <span class="access-status">${a.status}</span>
+          </div>
+          <div class="access-detail">${a.detail}</div>
+          <div class="access-ramp ${a.rampReady ? 'ready' : ''}">${a.ramp}</div>
+        </div>`;
+    } else {
+      accessPanel.innerHTML = `
+        <div class="access-panel occupied">
+          <div class="access-header">
+            <span class="access-icon">♿</span>
+            <span class="access-status">${a.status}</span>
+          </div>
+          <div class="access-detail">${a.detail}</div>
+        </div>`;
+    }
+  }
+}
+
+// Init with default state
+window.addEventListener('load', () => {
+  const firstTab = document.querySelector('.state-tab.active');
+  if (firstTab) firstTab.click();
+
+  // Simulate tab click for init without needing event
+  setState_init('normal');
+});
+
+function setState_init(key) {
+  const s = STATES[key];
+  const coachRow = document.getElementById('coachRow');
+  s.coaches.forEach(c => {
+    const block = document.createElement('div');
+    block.className = `coach-block ${coachClass(c.pct)}`;
+    block.innerHTML = `<span class="coach-num">${c.label}</span>`;
+    coachRow.appendChild(block);
+  });
+}
+</script>
+</body>
+</html>

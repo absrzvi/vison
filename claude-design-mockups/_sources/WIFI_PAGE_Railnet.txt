@@ -1,0 +1,38 @@
+
+=== xl/worksheets/sheet1.xml ===
+A1=0 | D1=Deutsch | E1=Language 3 | F1=Language 5 | G1=Language 6 | H1=Language 7 | I1=Language 8
+A2=1. Welcome page 1-1 | B2=8 | D2=Add copy for each language
+A3=10 | C3=Do you know Railnet? | D3=Kennen Sie das Railnet?
+A4=13 | C4=The onboard portal on railjets with infos about the journey, services and entertainment 
+railnet.oebb.at | D4=Das Onboard Portal im Railjet mit Infos zur Fahrt, Services und Entertainment
+railnet.oebb.at | E4=16
+A5=17 | C5=WiFi Connect | D5=Wlan Verbinden
+A6=1. Welcome page 1-2
+A7=10 | C7=How to get to Railnet? | D7=Wie erreicht man das Railnet?
+A8=13 | C8=After clicking "Connect" when using an Android device please insert railnet.oebb.at into your browser.
+railnet.oebb.at | D8=Nach dem Klick auf "Verbinden" geben Sie bei Android Nutzung railnet.oebb.at in Ihren Browser ein
+railnet.oebb.at | E8=16
+A9=17 | C9=WiFi Connect | D9=Wlan Verbinden
+A10=1. Welcome page 1-3
+A11=10 | C11=Top content für you | D11=Top Inhalte für Sie
+A12=13 | C12=Available are movies and series, for example Bösterreich, newspapers and magazines, the travel preview and much more free of charge to your disposal.
+railnet.oebb.at | D12=Es stehen Ihnen Filme und Serien, wie zum Beispiel Bösterreich, Zeitungen und Magazine, die Reisevorschau und vieles mehr kostenlos zur Verfügung.
+railnet.oebb.at | E12=16
+A13=17 | C13=WiFi Connect | D13=Wlan Verbinden
+A14=Terms &amp; Conditions
+A15=10 | C15=Free WLAN on the train | D15=Gratis WLAN am Zug
+A16=13 | C16=By connecting to our free WiFi, you agree to the terms of use.
+
+To get to the onboard portal, please insert railnet.oebb.at into your browser when using an Android device. | D16=Durch das Verbinden mit dem kostenlosen ÖBB WLAN erklären Sie sich mit den Nutzungsbedingungen [LINK] einverstanden.
+
+[CHECKMARK] Ich willige ein, dass die ÖBB-Personenverkehr AG die MAC-Adresse sowie das Betriebssystem meines Endgerätes während der Sitzung, den Zeitstempel von Verbindungsaufnahme- und -ende, die von mir ausgewählte Sprache und das verbrauchte Datenvolumen zum Zwecke der Bereitstellung des WLAN -Zugangs sowie für statistische Auswertungen verarbeitet. 
+Diese Daten werden im Regelfall nur an eingesetzte Auftragsverarbeiter und nicht an sonstige Dritte weitergegeben und bis zu 7 Tagen gespeichert. Ich kann diese Einwilligung jederzeit durch Beendigung der WLAN-Verbindung widerrufen. Weitere Informationen finden Sie in der Datenschutzinformation  [Link]
+
+Um zum Onboard Portal zu gelangen, geben Sie bei der Nutzung mit Android Geräten bitte railnet.oebb.at in Ihren Browser ein.
+A17=17 | C17=CONNECT | D17=VERBINDEN
+A18=2. Now connected page
+A19=10 | C19=Connection succeeded | D19=Verbindung erfolgreich!
+A20=13 | C20=Everything you need to know about your journey, services onboard and Infotainment can be found in our onboard portal railnet.
+Have fun surfing the web! | D20=Alles rund um Ihre Fahrt, Infos zum Zug und Infotainment finden sie im ÖBB Railnet.
+Viel Spaß beim Surfen!
+A21=17 | C21=open railnet | D21=railnet öffnen

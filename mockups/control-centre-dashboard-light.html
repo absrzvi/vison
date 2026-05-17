@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ÖBB Smart Rail — Control Centre Dashboard (Light)</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --oebb-red:        #E2002A;
+    --oebb-red-dim:    rgba(226,0,42,0.08);
+    --oebb-red-glow:   rgba(226,0,42,0.20);
+    --oebb-blue:       #073D6E;
+    --oebb-blue-mid:   #0A5298;
+    --oebb-blue-bright:#1A6FBF;
+    --surface-0:       #F4F5F8;
+    --surface-1:       #FFFFFF;
+    --surface-2:       #F0F2F6;
+    --surface-3:       #E8EBF0;
+    --surface-4:       #DDE1E9;
+    --surface-5:       #CDD2DC;
+    --border:          rgba(0,0,0,0.07);
+    --border-bright:   rgba(0,0,0,0.12);
+    --text-primary:    #14202E;
+    --text-secondary:  #4A5568;
+    --text-muted:      #8A94A8;
+    --green:           #007A55;
+    --green-dim:       rgba(0,122,85,0.08);
+    --green-glow:      rgba(0,122,85,0.15);
+    --amber:           #B57300;
+    --amber-dim:       rgba(181,115,0,0.08);
+    --amber-glow:      rgba(181,115,0,0.15);
+    --red:             #C8001F;
+    --red-dim:         rgba(200,0,31,0.07);
+    --red-glow:        rgba(200,0,31,0.15);
+    --blue-accent:     #1A6FBF;
+    --blue-dim:        rgba(26,111,191,0.08);
+    --purple:          #6040B8;
+    --purple-dim:      rgba(96,64,184,0.08);
+  }
+
+  body {
+    background: #ECEEF2;
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    min-height: 100vh;
+    padding: 40px 24px 80px;
+  }
+
+  /* ─── Cover header ─── */
+  .cover {
+    max-width: 1280px;
+    margin: 0 auto 48px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border-bright);
+  }
+  .cover-product {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--oebb-red); margin-bottom: 8px;
+  }
+  .cover-title { font-size: 26px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 6px; }
+  .cover-sub { font-size: 13px; color: var(--text-secondary); }
+  .cover-badge {
+    display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-muted); background: var(--surface-1); border: 1px solid var(--border-bright);
+    border-radius: 20px; padding: 5px 12px; margin-bottom: 8px;
+  }
+  .cover-meta { font-size: 11px; color: var(--text-muted); line-height: 1.8; text-align: right; }
+
+  /* ─── Section divider ─── */
+  .section-divider {
+    max-width: 1280px; margin: 56px auto 36px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .sdl { flex: 1; height: 1px; background: var(--border-bright); }
+  .sdp {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase;
+    color: var(--text-muted); background: var(--surface-1);
+    border: 1px solid var(--border-bright); border-radius: 20px; padding: 5px 14px; white-space: nowrap;
+  }
+  .sdn {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--oebb-blue); color: #fff;
+    font-size: 11px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+
+  /* ─── Dashboard frame ─── */
+  .dash-wrap { max-width: 1280px; margin: 0 auto; }
+  .dash-frame-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text-muted); text-align: center; margin-bottom: 12px;
+  }
+
+  .dash {
+    background: var(--surface-1);
+    border: 1px solid var(--border-bright);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 32px rgba(0,0,0,0.10);
+  }
+
+  /* ─── Top bar ─── */
+  .topbar {
+    background: var(--oebb-red);
+    padding: 0 24px;
+    height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid rgba(0,0,0,0.12);
+  }
+  .topbar-left { display: flex; align-items: center; gap: 20px; }
+  .topbar-logo { display: flex; align-items: center; gap: 10px; }
+  .topbar-logo img { height: 22px; display: block; }
+  .topbar-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.3); }
+  .topbar-product {
+    font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.9);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .topbar-nav { display: flex; gap: 4px; }
+  .nav-item {
+    font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.65);
+    padding: 6px 14px; border-radius: 8px; cursor: pointer;
+  }
+  .nav-item.active { background: rgba(255,255,255,0.18); color: #fff; }
+  .nav-item .nav-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; color: var(--oebb-red);
+    font-size: 9px; font-weight: 800; margin-left: 5px;
+  }
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+  .topbar-time { font-size: 12px; color: rgba(255,255,255,0.65); font-variant-numeric: tabular-nums; }
+  .topbar-user { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,0.85); }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; color: #fff;
+  }
+
+  /* ─── Status bar ─── */
+  .statusbar {
+    background: var(--surface-0);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 24px;
+    display: flex; align-items: center; gap: 24px;
+  }
+  .stat-pill { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-secondary); }
+  .stat-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .stat-dot.green { background: var(--green); }
+  .stat-dot.amber { background: #D4A017; }
+  .stat-dot.red   { background: var(--red); }
+  .stat-val { font-weight: 700; color: var(--text-primary); }
+  .stat-sep { width: 1px; height: 14px; background: var(--border-bright); }
+  .alert-chip {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(181,115,0,0.10);
+    border: 1px solid #C8860A;
+    border-radius: 20px; padding: 3px 10px;
+    font-size: 11px; font-weight: 700; color: #8A5800; cursor: pointer;
+  }
+
+  /* ─── Main layout ─── */
+  .dash-body { display: flex; height: 680px; }
+
+  /* ─── Sidebar ─── */
+  .sidebar {
+    width: 240px; flex-shrink: 0;
+    background: var(--surface-0);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .sidebar-header {
+    padding: 14px 16px 10px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sidebar-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
+  .sidebar-count { font-size: 11px; font-weight: 700; color: var(--text-muted); }
+  .sidebar-filter { padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; gap: 4px; }
+  .filter-chip {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 20px; cursor: pointer;
+    color: var(--text-muted); background: transparent; border: 1px solid transparent;
+  }
+  .filter-chip.active {
+    background: var(--surface-1); border-color: var(--border-bright); color: var(--text-secondary);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .train-list { flex: 1; overflow-y: auto; }
+  .train-item {
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    cursor: pointer; display: flex; align-items: center; gap: 12px;
+    transition: background 0.1s;
+  }
+  .train-item:hover { background: var(--surface-2); }
+  .train-item.selected { background: #EBF3FB; border-left: 2px solid var(--blue-accent); }
+  .train-item.fault { border-left: 2px solid #D4A017; }
+  .train-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .train-info { flex: 1; min-width: 0; }
+  .train-id { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+  .train-route { font-size: 10px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .train-fault-badge {
+    font-size: 9px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 2px 6px; border-radius: 4px;
+    background: rgba(181,115,0,0.10); border: 1px solid #C8860A; color: #7A5000; white-space: nowrap;
+  }
+  .train-fault-badge.red-badge { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+
+  /* ─── Main content ─── */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  .tab-bar {
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex; gap: 0; align-items: flex-end; height: 44px;
+  }
+  .tab {
+    font-size: 12px; font-weight: 600; color: var(--text-muted);
+    padding: 0 18px; height: 44px;
+    display: flex; align-items: center;
+    border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap;
+  }
+  .tab.active { color: var(--oebb-blue); border-bottom-color: var(--oebb-blue); }
+  .tab .tab-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #D4A017; color: #fff;
+    font-size: 9px; font-weight: 800; margin-left: 5px;
+  }
+
+  .content { flex: 1; overflow-y: auto; padding: 20px 24px 24px; background: var(--surface-0); }
+
+  /* ─── KPI row ─── */
+  .kpi-row { display: flex; gap: 12px; margin-bottom: 20px; }
+  .kpi-card {
+    flex: 1; background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .kpi-label { font-size: 10px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px; }
+  .kpi-val { font-size: 24px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em; line-height: 1; }
+  .kpi-sub { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+  .kpi-card.amber-card { border-color: #C8860A; background: rgba(181,115,0,0.06); }
+  .kpi-card.amber-card .kpi-val { color: #7A5000; }
+  .kpi-card.green-card { border-color: rgba(0,122,85,0.25); }
+  .kpi-card.green-card .kpi-val { color: var(--green); }
+
+  /* ─── Section heading ─── */
+  .sec-heading {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase;
+    color: var(--text-secondary); margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sec-heading-action { font-size: 11px; font-weight: 600; color: var(--blue-accent); cursor: pointer; text-transform: none; letter-spacing: 0; }
+
+  /* ─── Fleet grid ─── */
+  .fleet-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 24px; }
+  .fleet-card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 10px 8px; cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .fleet-card:hover { border-color: var(--border-bright); box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+  .fleet-card.selected { border-color: var(--blue-accent); background: #EBF3FB; }
+  .fleet-card.fault-amber { border-color: #C8860A; background: rgba(181,115,0,0.06); }
+  .fleet-card.fault-red { border-color: var(--red); background: var(--red-dim); }
+  .fc-id { font-size: 11px; font-weight: 800; color: var(--text-primary); margin-bottom: 2px; }
+  .fc-route { font-size: 9px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 8px; }
+  .fc-bars { display: flex; gap: 2px; align-items: flex-end; height: 24px; }
+  .fc-bar { flex: 1; border-radius: 2px; background: var(--green); min-height: 4px; }
+  .fc-bar.amber { background: #D4A017; }
+  .fc-bar.red { background: var(--red); }
+  .fc-status { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+  .fc-status-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .fc-label { font-size: 9px; color: var(--text-muted); }
+
+  /* ─── Train detail header ─── */
+  .train-detail-header {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 20px; margin-bottom: 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .tdh-id { font-size: 18px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.01em; }
+  .tdh-route { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .tdh-badges { display: flex; gap: 8px; margin-top: 8px; }
+  .badge { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 9px; border-radius: 6px; }
+  .badge-amber { background: rgba(181,115,0,0.10); border: 1px solid #C8860A; color: #7A5000; }
+  .badge-blue { background: var(--blue-dim); border: 1px solid var(--blue-accent); color: var(--blue-accent); }
+  .badge-green { background: var(--green-dim); border: 1px solid var(--green); color: var(--green); }
+  .notify-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--oebb-red); color: #fff;
+    font-size: 12px; font-weight: 700; padding: 10px 20px;
+    border-radius: 8px; cursor: pointer; border: none; letter-spacing: 0.02em;
+    box-shadow: 0 2px 8px var(--oebb-red-glow);
+  }
+
+  /* ─── Link map ─── */
+  .link-map-wrap {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .link-map { display: flex; align-items: center; gap: 0; margin: 16px 0 12px; }
+  .coach-node { display: flex; flex-direction: column; align-items: center; flex: 1; }
+  .coach-box {
+    width: 52px; height: 28px; background: var(--surface-2);
+    border: 1px solid var(--border-bright); border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 800; color: var(--text-primary);
+  }
+  .coach-box.engine { background: var(--oebb-blue); border-color: var(--oebb-blue); border-radius: 8px 4px 4px 8px; color: #fff; }
+  .coach-box.engine-r { border-radius: 4px 8px 8px 4px; }
+  .coach-label { font-size: 9px; color: var(--text-muted); margin-top: 4px; }
+  .link-segment { flex: 1; height: 4px; border-radius: 2px; margin: 0 2px; }
+  .link-segment.ok { background: var(--green); }
+  .link-segment.amber { background: #D4A017; }
+  .link-segment.failed { background: var(--red); }
+  .link-legend { display: flex; gap: 16px; margin-top: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-secondary); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .fault-detail-row { display: flex; gap: 12px; margin-bottom: 16px; }
+
+  /* ─── Fault card ─── */
+  .fault-card {
+    flex: 1; background: var(--surface-1);
+    border: 1px solid #C8860A; border-radius: 10px; padding: 16px 18px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .fault-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .fault-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: rgba(181,115,0,0.10); border: 1px solid #C8860A;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; flex-shrink: 0;
+  }
+  .fault-heading { font-size: 13px; font-weight: 700; color: #7A5000; }
+  .fault-desc { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+  .fault-metric-row { display: flex; gap: 16px; margin-bottom: 12px; }
+  .fault-metric { flex: 1; }
+  .fault-metric-label { font-size: 10px; color: var(--text-muted); margin-bottom: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+  .fault-metric-val { font-size: 15px; font-weight: 800; color: #7A5000; }
+  .event-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-top: 1px solid var(--border); font-size: 11px; }
+  .event-time { color: var(--text-muted); font-variant-numeric: tabular-nums; width: 46px; flex-shrink: 0; }
+  .event-desc { color: var(--text-secondary); flex: 1; }
+  .event-dot { width: 6px; height: 6px; border-radius: 50%; background: #D4A017; flex-shrink: 0; }
+
+  /* ─── Affected systems ─── */
+  .affected-card {
+    width: 280px; flex-shrink: 0; background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .sys-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .sys-row:last-child { border-bottom: none; }
+  .sys-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .sys-icon.ok { background: var(--green-dim); }
+  .sys-icon.impact { background: rgba(181,115,0,0.10); }
+  .sys-name { flex: 1; font-size: 12px; font-weight: 600; color: var(--text-primary); }
+  .sys-status { font-size: 10px; font-weight: 700; }
+  .sys-status.ok { color: var(--green); }
+  .sys-status.impact { color: #7A5000; }
+  .sys-status.offline { color: var(--red); }
+
+  /* ─── SNMP raw ─── */
+  .snmp-raw {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 16px; font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 10px; color: var(--text-muted); line-height: 1.8;
+  }
+  .snmp-raw span { color: var(--text-secondary); }
+  .snmp-raw em { color: var(--green); font-style: normal; }
+  .snmp-expand { font-size: 10px; color: var(--blue-accent); cursor: pointer; margin-top: 8px; display: inline-block; }
+
+  /* ─── Notify modal ─── */
+  .modal {
+    width: 640px; background: var(--surface-1);
+    border: 1px solid var(--border-bright); border-radius: 14px; overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+  }
+  .modal-header {
+    padding: 18px 22px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-title { font-size: 15px; font-weight: 800; color: var(--text-primary); }
+  .modal-subtitle { font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
+  .modal-close {
+    width: 28px; height: 28px; border-radius: 50%; background: var(--surface-2);
+    border: 1px solid var(--border); display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: var(--text-muted); cursor: pointer;
+  }
+  .modal-body { padding: 20px 22px; }
+  .modal-section { margin-bottom: 16px; }
+  .modal-section-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase;
+    color: var(--text-secondary); margin-bottom: 8px;
+  }
+  .modal-field-row { display: flex; gap: 10px; margin-bottom: 8px; }
+  .modal-field {
+    flex: 1; background: var(--surface-0); border: 1px solid var(--border-bright);
+    border-radius: 8px; padding: 10px 14px;
+  }
+  .mf-label { font-size: 10px; color: var(--text-muted); margin-bottom: 3px; }
+  .mf-val { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+  .mf-val.amber { color: #7A5000; }
+  .modal-textarea {
+    width: 100%; background: var(--surface-0); border: 1px solid var(--border-bright);
+    border-radius: 8px; padding: 10px 14px; resize: none; height: 64px;
+    font-family: inherit; font-size: 12px; color: var(--text-primary); outline: none;
+  }
+  .modal-footer {
+    padding: 14px 22px 18px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-cancel {
+    font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer;
+    padding: 8px 16px; border-radius: 8px; background: transparent; border: 1px solid var(--border);
+  }
+  .modal-send {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--oebb-red); color: #fff; font-size: 12px; font-weight: 700;
+    padding: 10px 22px; border-radius: 8px; cursor: pointer; border: none;
+    box-shadow: 0 2px 8px var(--oebb-red-glow); letter-spacing: 0.02em;
+  }
+  .severity-chip {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(181,115,0,0.10); border: 1px solid #C8860A;
+    border-radius: 6px; padding: 5px 10px;
+    font-size: 11px; font-weight: 700; color: #7A5000;
+  }
+
+  /* ─── Confirmation ─── */
+  .confirm-content { display: flex; flex-direction: column; align-items: center; padding: 40px 32px; text-align: center; }
+  .confirm-icon {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: var(--green-dim); border: 2px solid var(--green);
+    display: flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 20px;
+  }
+  .confirm-title { font-size: 18px; font-weight: 800; color: var(--text-primary); margin-bottom: 8px; }
+  .confirm-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; max-width: 400px; }
+  .confirm-ref {
+    background: var(--surface-0); border: 1px solid var(--border-bright);
+    border-radius: 10px; padding: 14px 24px; margin-bottom: 24px; display: flex; gap: 32px;
+  }
+  .confirm-field { text-align: left; }
+  .cf-label { font-size: 10px; color: var(--text-muted); margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+  .cf-val { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+  .confirm-done {
+    background: var(--surface-2); border: 1px solid var(--border-bright);
+    color: var(--text-primary); font-size: 12px; font-weight: 700;
+    padding: 10px 28px; border-radius: 8px; cursor: pointer;
+  }
+  .confirm-note { font-size: 11px; color: var(--text-secondary); margin-top: 12px; }
+
+  /* ─── Occupancy ─── */
+  .occ-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .occ-card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .occ-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .occ-card-title { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+  .occ-card-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+  .badge-green-pill { background: var(--green-dim); border: 1px solid var(--green); color: var(--green); border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 700; }
+  .badge-amber-pill { background: rgba(181,115,0,0.10); border: 1px solid #C8860A; color: #7A5000; border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 700; }
+  .occ-coaches { display: flex; gap: 4px; margin-bottom: 8px; }
+  .occ-coach {
+    flex: 1; height: 40px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; color: #fff;
+  }
+  .occ-coach.g { background: var(--green); }
+  .occ-coach.a { background: #D4A017; }
+  .occ-coach.r { background: var(--red); }
+  .occ-coach.lg { background: rgba(0,122,85,0.15); color: var(--green); border: 1px solid var(--green); }
+  .occ-footnote { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ─── Annotations ─── */
+  .annotation {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 12px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .annotation-num {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--oebb-blue); color: #fff;
+    font-size: 10px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;
+  }
+  .annotation-text { font-size: 11px; color: var(--text-secondary); line-height: 1.5; }
+  .annotation-text strong { color: var(--text-primary); }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface-4); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- ─── Cover ─── -->
+<div class="cover">
+  <div class="cover-left">
+    <div class="cover-product">ÖBB Smart Rail — Passenger Intelligence</div>
+    <div class="cover-title">Control Centre Dashboard</div>
+    <div class="cover-sub">Roland (Fleet Manager) · 30+ DOSTO trains · Scenario 09 + 04 flows · Light theme</div>
+  </div>
+  <div class="cover-right">
+    <div class="cover-badge">Phase 4 — UX Design</div>
+    <div class="cover-meta">
+      Interface: Web dashboard — 1280px wide<br>
+      Users: Roland (fleet / network), Claudia (occupancy)<br>
+      Date: 2026-05-14
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SCREEN 1 — FLEET OVERVIEW                  -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="section-divider">
+  <div class="sdl"></div>
+  <div class="sdn">1</div>
+  <div class="sdp">Fleet Overview — Network Health tab · 1 amber fault in fleet</div>
+  <div class="sdl"></div>
+</div>
+
+<div class="dash-wrap">
+  <div class="dash-frame-label">SCREEN 1 — FLEET OVERVIEW</div>
+  <div class="dash">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-logo">
+          <img src="../current-portal-design/Logos & Symbole/Logos railnet/OeBB_railnet.png" alt="ÖBB railnet">
+          <div class="topbar-divider"></div>
+          <div class="topbar-product">Passenger Intelligence</div>
+        </div>
+        <div class="topbar-nav">
+          <div class="nav-item active">Network Health <span class="nav-badge">1</span></div>
+          <div class="nav-item">Occupancy</div>
+          <div class="nav-item">Analytics</div>
+          <div class="nav-item">Faults</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-time">09:48 · Wed 14 May</div>
+        <div class="topbar-user"><div class="avatar">RK</div> Roland K.</div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <div class="stat-pill"><div class="stat-dot green"></div> <span class="stat-val">31</span> trains active</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill"><div class="stat-dot green"></div> <span class="stat-val">30</span> networks healthy</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill"><div class="stat-dot amber"></div> <span class="stat-val">1</span> degraded link</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill"><div class="stat-dot green"></div> Hailo-8 inference OK · <span class="stat-val">31/31</span></div>
+      <div class="alert-chip">⚠ 1 active fault — R5001C-017</div>
+    </div>
+    <div class="dash-body">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-title">Fleet</div>
+          <div class="sidebar-count">31 trains</div>
+        </div>
+        <div class="sidebar-filter">
+          <div class="filter-chip active">All</div>
+          <div class="filter-chip">⚠ Faults</div>
+          <div class="filter-chip">In svc</div>
+        </div>
+        <div class="train-list">
+          <div class="train-item fault selected">
+            <div class="train-status-dot" style="background:#D4A017"></div>
+            <div class="train-info">
+              <div class="train-id">R5001C-017</div>
+              <div class="train-route">Innsbruck → Wien Hbf</div>
+            </div>
+            <div class="train-fault-badge">L1 Fault</div>
+          </div>
+          <div class="train-item">
+            <div class="train-status-dot" style="background:var(--green)"></div>
+            <div class="train-info"><div class="train-id">R5001C-003</div><div class="train-route">Wien Hbf → Salzburg</div></div>
+          </div>
+          <div class="train-item">
+            <div class="train-status-dot" style="background:var(--green)"></div>
+            <div class="train-info"><div class="train-id">R5001C-009</div><div class="train-route">Graz → Wien Hbf</div></div>
+          </div>
+          <div class="train-item">
+            <div class="train-status-dot" style="background:var(--green)"></div>
+            <div class="train-info"><div class="train-id">R5001C-012</div><div class="train-route">Linz → Villach</div></div>
+          </div>
+          <div class="train-item">
+            <div class="train-status-dot" style="background:var(--green)"></div>
+            <div class="train-info"><div class="train-id">R5001C-021</div><div class="train-route">Salzburg → Bregenz</div></div>
+          </div>
+          <div class="train-item">
+            <div class="train-status-dot" style="background:var(--green)"></div>
+            <div class="train-info"><div class="train-id">R5001C-024</div><div class="train-route">Wien Hbf → Feldkirch</div></div>
+          </div>
+          <div class="train-item" style="opacity:0.5">
+            <div class="train-status-dot" style="background:var(--text-muted)"></div>
+            <div class="train-info"><div class="train-id">R5001C-031</div><div class="train-route">Depot — not in service</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="tab-bar">
+          <div class="tab active">Network <span class="tab-badge">1</span></div>
+          <div class="tab">AI Health</div>
+          <div class="tab">TCMS</div>
+          <div class="tab">Occupancy</div>
+          <div class="tab">History</div>
+        </div>
+        <div class="content">
+          <div class="kpi-row">
+            <div class="kpi-card green-card">
+              <div class="kpi-label">Trains online</div>
+              <div class="kpi-val">31</div>
+              <div class="kpi-sub">of 32 in fleet · 1 depot</div>
+            </div>
+            <div class="kpi-card amber-card">
+              <div class="kpi-label">Active faults</div>
+              <div class="kpi-val">1</div>
+              <div class="kpi-sub">Degraded L1 link · R5001C-017</div>
+            </div>
+            <div class="kpi-card green-card">
+              <div class="kpi-label">Hailo-8 units</div>
+              <div class="kpi-val">31</div>
+              <div class="kpi-sub">All online · avg latency 18ms</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Stadler tickets open</div>
+              <div class="kpi-val" style="color:var(--text-secondary)">0</div>
+              <div class="kpi-sub">Last closed 3 days ago</div>
+            </div>
+          </div>
+          <div class="sec-heading">
+            Fleet Network Status — all 32 trains
+            <div class="sec-heading-action">View list ↗</div>
+          </div>
+          <div class="fleet-grid">
+            <div class="fleet-card fault-amber">
+              <div class="fc-id">R5001C-017</div>
+              <div class="fc-route">Innsbruck→Wien</div>
+              <div class="fc-bars">
+                <div class="fc-bar" style="height:18px"></div>
+                <div class="fc-bar" style="height:22px"></div>
+                <div class="fc-bar" style="height:20px"></div>
+                <div class="fc-bar amber" style="height:14px"></div>
+                <div class="fc-bar" style="height:18px"></div>
+              </div>
+              <div class="fc-status">
+                <div class="fc-status-dot" style="background:#D4A017"></div>
+                <div class="fc-label">L1 fault C4–5</div>
+              </div>
+            </div>
+            <div class="fleet-card">
+              <div class="fc-id">R5001C-003</div>
+              <div class="fc-route">Wien→Salzburg</div>
+              <div class="fc-bars">
+                <div class="fc-bar" style="height:20px"></div>
+                <div class="fc-bar" style="height:24px"></div>
+                <div class="fc-bar" style="height:18px"></div>
+                <div class="fc-bar" style="height:22px"></div>
+                <div class="fc-bar" style="height:19px"></div>
+              </div>
+              <div class="fc-status">
+                <div class="fc-status-dot" style="background:var(--green)"></div>
+                <div class="fc-label">All links OK</div>
+              </div>
+            </div>
+            <div class="fleet-card">
+              <div class="fc-id">R5001C-009</div>
+              <div class="fc-route">Graz→Wien</div>
+              <div class="fc-bars">
+                <div class="fc-bar" style="height:22px"></div>
+                <div class="fc-bar" style="height:20px"></div>
+                <div class="fc-bar" style="height:24px"></div>
+                <div class="fc-bar" style="height:21px"></div>
+                <div class="fc-bar" style="height:18px"></div>
+              </div>
+              <div class="fc-status">
+                <div class="fc-status-dot" style="background:var(--green)"></div>
+                <div class="fc-label">All links OK</div>
+              </div>
+            </div>
+            <div class="fleet-card">
+              <div class="fc-id">R5001C-012</div>
+              <div class="fc-route">Linz→Villach</div>
+              <div class="fc-bars">
+                <div class="fc-bar" style="height:19px"></div>
+                <div class="fc-bar" style="height:23px"></div>
+                <div class="fc-bar" style="height:20px"></div>
+                <div class="fc-bar" style="height:18px"></div>
+                <div class="fc-bar" style="height:22px"></div>
+              </div>
+              <div class="fc-status">
+                <div class="fc-status-dot" style="background:var(--green)"></div>
+                <div class="fc-label">All links OK</div>
+              </div>
+            </div>
+            <div class="fleet-card">
+              <div class="fc-id">R5001C-021</div>
+              <div class="fc-route">Salzburg→Bregenz</div>
+              <div class="fc-bars">
+                <div class="fc-bar" style="height:21px"></div>
+                <div class="fc-bar" style="height:18px"></div>
+                <div class="fc-bar" style="height:24px"></div>
+                <div class="fc-bar" style="height:20px"></div>
+                <div class="fc-bar" style="height:22px"></div>
+              </div>
+              <div class="fc-status">
+                <div class="fc-status-dot" style="background:var(--green)"></div>
+                <div class="fc-label">All links OK</div>
+              </div>
+            </div>
+            <div class="fleet-card" style="opacity:0.45">
+              <div class="fc-id">R5001C-031</div>
+              <div class="fc-route">Depot</div>
+              <div class="fc-bars">
+                <div class="fc-bar" style="height:4px;background:var(--surface-4)"></div>
+                <div class="fc-bar" style="height:4px;background:var(--surface-4)"></div>
+                <div class="fc-bar" style="height:4px;background:var(--surface-4)"></div>
+                <div class="fc-bar" style="height:4px;background:var(--surface-4)"></div>
+                <div class="fc-bar" style="height:4px;background:var(--surface-4)"></div>
+              </div>
+              <div class="fc-status">
+                <div class="fc-status-dot" style="background:var(--text-muted)"></div>
+                <div class="fc-label">Not in service</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dash-wrap" style="margin-top:16px">
+  <div class="annotation">
+    <div class="annotation-num">1</div>
+    <div class="annotation-text"><strong>Passive alert surfacing:</strong> Roland sees the amber badge on the Network Health nav item the moment he opens the dashboard. The fleet grid immediately shows R5001C-017 highlighted — he doesn't need to scan a table or check logs. All other trains are visually quiet.</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SCREEN 2 — TRAIN DETAIL                    -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="section-divider">
+  <div class="sdl"></div>
+  <div class="sdn">2</div>
+  <div class="sdp">Train detail — R5001C-017 · Network tab · L1 fault coach 4–5</div>
+  <div class="sdl"></div>
+</div>
+
+<div class="dash-wrap">
+  <div class="dash-frame-label">SCREEN 2 — TRAIN DETAIL: NETWORK DIAGNOSTICS</div>
+  <div class="dash">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-logo">
+          <img src="../current-portal-design/Logos & Symbole/Logos railnet/OeBB_railnet.png" alt="ÖBB railnet">
+          <div class="topbar-divider"></div>
+          <div class="topbar-product">Passenger Intelligence</div>
+        </div>
+        <div class="topbar-nav">
+          <div class="nav-item active">Network Health <span class="nav-badge">1</span></div>
+          <div class="nav-item">Occupancy</div>
+          <div class="nav-item">Analytics</div>
+          <div class="nav-item">Faults</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-time">09:49 · Wed 14 May</div>
+        <div class="topbar-user"><div class="avatar">RK</div> Roland K.</div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <div class="stat-pill"><div class="stat-dot green"></div> <span class="stat-val">31</span> trains active</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill"><div class="stat-dot amber"></div> <span class="stat-val">1</span> degraded link</div>
+      <div class="stat-sep"></div>
+      <span style="font-size:11px;color:var(--text-secondary)">Viewing: <strong style="color:var(--text-primary)">R5001C-017</strong> · Innsbruck → Wien Hbf · Last seen: St. Pölten 09:31</span>
+    </div>
+    <div class="dash-body">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-title">Fleet</div>
+          <div class="sidebar-count">31 trains</div>
+        </div>
+        <div class="sidebar-filter">
+          <div class="filter-chip active">All</div>
+          <div class="filter-chip">⚠ Faults</div>
+          <div class="filter-chip">In svc</div>
+        </div>
+        <div class="train-list">
+          <div class="train-item fault selected">
+            <div class="train-status-dot" style="background:#D4A017"></div>
+            <div class="train-info"><div class="train-id">R5001C-017</div><div class="train-route">Innsbruck → Wien Hbf</div></div>
+            <div class="train-fault-badge">L1 Fault</div>
+          </div>
+          <div class="train-item"><div class="train-status-dot" style="background:var(--green)"></div><div class="train-info"><div class="train-id">R5001C-003</div><div class="train-route">Wien Hbf → Salzburg</div></div></div>
+          <div class="train-item"><div class="train-status-dot" style="background:var(--green)"></div><div class="train-info"><div class="train-id">R5001C-009</div><div class="train-route">Graz → Wien Hbf</div></div></div>
+          <div class="train-item"><div class="train-status-dot" style="background:var(--green)"></div><div class="train-info"><div class="train-id">R5001C-012</div><div class="train-route">Linz → Villach</div></div></div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="tab-bar">
+          <div class="tab active">Network <span class="tab-badge">1</span></div>
+          <div class="tab">AI Health</div>
+          <div class="tab">TCMS</div>
+          <div class="tab">Occupancy</div>
+          <div class="tab">History</div>
+        </div>
+        <div class="content">
+          <div class="train-detail-header">
+            <div>
+              <div class="tdh-id">R5001C-017 · DOSTO Stadler</div>
+              <div class="tdh-route">Innsbruck Hbf → Wien Hbf · IC 712 · Dep 07:04 · Arr 11:22 (on time)</div>
+              <div class="tdh-badges">
+                <div class="badge badge-amber">⚠ L1 Degraded</div>
+                <div class="badge badge-blue">Coach 4–5 segment</div>
+                <div class="badge badge-green">Hailo-8 OK</div>
+              </div>
+            </div>
+            <button class="notify-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+              Notify Stadler
+            </button>
+          </div>
+
+          <div class="link-map-wrap">
+            <div class="sec-heading" style="margin-bottom:4px">
+              Inter-coach L1 cable map
+              <div class="sec-heading-action">SNMP detail ↗</div>
+            </div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px">Signal quality per inter-coach segment · Stadler R5001C-017 · Updated 09:49:12</div>
+            <div class="link-map">
+              <div class="coach-node"><div class="coach-box engine">Loco</div><div class="coach-label">Power</div></div>
+              <div class="link-segment ok"></div>
+              <div class="coach-node"><div class="coach-box">C1</div><div class="coach-label">Coach 1</div></div>
+              <div class="link-segment ok"></div>
+              <div class="coach-node"><div class="coach-box">C2</div><div class="coach-label">Coach 2</div></div>
+              <div class="link-segment ok"></div>
+              <div class="coach-node"><div class="coach-box">C3</div><div class="coach-label">Coach 3</div></div>
+              <div class="link-segment amber"></div>
+              <div class="coach-node"><div class="coach-box" style="border-color:#C8860A;background:rgba(181,115,0,0.10);color:#7A5000">C4</div><div class="coach-label" style="color:#7A5000;font-weight:700">Coach 4</div></div>
+              <div class="link-segment amber"></div>
+              <div class="coach-node"><div class="coach-box" style="border-color:#C8860A;background:rgba(181,115,0,0.10);color:#7A5000">C5</div><div class="coach-label" style="color:#7A5000;font-weight:700">Coach 5</div></div>
+              <div class="link-segment ok"></div>
+              <div class="coach-node"><div class="coach-box">C6</div><div class="coach-label">Coach 6</div></div>
+              <div class="link-segment ok"></div>
+              <div class="coach-node"><div class="coach-box engine engine-r">Loco</div><div class="coach-label">Power</div></div>
+            </div>
+            <div class="link-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> OK — no drops</div>
+              <div class="legend-item"><div class="legend-dot" style="background:#D4A017"></div> Degraded — packet loss detected</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Failed — link down</div>
+            </div>
+          </div>
+
+          <div class="fault-detail-row">
+            <div class="fault-card">
+              <div class="fault-card-header">
+                <div class="fault-icon">⚠</div>
+                <div>
+                  <div class="fault-heading">Inter-coach cable 4–5: signal degraded</div>
+                  <div class="fault-desc">Packet loss 6.2% · 4 link-down events in last 60 min · First seen 09:42</div>
+                </div>
+              </div>
+              <div class="fault-metric-row">
+                <div class="fault-metric"><div class="fault-metric-label">Packet loss</div><div class="fault-metric-val">6.2%</div></div>
+                <div class="fault-metric"><div class="fault-metric-label">Link-down events</div><div class="fault-metric-val">4 × 60 min</div></div>
+                <div class="fault-metric"><div class="fault-metric-label">First detected</div><div class="fault-metric-val" style="font-size:12px">09:42 today</div></div>
+              </div>
+              <div>
+                <div class="event-row"><div class="event-time">09:42</div><div class="event-dot"></div><div class="event-desc">First packet loss event — 4.1%, link recovered after 8s</div></div>
+                <div class="event-row"><div class="event-time">09:44</div><div class="event-dot"></div><div class="event-desc">Second event — 5.8%, link recovered after 12s</div></div>
+                <div class="event-row"><div class="event-time">09:46</div><div class="event-dot"></div><div class="event-desc">Third event — 6.2%, link recovered after 9s</div></div>
+                <div class="event-row"><div class="event-time">09:48</div><div class="event-dot"></div><div class="event-desc">Fourth event — ongoing, packet loss 6.2%</div></div>
+              </div>
+            </div>
+            <div class="affected-card">
+              <div class="sec-heading" style="margin-bottom:10px">Affected systems</div>
+              <div class="sys-row"><div class="sys-icon impact">📹</div><div class="sys-name">CCTV — Coaches 4, 5, 6</div><div class="sys-status impact">Impacted</div></div>
+              <div class="sys-row"><div class="sys-icon impact">🖥</div><div class="sys-name">PIS interior — Coach 5</div><div class="sys-status impact">Impacted</div></div>
+              <div class="sys-row"><div class="sys-icon ok">📡</div><div class="sys-name">WiFi — Coach 4, 5</div><div class="sys-status ok">Routing OK</div></div>
+              <div class="sys-row"><div class="sys-icon ok">🤖</div><div class="sys-name">Hailo-8 inference</div><div class="sys-status ok">Running</div></div>
+              <div class="sys-row"><div class="sys-icon ok">🚆</div><div class="sys-name">TCMS</div><div class="sys-status ok">Unaffected</div></div>
+              <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+                <div class="fault-metric-label">Next depot</div>
+                <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-top:4px">Wien Hbf · arr 11:22</div>
+                <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Recommend inspection at arrival</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sec-heading">Raw SNMP data <span class="snmp-expand">— hide</span></div>
+          <div class="snmp-raw">
+            <div>OID: <span>1.3.6.1.2.1.31.1.1.1.13</span> · ifInErrors · Coach4_Sw0 → Coach5_Sw0 · <em>6.2%</em></div>
+            <div>OID: <span>1.3.6.1.2.1.2.2.1.14</span>   · ifInErrors · last 60s: <em>4 events</em></div>
+            <div>OID: <span>1.3.6.1.2.1.2.2.1.8</span>    · ifOperStatus · <em>degraded</em> (not down)</div>
+            <div>Source: <span>Stadler diagnostic SNMP · R5001C-017 · polled 09:49:08</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dash-wrap" style="margin-top:16px">
+  <div class="annotation">
+    <div class="annotation-num">2</div>
+    <div class="annotation-text"><strong>Plain language over OIDs:</strong> The fault reads "Inter-coach cable 4–5: signal degraded, packet loss 6.2%" — not raw SNMP strings. Raw data is collapsed below for Stadler export. The spatial link map shows which segment is amber without requiring any table scan.</div>
+  </div>
+  <div class="annotation">
+    <div class="annotation-num">3</div>
+    <div class="annotation-text"><strong>Affected systems derived automatically:</strong> The platform knows which systems route through which switches. Roland sees CCTV on coaches 4, 5, 6 and PIS interior on coach 5 are impacted. WiFi and TCMS are unaffected. Zero manual topology lookup.</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SCREEN 3 — NOTIFY STADLER MODAL            -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="section-divider">
+  <div class="sdl"></div>
+  <div class="sdn">3</div>
+  <div class="sdp">Notify Stadler modal · pre-populated fault report · Roland adds one-line note</div>
+  <div class="sdl"></div>
+</div>
+
+<div class="dash-wrap">
+  <div class="dash-frame-label">SCREEN 3 — STADLER NOTIFICATION FORM</div>
+  <div class="dash">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-logo">
+          <img src="../current-portal-design/Logos & Symbole/Logos railnet/OeBB_railnet.png" alt="ÖBB railnet">
+          <div class="topbar-divider"></div>
+          <div class="topbar-product">Passenger Intelligence</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-time">09:49 · Wed 14 May</div>
+        <div class="topbar-user"><div class="avatar">RK</div> Roland K.</div>
+      </div>
+    </div>
+    <div class="dash-body" style="background:rgba(0,0,0,0.18);backdrop-filter:blur(4px);align-items:center;justify-content:center;">
+      <div class="modal">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title">Notify Stadler — Fault Report</div>
+            <div class="modal-subtitle">Pre-packaged from SNMP data · R5001C-017 · Sent via Nomad platform</div>
+          </div>
+          <div class="modal-close">✕</div>
+        </div>
+        <div class="modal-body">
+          <div class="modal-section">
+            <div class="modal-section-label">Train &amp; fault identification</div>
+            <div class="modal-field-row">
+              <div class="modal-field"><div class="mf-label">Train ID</div><div class="mf-val">R5001C-017</div></div>
+              <div class="modal-field"><div class="mf-label">Fault type</div><div class="mf-val amber">L1 inter-coach cable degradation</div></div>
+              <div class="modal-field">
+                <div class="mf-label">Severity</div>
+                <div class="severity-chip" style="margin-top:4px"><div class="stat-dot amber"></div> Amber — degraded</div>
+              </div>
+            </div>
+            <div class="modal-field-row">
+              <div class="modal-field"><div class="mf-label">Affected segment</div><div class="mf-val">Coach 4–5 inter-coach cable</div></div>
+              <div class="modal-field"><div class="mf-label">First detected</div><div class="mf-val">09:42 · 14 May 2026</div></div>
+            </div>
+          </div>
+          <div class="modal-section">
+            <div class="modal-section-label">SNMP diagnostic data (auto-attached)</div>
+            <div class="modal-field-row">
+              <div class="modal-field"><div class="mf-label">Packet loss</div><div class="mf-val amber">6.2%</div></div>
+              <div class="modal-field"><div class="mf-label">Link-down events</div><div class="mf-val amber">4 × last 60 min</div></div>
+              <div class="modal-field"><div class="mf-label">SNMP event log</div><div class="mf-val" style="font-size:11px;color:var(--text-secondary)">Attached (4 events)</div></div>
+            </div>
+          </div>
+          <div class="modal-section">
+            <div class="modal-section-label">Affected systems (auto-derived)</div>
+            <div style="font-size:11px;color:var(--text-secondary);background:var(--surface-0);border:1px solid var(--border);border-radius:8px;padding:10px 14px;line-height:1.8">
+              CCTV VLANs — coaches 4, 5, 6 (intermittent) · PIS interior screens — coach 5 (intermittent)<br>
+              WiFi coaches 4–5: routing OK · TCMS: unaffected · Hailo-8: unaffected
+            </div>
+          </div>
+          <div class="modal-section">
+            <div class="modal-section-label">Current train position</div>
+            <div class="modal-field-row">
+              <div class="modal-field"><div class="mf-label">Last known location</div><div class="mf-val">St. Pölten · 09:31</div></div>
+              <div class="modal-field"><div class="mf-label">Next depot</div><div class="mf-val">Wien Hbf · arr 11:22</div></div>
+            </div>
+          </div>
+          <div class="modal-section">
+            <div class="modal-section-label">Note from Roland (optional)</div>
+            <textarea class="modal-textarea" placeholder="Add a note for Stadler...">Seen intermittent drops since 09:42 — recommend inspection at Wien Hbf arrival or earlier if full failure.</textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-cancel">Cancel</button>
+          <button class="modal-send">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+            Send to Stadler
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dash-wrap" style="margin-top:16px">
+  <div class="annotation">
+    <div class="annotation-num">4</div>
+    <div class="annotation-text"><strong>Zero manual data entry:</strong> Every field in the Stadler notification is pre-populated from SNMP data and platform topology. Roland's only input is the optional free-text note. The entire report is assembled by the platform in one tap.</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SCREEN 4 — CONFIRMATION                    -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="section-divider">
+  <div class="sdl"></div>
+  <div class="sdn">4</div>
+  <div class="sdp">Confirmation · Stadler notified · fault logged in platform</div>
+  <div class="sdl"></div>
+</div>
+
+<div class="dash-wrap">
+  <div class="dash-frame-label">SCREEN 4 — NOTIFICATION CONFIRMED</div>
+  <div class="dash">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-logo">
+          <img src="../current-portal-design/Logos & Symbole/Logos railnet/OeBB_railnet.png" alt="ÖBB railnet">
+          <div class="topbar-divider"></div>
+          <div class="topbar-product">Passenger Intelligence</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-time">09:50 · Wed 14 May</div>
+        <div class="topbar-user"><div class="avatar">RK</div> Roland K.</div>
+      </div>
+    </div>
+    <div class="dash-body" style="background:rgba(0,0,0,0.18);backdrop-filter:blur(4px);align-items:center;justify-content:center;">
+      <div class="modal" style="width:500px">
+        <div class="modal-body">
+          <div class="confirm-content">
+            <div class="confirm-icon">✓</div>
+            <div class="confirm-title">Stadler notified</div>
+            <div class="confirm-sub">The fault report has been sent and logged. Stadler will receive a structured diagnostic report via the Nomad platform integration.</div>
+            <div class="confirm-ref">
+              <div class="confirm-field"><div class="cf-label">Reference</div><div class="cf-val">ST-2741</div></div>
+              <div class="confirm-field"><div class="cf-label">Sent</div><div class="cf-val">09:50 · 14 May 2026</div></div>
+              <div class="confirm-field"><div class="cf-label">Train</div><div class="cf-val">R5001C-017</div></div>
+              <div class="confirm-field"><div class="cf-label">Severity</div><div class="cf-val" style="color:#7A5000">Amber</div></div>
+            </div>
+            <button class="confirm-done">Back to fleet view</button>
+            <div class="confirm-note">R5001C-017 is now marked "Fault reported — awaiting Stadler response." Any further degradation will auto-escalate.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SCREEN 5 — OCCUPANCY TAB                   -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="section-divider">
+  <div class="sdl"></div>
+  <div class="sdn">5</div>
+  <div class="sdp">Occupancy tab — Claudia/Roland fleet view · Scenario 04 flow</div>
+  <div class="sdl"></div>
+</div>
+
+<div class="dash-wrap">
+  <div class="dash-frame-label">SCREEN 5 — OCCUPANCY TAB (FLEET OVERVIEW)</div>
+  <div class="dash">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-logo">
+          <img src="../current-portal-design/Logos & Symbole/Logos railnet/OeBB_railnet.png" alt="ÖBB railnet">
+          <div class="topbar-divider"></div>
+          <div class="topbar-product">Passenger Intelligence</div>
+        </div>
+        <div class="topbar-nav">
+          <div class="nav-item">Network Health <span class="nav-badge">1</span></div>
+          <div class="nav-item active">Occupancy</div>
+          <div class="nav-item">Analytics</div>
+          <div class="nav-item">Faults</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-time">09:51 · Wed 14 May</div>
+        <div class="topbar-user"><div class="avatar">CW</div> Claudia W.</div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <div class="stat-pill"><div class="stat-dot green"></div> <span class="stat-val">31</span> trains · live occupancy</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill"><div class="stat-dot red"></div> <span class="stat-val">2</span> trains over capacity</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill"><div class="stat-dot amber"></div> <span class="stat-val">5</span> trains amber</div>
+      <div class="alert-chip" style="background:var(--red-dim);border-color:var(--red);color:var(--red)">🔴 2 capacity alerts</div>
+    </div>
+    <div class="dash-body">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-title">Fleet</div>
+          <div class="sidebar-count">31 trains</div>
+        </div>
+        <div class="sidebar-filter">
+          <div class="filter-chip active">All</div>
+          <div class="filter-chip">🔴 Over cap</div>
+          <div class="filter-chip">Escalated</div>
+        </div>
+        <div class="train-list">
+          <div class="train-item fault" style="border-left-color:var(--red)">
+            <div class="train-status-dot" style="background:var(--red)"></div>
+            <div class="train-info"><div class="train-id">R5001C-008</div><div class="train-route">Wien Hbf → München</div></div>
+            <div class="train-fault-badge red-badge">Over cap</div>
+          </div>
+          <div class="train-item fault" style="border-left-color:var(--red)">
+            <div class="train-status-dot" style="background:var(--red)"></div>
+            <div class="train-info"><div class="train-id">R5001C-019</div><div class="train-route">Salzburg → Wien Hbf</div></div>
+            <div class="train-fault-badge red-badge">Over cap</div>
+          </div>
+          <div class="train-item fault">
+            <div class="train-status-dot" style="background:#D4A017"></div>
+            <div class="train-info"><div class="train-id">R5001C-003</div><div class="train-route">Wien Hbf → Salzburg</div></div>
+            <div class="train-fault-badge">Amber</div>
+          </div>
+          <div class="train-item"><div class="train-status-dot" style="background:var(--green)"></div><div class="train-info"><div class="train-id">R5001C-009</div><div class="train-route">Graz → Wien Hbf</div></div></div>
+          <div class="train-item"><div class="train-status-dot" style="background:var(--green)"></div><div class="train-info"><div class="train-id">R5001C-012</div><div class="train-route">Linz → Villach</div></div></div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="tab-bar">
+          <div class="tab">Live overview</div>
+          <div class="tab active">Fleet grid</div>
+          <div class="tab">Analytics</div>
+          <div class="tab">Escalations <span class="tab-badge" style="background:var(--red)">1</span></div>
+        </div>
+        <div class="content">
+          <div class="kpi-row">
+            <div class="kpi-card"><div class="kpi-label">Fleet avg occupancy</div><div class="kpi-val">61%</div><div class="kpi-sub">Live · updated 09:51</div></div>
+            <div class="kpi-card" style="border-color:var(--red);background:var(--red-dim)">
+              <div class="kpi-label">Over capacity</div>
+              <div class="kpi-val" style="color:var(--red)">2</div>
+              <div class="kpi-sub">trains · >100% occupancy</div>
+            </div>
+            <div class="kpi-card amber-card"><div class="kpi-label">Amber (80–99%)</div><div class="kpi-val">5</div><div class="kpi-sub">trains approaching capacity</div></div>
+            <div class="kpi-card green-card"><div class="kpi-label">Escalations pending</div><div class="kpi-val">1</div><div class="kpi-sub">Conrad · IC 712 Fri 17:15</div></div>
+          </div>
+          <div class="sec-heading">Live fleet occupancy by train</div>
+          <div class="occ-grid">
+            <div class="occ-card" style="border-color:var(--red);background:var(--red-dim)">
+              <div class="occ-card-header">
+                <div class="occ-card-title">R5001C-008 · Wien→München</div>
+                <div style="background:var(--red-dim);border:1px solid var(--red);color:var(--red);border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700">109%</div>
+              </div>
+              <div class="occ-coaches">
+                <div class="occ-coach r">C1<br><span style="font-size:9px">108%</span></div>
+                <div class="occ-coach r">C2<br><span style="font-size:9px">112%</span></div>
+                <div class="occ-coach a">C3<br><span style="font-size:9px">94%</span></div>
+                <div class="occ-coach r">C4<br><span style="font-size:9px">115%</span></div>
+                <div class="occ-coach a">C5<br><span style="font-size:9px">89%</span></div>
+                <div class="occ-coach a">C6<br><span style="font-size:9px">82%</span></div>
+              </div>
+              <div class="occ-footnote">⚠ Over capacity — no conductor escalation attached</div>
+            </div>
+            <div class="occ-card" style="border-color:var(--red);background:var(--red-dim)">
+              <div class="occ-card-header">
+                <div class="occ-card-title">R5001C-019 · Salzburg→Wien</div>
+                <div style="background:var(--red-dim);border:1px solid var(--red);color:var(--red);border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700">103%</div>
+              </div>
+              <div class="occ-coaches">
+                <div class="occ-coach a">C1<br><span style="font-size:9px">97%</span></div>
+                <div class="occ-coach r">C2<br><span style="font-size:9px">106%</span></div>
+                <div class="occ-coach r">C3<br><span style="font-size:9px">110%</span></div>
+                <div class="occ-coach a">C4<br><span style="font-size:9px">91%</span></div>
+                <div class="occ-coach g">C5<br><span style="font-size:9px">74%</span></div>
+                <div class="occ-coach lg">C6<br><span style="font-size:9px">52%</span></div>
+              </div>
+              <div class="occ-footnote">⚠ Occupancy imbalance — C6 underutilised</div>
+            </div>
+            <div class="occ-card">
+              <div class="occ-card-header">
+                <div class="occ-card-title">R5001C-003 · Wien→Salzburg</div>
+                <div class="badge-amber-pill">87% avg</div>
+              </div>
+              <div class="occ-coaches">
+                <div class="occ-coach g">C1<br><span style="font-size:9px">78%</span></div>
+                <div class="occ-coach a">C2<br><span style="font-size:9px">91%</span></div>
+                <div class="occ-coach a">C3<br><span style="font-size:9px">88%</span></div>
+                <div class="occ-coach g">C4<br><span style="font-size:9px">82%</span></div>
+                <div class="occ-coach g">C5<br><span style="font-size:9px">79%</span></div>
+                <div class="occ-coach g">C6<br><span style="font-size:9px">70%</span></div>
+              </div>
+              <div class="occ-footnote">Approaching capacity — monitor</div>
+            </div>
+            <div class="occ-card">
+              <div class="occ-card-header">
+                <div class="occ-card-title">R5001C-009 · Graz→Wien</div>
+                <div class="badge-green-pill">61% avg</div>
+              </div>
+              <div class="occ-coaches">
+                <div class="occ-coach g">C1<br><span style="font-size:9px">65%</span></div>
+                <div class="occ-coach g">C2<br><span style="font-size:9px">58%</span></div>
+                <div class="occ-coach g">C3<br><span style="font-size:9px">61%</span></div>
+                <div class="occ-coach g">C4<br><span style="font-size:9px">64%</span></div>
+                <div class="occ-coach g">C5<br><span style="font-size:9px">55%</span></div>
+                <div class="occ-coach lg">C6<br><span style="font-size:9px">48%</span></div>
+              </div>
+              <div class="occ-footnote">Nominal — all coaches comfortable</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dash-wrap" style="margin-top:16px">
+  <div class="annotation">
+    <div class="annotation-num">6</div>
+    <div class="annotation-text"><strong>Same interface, different tab:</strong> Roland and Claudia share the same dashboard. Roland uses Network Health; Claudia uses Occupancy. Coach-level colour bars give immediate spatial data. Red alerts surface automatically — Claudia only reviews flagged trains.</div>
+  </div>
+</div>
+
+<div style="max-width:1280px;margin:48px auto 0;padding-top:24px;border-top:1px solid var(--border-bright);display:flex;justify-content:space-between;align-items:center">
+  <div style="font-size:11px;color:var(--text-muted)">ÖBB Smart Rail — Passenger Intelligence · Control Centre Dashboard · Light theme · Phase 4 UX Design · 2026-05-14</div>
+  <div style="font-size:11px;color:var(--text-muted)">Nomad Digital · Confidential</div>
+</div>
+
+</body>
+</html>

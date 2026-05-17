@@ -1,0 +1,267 @@
+.occ-heatmap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.analytics-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--obb-text-on-dark-4);
+}
+
+.analytics-section-note {
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--obb-text-on-dark-4);
+  font-style: italic;
+  margin-left: 6px;
+}
+
+/* ── Heatmap grid ───────────────────────────────────────────── */
+
+.occ-heatmap__wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.occ-heatmap__hour-axis {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+}
+
+.occ-heatmap__hour-tick {
+  width: 44px;
+  flex-shrink: 0;
+  font-size: 9px;
+  color: var(--obb-text-on-dark-4);
+  text-align: center;
+  font-family: var(--font-mono);
+}
+
+.occ-heatmap__row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+}
+
+.occ-heatmap__route-label {
+  width: 140px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--obb-text-on-dark-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 8px;
+}
+
+.occ-heatmap__cell {
+  width: 44px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  cursor: default;
+  transition: transform 100ms ease;
+  outline: none;
+}
+
+/* P1 fix: hover class now wired in JSX — CSS already correct */
+.occ-heatmap__cell--hovered {
+  transform: scale(1.15);
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  z-index: 1;
+  position: relative;
+}
+
+/* P2 fix: keyboard focus visible */
+.occ-heatmap__cell:focus-visible {
+  outline: 2px solid var(--obb-blue-accent);
+  outline-offset: 1px;
+  z-index: 2;
+  position: relative;
+}
+
+/* P1 fix: null cells (boundary hours with no range data) */
+.occ-heatmap__cell--null {
+  background: var(--obb-surface-3);
+  color: var(--obb-text-on-dark-4);
+  font-size: 9px;
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Tooltip — fixed at cursor ─────────────────────────────── */
+
+.occ-heatmap__tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  font-size: 12px;
+  color: var(--obb-text-on-dark-2);
+  background: var(--obb-surface-4);
+  border: 1px solid var(--obb-border-bright);
+  border-radius: 6px;
+  padding: 6px 12px;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Scroll container — fade only when overflowing ─────────── */
+
+.occ-heatmap__scroll-container {
+  position: relative;
+}
+
+/* P2 fix: fade only rendered when --overflow class is present (JS-toggled) */
+.occ-heatmap__scroll-container--overflow::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 32px;
+  height: 100%;
+  background: linear-gradient(to right, transparent, var(--obb-surface-1, #0f1117));
+  pointer-events: none;
+  border-radius: 0 4px 4px 0;
+}
+
+/* ── Legend ─────────────────────────────────────────────────── */
+
+.occ-heatmap__legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.occ-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.occ-legend-label {
+  font-size: 10px;
+  color: var(--obb-text-on-dark-4);
+}
+
+.occ-legend-swatch {
+  width: 20px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+/* ── Peak hour table ─────────────────────────────────────────── */
+
+/* P2 fix: all rows (including axis) share the same grid template
+   so the bar column left edge is guaranteed identical across all rows */
+.peak-hour-table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.peak-hour-row {
+  display: grid;
+  grid-template-columns: 160px 52px 1fr 44px auto;
+  align-items: center;
+  column-gap: 8px;
+}
+
+.peak-hour-row__route {
+  font-size: 11px;
+  color: var(--obb-text-on-dark-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.peak-hour-row__hour {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--obb-text-on-dark-3);
+}
+
+/* P2 fix: bar-wrap is overflow:visible so threshold line isn't clipped by the bar */
+.peak-hour-row__bar-wrap {
+  position: relative;
+  height: 10px;
+  background: var(--obb-surface-5);
+  border-radius: 3px;
+  overflow: visible;
+}
+
+/* Axis row uses same grid but bar-wrap column shows axis ticks instead of a bar */
+.peak-hour-row--axis .peak-hour-row__bar-wrap {
+  background: transparent;
+  height: 16px;
+  display: block;
+}
+
+/* Axis tick labels — positioned within the bar column, matching bar percentages exactly */
+.peak-hour-axis__tick {
+  position: absolute;
+  font-size: 9px;
+  color: var(--obb-text-on-dark-4);
+  bottom: 0;
+  transform: translateX(-50%);
+}
+.peak-hour-axis__tick--50 { left: 50%; }
+.peak-hour-axis__tick--85 { left: 85%; color: var(--obb-sev-warning); }
+
+.peak-hour-row__bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* P2 fix: threshold rendered after the bar, z-index above, overflow:visible on parent ensures visibility */
+.peak-hour-row__threshold {
+  position: absolute;
+  left: 85%;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--obb-sev-warning);
+  opacity: 0.7;
+  z-index: 2;
+  border-radius: 1px;
+}
+
+.peak-hour-row__pct {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+/* P3 fix: days-over-threshold sub-label */
+.peak-hour-row__days-note {
+  font-size: 10px;
+  color: var(--obb-sev-warning);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}

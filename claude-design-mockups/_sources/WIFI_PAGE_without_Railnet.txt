@@ -1,0 +1,17 @@
+
+=== xl/worksheets/sheet1.xml ===
+A1=0 | D1=Deutsch | E1=Language 3 | F1=Language 5 | G1=Language 6 | H1=Language 7 | I1=Language 8
+A2=Terms &amp; Conditions | B2=8 | D2=Add copy for each language
+A3=10 | C3=Free WLAN on the train | D3=Gratis WLAN am Zug
+A4=13 | C4=By connecting to our free WiFi, you agree to the terms of use.
+
+To get to the onboard portal, please insert railnet.oebb.at into your browser when using an Android device. | D4=Durch das Verbinden mit dem kostenlosen ÖBB WLAN erklären Sie sich mit den Nutzungsbedingungen [LINK] einverstanden.
+
+[CHECKMARK] Ich willige ein, dass die ÖBB-Personenverkehr AG die MAC-Adresse sowie das Betriebssystem meines Endgerätes während der Sitzung, den Zeitstempel von Verbindungsaufnahme- und -ende, die von mir ausgewählte Sprache und das verbrauchte Datenvolumen zum Zwecke der Bereitstellung des WLAN -Zugangs sowie für statistische Auswertungen verarbeitet. 
+Diese Daten werden im Regelfall nur an eingesetzte Auftragsverarbeiter und nicht an sonstige Dritte weitergegeben und bis zu 7 Tagen gespeichert. Ich kann diese Einwilligung jederzeit durch Beendigung der WLAN-Verbindung widerrufen. Weitere Informationen finden Sie in der Datenschutzinformation  [Link]
+
+Um zum Onboard Portal zu gelangen, geben Sie bei der Nutzung mit Android Geräten bitte railnet.oebb.at in Ihren Browser ein.
+A5=16 | C5=CONNECT | D5=VERBINDEN
+A6=2. Now connected page
+A7=10 | C7=Connection succeeded | D7=Verbindung erfolgreich!
+A8=13

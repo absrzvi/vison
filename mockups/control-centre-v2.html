@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="shared-tokens.css">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control Centre Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #080814; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; font-size: 13px; }
+  h2 { font-size: 16px; color: #fff; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 12px; margin-bottom: 20px; }
+
+  /* Top bar */
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #0d0d1f; border-bottom: 1px solid #1e1e3a;
+    padding: 10px 16px; border-radius: 10px 10px 0 0; margin-bottom: 0;
+  }
+  .topbar .brand { font-size: 14px; font-weight: 700; color: #4a9eff; }
+  .topbar .context { font-size: 11px; color: #555; }
+  .topbar .live { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #00c49f; }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #00c49f; animation: blink 1.5s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* Dashboard grid */
+  .dashboard {
+    background: #0d0d1f;
+    border: 1px solid #1e1e3a;
+    border-radius: 0 0 10px 10px;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    grid-template-rows: auto auto;
+    gap: 14px;
+  }
+
+  /* KPI strip */
+  .kpi-strip {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 10px;
+  }
+  .kpi-card {
+    background: #12122a;
+    border-radius: 8px;
+    padding: 12px 14px;
+    border-top: 3px solid transparent;
+  }
+  .kpi-card.blue { border-color: #4a9eff; }
+  .kpi-card.green { border-color: #00c49f; }
+  .kpi-card.amber { border-color: #ffaa00; }
+  .kpi-card.red { border-color: #ef4444; }
+  .kpi-card.purple { border-color: #a855f7; }
+  .kpi-card.teal   { border-color: #0D9488; }
+  .kpi-card.orange { border-color: #FF6B00; }
+  .kpi-card.rose   { border-color: #F43F5E; }
+  .kpi-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .kpi-value { font-size: 24px; font-weight: 700; color: #fff; }
+  .kpi-sub { font-size: 10px; color: #555; margin-top: 3px; }
+
+  /* Fleet map */
+  .fleet-panel {
+    background: #12122a;
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .panel-title {
+    font-size: 11px; font-weight: 700; color: #555;
+    text-transform: uppercase; letter-spacing: 1.5px;
+    margin-bottom: 12px;
+  }
+
+  .train-card {
+    background: #0d0d20;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    border-left: 4px solid transparent;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .train-card:hover { background: #151530; }
+  .train-card.ok { border-color: #00c49f; }
+  .train-card.warn { border-color: #ffaa00; }
+  .train-card.alert { border-color: #ef4444; }
+
+  .train-card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px;
+  }
+  .train-name { font-size: 13px; font-weight: 700; color: #fff; }
+  .train-route { font-size: 10px; color: #555; }
+  .train-badge {
+    font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700;
+  }
+  .train-badge.ok { background: #0a2a14; color: #00c49f; }
+  .train-badge.warn { background: #2a1e00; color: #ffaa00; }
+  .train-badge.alert { background: #2a0a0a; color: #ef4444; }
+
+  /* Mini coach bar */
+  .mini-coaches { display: flex; gap: 3px; }
+  .mini-coach {
+    flex: 1; height: 8px; border-radius: 3px;
+  }
+  .mini-coach.green { background: #00c49f44; border: 1px solid #00c49f; }
+  .mini-coach.amber { background: #ffaa0044; border: 1px solid #ffaa00; }
+  .mini-coach.red { background: #ef444444; border: 1px solid #ef4444; }
+
+  /* Coach bar icon overlay container */
+  .mini-coach-wrap {
+    position: relative;
+    flex: 1;
+  }
+  .mini-coach-wrap .mini-coach {
+    width: 100%;
+  }
+  .coach-icons {
+    position: absolute;
+    bottom: 1px;
+    right: 1px;
+    display: flex;
+    gap: 1px;
+    font-size: 7px;
+    line-height: 1;
+  }
+  .coach-icon-luggage { color: #9BA3AF; }
+  .coach-icon-congestion { color: #F5A623; }
+  .coach-icon-bike { color: #9BA3AF; }
+  .coach-icon-access { color: #4A9EFF; }
+
+  /* Expected vs actual delta badge */
+  .train-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #FF6B00;
+    background: rgba(255,107,0,0.08);
+    border: 1px solid rgba(255,107,0,0.3);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-top: 4px;
+  }
+  .train-delta.overboard { color: #FF3B3B; border-color: rgba(255,59,59,0.4); background: rgba(255,59,59,0.06); }
+
+  .train-meta {
+    display: flex; justify-content: space-between; margin-top: 6px;
+    font-size: 10px; color: #555;
+  }
+
+  /* Right column */
+  .right-col {
+    display: flex; flex-direction: column; gap: 14px;
+  }
+
+  /* Incident feed */
+  .incident-feed {
+    background: #12122a;
+    border-radius: 10px;
+    padding: 14px;
+    flex: 1;
+  }
+  .incident-item {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 8px 0; border-bottom: 1px solid #1a1a2e;
+  }
+  .incident-item:last-child { border-bottom: none; }
+  .inc-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .inc-dot.red { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+  .inc-dot.amber { background: #ffaa00; }
+  .inc-dot.blue { background: #4a9eff; }
+  .inc-dot.purple { background: #a855f7; }
+  .inc-body { flex: 1; }
+  .inc-title { font-size: 12px; color: #ddd; font-weight: 600; }
+  .inc-sub { font-size: 11px; color: #555; margin-top: 2px; }
+  .inc-time { font-size: 10px; color: #444; white-space: nowrap; }
+
+  /* Fault summary */
+  .fault-summary {
+    background: #12122a;
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .fault-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0; border-bottom: 1px solid #1a1a2e;
+    font-size: 12px;
+  }
+  .fault-row:last-child { border-bottom: none; }
+  .fault-row .subsys { color: #888; }
+  .fault-row .count {
+    font-weight: 700; padding: 2px 8px; border-radius: 10px;
+    font-size: 11px;
+  }
+  .fault-row .count.red { background: #2a0a0a; color: #ef4444; }
+  .fault-row .count.amber { background: #2a1e00; color: #ffaa00; }
+  .fault-row .count.green { background: #0a2a14; color: #00c49f; }
+
+/* ── Escalations inbox ── */
+.escalations-panel {
+  background: #12122a;
+  border-radius: 10px;
+  padding: 14px;
+}
+.esc-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 9px 0;
+  border-bottom: 1px solid #1a1a2e;
+  animation: slide-in-top 0.2s ease-out;
+}
+.esc-item:last-child { border-bottom: none; }
+.esc-item.critical { background: rgba(255,59,59,0.03); border-left: 2px solid rgba(255,59,59,0.6); padding-left: 8px; margin-left: -8px; }
+.esc-item.high     { background: rgba(255,107,0,0.03); border-left: 2px solid rgba(255,107,0,0.6); padding-left: 8px; margin-left: -8px; }
+.esc-item.readonly { opacity: 0.45; }
+
+.esc-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  margin-top: 4px; flex-shrink: 0;
+}
+.esc-dot.critical { background: #FF3B3B; animation: severity-pulse 1.2s ease-in-out infinite; }
+.esc-dot.high     { background: #FF6B00; }
+.esc-dot.advisory { background: #4A9EFF; }
+
+.esc-body { flex: 1; min-width: 0; }
+.esc-title { font-size: 12px; font-weight: 600; color: #ddd; }
+.esc-meta  { font-size: 11px; color: #555; margin-top: 2px; }
+.esc-time  { font-size: 10px; color: #444; white-space: nowrap; }
+
+.esc-source-badge {
+  display: inline-block;
+  font-size: 9px; font-weight: 700;
+  padding: 1px 5px; border-radius: 3px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  margin-right: 4px;
+}
+.esc-source-badge.ai     { background: rgba(74,158,255,0.15); color: #4A9EFF; }
+.esc-source-badge.staff  { background: rgba(155,163,175,0.15); color: #9BA3AF; }
+
+.esc-actions { display: flex; gap: 10px; margin-top: 5px; }
+.esc-action-btn {
+  font-size: 11px; font-weight: 600;
+  color: #4A9EFF; background: none; border: none;
+  cursor: pointer; padding: 0;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.esc-status-pill {
+  display: inline-block;
+  font-size: 9px; font-weight: 700;
+  padding: 1px 6px; border-radius: 10px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.esc-status-pill.new  { background: rgba(255,59,59,0.15); color: #FF3B3B; }
+.esc-status-pill.ack  { background: rgba(245,166,35,0.15); color: #F5A623; }
+.esc-status-pill.done { background: rgba(34,197,94,0.15);  color: #22C55E; }
+
+.esc-section-label {
+  font-size: 10px; font-weight: 700; color: #444;
+  text-transform: uppercase; letter-spacing: 1.5px;
+  margin: 10px 0 6px;
+}
+
+/* ── Coach drill-in detail grid ── */
+.coach-drilldown {
+  background: #12122a;
+  border-radius: 10px;
+  padding: 14px;
+  margin-top: 14px;
+}
+.coach-grid-header {
+  display: grid;
+  grid-template-columns: 40px 1fr 60px 60px 50px 60px 60px 60px;
+  gap: 6px;
+  font-size: 9px; font-weight: 700;
+  color: #555; text-transform: uppercase; letter-spacing: 1px;
+  padding: 0 4px 8px;
+  border-bottom: 1px solid #1a1a2e;
+}
+.coach-grid-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 60px 60px 50px 60px 60px 60px;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  padding: 7px 4px;
+  border-bottom: 1px solid #1a1a2e;
+}
+.coach-grid-row:last-child { border-bottom: none; }
+.coach-grid-row.overboard { background: rgba(255,59,59,0.04); }
+.coach-grid-row.high-occ  { background: rgba(255,107,0,0.03); }
+
+.cgr-coach { font-weight: 700; color: #fff; }
+.cgr-bar   { height: 6px; border-radius: 3px; }
+.cgr-bar.green  { background: #22C55E; }
+.cgr-bar.amber  { background: #F5A623; }
+.cgr-bar.orange { background: #FF6B00; }
+.cgr-bar.red    { background: #FF3B3B; }
+
+.cgr-actual   { color: #F0F2F5; font-weight: 600; }
+.cgr-expected { color: #6B7280; }
+.cgr-delta    { font-weight: 700; }
+.cgr-delta.pos { color: #FF6B00; }
+.cgr-delta.neg { color: #22C55E; }
+.cgr-delta.ok  { color: #6B7280; }
+.cgr-luggage   { color: #9BA3AF; }
+.cgr-cong      { color: #F5A623; }
+.cgr-access    { color: #4A9EFF; }
+</style>
+</head>
+<body>
+
+<h2>Control Centre Dashboard — Fleet Operations View</h2>
+<p class="subtitle">Web · Landside · Real-time · Both AI services · OEBB Vienna Control</p>
+
+<div class="topbar">
+  <div>
+    <div class="brand">OEBB Smart Rail · Control Centre</div>
+    <div class="context">Vienna Operations · Shift: 06:00–14:00 · Operator: M. Wagner</div>
+  </div>
+  <div class="live"><div class="live-dot"></div> LIVE · Last update 3s ago</div>
+</div>
+
+<div class="dashboard">
+
+  <!-- KPI Strip -->
+  <div class="kpi-strip">
+    <div class="kpi-card blue">
+      <div class="kpi-label">Active Trains</div>
+      <div class="kpi-value">14</div>
+      <div class="kpi-sub">of 18 scheduled</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Avg Occupancy</div>
+      <div class="kpi-value">61%</div>
+      <div class="kpi-sub">↓ 4% vs yesterday</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Active Incidents</div>
+      <div class="kpi-value">3</div>
+      <div class="kpi-sub">2 safety · 1 fault</div>
+    </div>
+    <div class="kpi-card amber">
+      <div class="kpi-label">Overcrowded Coaches</div>
+      <div class="kpi-value">7</div>
+      <div class="kpi-sub">>85% capacity</div>
+    </div>
+    <div class="kpi-card purple">
+      <div class="kpi-label">Fleet Health</div>
+      <div class="kpi-value">81</div>
+      <div class="kpi-sub">↓ 3pts · 2 faults active</div>
+    </div>
+    <div class="kpi-card teal">
+      <div class="kpi-label">Congested Coaches</div>
+      <div class="kpi-value">4</div>
+      <div class="kpi-sub">score &gt;70 threshold</div>
+    </div>
+    <div class="kpi-card orange">
+      <div class="kpi-label">Luggage Alerts</div>
+      <div class="kpi-value">3</div>
+      <div class="kpi-sub">high density flagged</div>
+    </div>
+    <div class="kpi-card rose">
+      <div class="kpi-label">Open Escalations</div>
+      <div class="kpi-value">2</div>
+      <div class="kpi-sub">1 operational · 1 technical</div>
+    </div>
+  </div>
+
+  <!-- Fleet train list -->
+  <div class="fleet-panel">
+    <div class="panel-title">Fleet Status · 14 Active Trains</div>
+
+    <div class="train-card alert">
+      <div class="train-card-top">
+        <div>
+          <div class="train-name">RJ 561</div>
+          <div class="train-route">Wien Hbf → Salzburg · Next: Linz 10:12</div>
+        </div>
+        <div class="train-badge alert">⚠ Alert</div>
+      </div>
+      <div class="mini-coaches">
+        <div class="mini-coach-wrap"><div class="mini-coach green"></div></div>
+        <div class="mini-coach-wrap"><div class="mini-coach green"></div></div>
+        <div class="mini-coach-wrap">
+          <div class="mini-coach amber"></div>
+          <div class="coach-icons"><span class="coach-icon-luggage">🧳</span></div>
+        </div>
+        <div class="mini-coach-wrap">
+          <div class="mini-coach red"></div>
+          <div class="coach-icons"><span class="coach-icon-congestion">⬡</span></div>
+        </div>
+        <div class="mini-coach-wrap"><div class="mini-coach amber"></div></div>
+        <div class="mini-coach-wrap"><div class="mini-coach green"></div></div>
+      </div>
+      <div class="train-meta">
+        <span>🧳 Unattended luggage · C4</span>
+        <span>⚠ HVAC fault · C3</span>
+      </div>
+      <div class="train-delta overboard">63 aboard / 48 reserved · +15 overboard</div>
+    </div>
+
+    <div class="train-card warn">
+      <div class="train-card-top">
+        <div>
+          <div class="train-name">ICE 724</div>
+          <div class="train-route">Salzburg → Wien · Next: Wels 09:58</div>
+        </div>
+        <div class="train-badge warn">△ Watch</div>
+      </div>
+      <div class="mini-coaches">
+        <div class="mini-coach red"></div>
+        <div class="mini-coach red"></div>
+        <div class="mini-coach amber"></div>
+        <div class="mini-coach amber"></div>
+        <div class="mini-coach green"></div>
+        <div class="mini-coach green"></div>
+      </div>
+      <div class="train-meta">
+        <span>🧍 C1+C2 overcrowded</span>
+        <span>↑ boarding at next stop</span>
+      </div>
+    </div>
+
+    <div class="train-card ok">
+      <div class="train-card-top">
+        <div>
+          <div class="train-name">RJ 847</div>
+          <div class="train-route">Graz → Wien · Next: Bruck 10:34</div>
+        </div>
+        <div class="train-badge ok">✓ Normal</div>
+      </div>
+      <div class="mini-coaches">
+        <div class="mini-coach green"></div>
+        <div class="mini-coach green"></div>
+        <div class="mini-coach green"></div>
+        <div class="mini-coach amber"></div>
+        <div class="mini-coach green"></div>
+        <div class="mini-coach green"></div>
+      </div>
+      <div class="train-meta">
+        <span>Avg 48% · All systems OK</span>
+        <span>On time</span>
+      </div>
+    </div>
+
+    <div class="train-card ok">
+      <div class="train-card-top">
+        <div>
+          <div class="train-name">S7 112</div>
+          <div class="train-route">Floridsdorf → Raasdorf</div>
+        </div>
+        <div class="train-badge ok">✓ Normal</div>
+      </div>
+      <div class="mini-coaches">
+        <div class="mini-coach amber"></div>
+        <div class="mini-coach amber"></div>
+        <div class="mini-coach green"></div>
+        <div class="mini-coach green"></div>
+      </div>
+      <div class="train-meta">
+        <span>Avg 54%</span>
+        <span>All systems OK</span>
+      </div>
+    </div>
+
+    <div style="text-align:center; padding: 8px; font-size: 11px; color: #444;">
+      + 10 more trains · All normal
+    </div>
+
+  </div>
+
+  <!-- Right column -->
+  <div class="right-col">
+
+    <!-- Escalations Inbox -->
+    <div class="escalations-panel">
+      <div class="panel-title">Escalations Inbox</div>
+
+      <!-- AI-direct critical escalation -->
+      <div class="esc-item critical">
+        <div class="esc-dot critical"></div>
+        <div class="esc-body">
+          <div class="esc-title">
+            <span class="esc-source-badge ai">AI</span>
+            Fall detected — passenger not moving
+          </div>
+          <div class="esc-meta">ICE 47 · Coach 4 · Pose estimation</div>
+          <div class="esc-actions">
+            <button class="esc-action-btn">Acknowledge</button>
+            <button class="esc-action-btn">View detail</button>
+          </div>
+        </div>
+        <div>
+          <div class="esc-time">2m ago</div>
+          <div class="esc-status-pill new" style="margin-top:4px">New</div>
+        </div>
+      </div>
+
+      <!-- Staff-raised operational escalation -->
+      <div class="esc-item high">
+        <div class="esc-dot high"></div>
+        <div class="esc-body">
+          <div class="esc-title">
+            <span class="esc-source-badge staff">Staff</span>
+            Disruptive passenger — requesting police
+          </div>
+          <div class="esc-meta">RJ 789 · Coach 2 · Conrad Müller · Urgent</div>
+          <div class="esc-actions">
+            <button class="esc-action-btn">Acknowledge</button>
+            <button class="esc-action-btn">Resolve</button>
+          </div>
+        </div>
+        <div>
+          <div class="esc-time">7m ago</div>
+          <div class="esc-status-pill ack" style="margin-top:4px">Ack'd</div>
+        </div>
+      </div>
+
+      <!-- Read-only technical escalation (Roland's) -->
+      <div class="esc-section-label">Technical · Routed to Roland (read-only)</div>
+      <div class="esc-item readonly">
+        <div class="esc-dot advisory"></div>
+        <div class="esc-body">
+          <div class="esc-title">
+            <span class="esc-source-badge staff">Staff</span>
+            Door fault — Coach 3 D2L won't close
+          </div>
+          <div class="esc-meta">ICE 47 · Coach 3 · Conrad Müller · Advisory</div>
+        </div>
+        <div>
+          <div class="esc-time">14m ago</div>
+          <div class="esc-status-pill ack" style="margin-top:4px">Ack'd</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live incident feed (condensed) -->
+    <div class="incident-feed">
+      <div class="panel-title">Live Incident Feed</div>
+      <div class="incident-item">
+        <div class="inc-dot red" style="animation: severity-pulse 1.2s ease-in-out infinite"></div>
+        <div class="inc-body">
+          <div class="inc-title">Door obstruction at speed · D2L</div>
+          <div class="inc-sub">ICE 47 · Coach 3 · CCTV + TCMS confirmed</div>
+        </div>
+        <div class="inc-time">1m ago</div>
+      </div>
+      <div class="incident-item">
+        <div class="inc-dot amber"></div>
+        <div class="inc-body">
+          <div class="inc-title">Unattended luggage · 8m stationary</div>
+          <div class="inc-sub">RJ 789 · Coach 5 · Vestibule</div>
+        </div>
+        <div class="inc-time">3m ago</div>
+      </div>
+      <div class="incident-item">
+        <div class="inc-dot blue"></div>
+        <div class="inc-body">
+          <div class="inc-title">Wheelchair user detected</div>
+          <div class="inc-sub">EC 163 · Coach 1 · Platform staff alerted</div>
+        </div>
+        <div class="inc-time">9m ago</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Coach drill-in — appears when a train card is clicked -->
+<div class="coach-drilldown">
+  <div class="panel-title">ICE 47 · Wien Hbf → Salzburg · Coach Detail</div>
+  <div style="font-size:11px;color:#555;margin-bottom:12px;">
+    Tap a coach row to see camera feed. Showing: actual pax vs reservation · luggage · congestion · accessibility
+  </div>
+
+  <div class="coach-grid-header">
+    <div>Coach</div>
+    <div>Occupancy</div>
+    <div>Actual</div>
+    <div>Reserved</div>
+    <div>Delta</div>
+    <div>Luggage</div>
+    <div>Cong.</div>
+    <div>Access.</div>
+  </div>
+
+  <div class="coach-grid-row">
+    <div class="cgr-coach">C1</div>
+    <div><div class="cgr-bar green" style="width:45%"></div></div>
+    <div class="cgr-actual">42</div>
+    <div class="cgr-expected">50</div>
+    <div class="cgr-delta neg">−8</div>
+    <div class="cgr-luggage">3</div>
+    <div class="cgr-cong">28</div>
+    <div class="cgr-access">—</div>
+  </div>
+
+  <div class="coach-grid-row">
+    <div class="cgr-coach">C2</div>
+    <div><div class="cgr-bar green" style="width:52%"></div></div>
+    <div class="cgr-actual">49</div>
+    <div class="cgr-expected">50</div>
+    <div class="cgr-delta ok">−1</div>
+    <div class="cgr-luggage">5</div>
+    <div class="cgr-cong">35</div>
+    <div class="cgr-access">—</div>
+  </div>
+
+  <div class="coach-grid-row high-occ">
+    <div class="cgr-coach">C3</div>
+    <div><div class="cgr-bar amber" style="width:78%"></div></div>
+    <div class="cgr-actual">73</div>
+    <div class="cgr-expected">48</div>
+    <div class="cgr-delta pos">+25</div>
+    <div class="cgr-luggage" style="color:#FF6B00;font-weight:700">12 ⚠</div>
+    <div class="cgr-cong" style="color:#FF6B00;font-weight:700">74</div>
+    <div class="cgr-access">—</div>
+  </div>
+
+  <div class="coach-grid-row overboard">
+    <div class="cgr-coach">C4</div>
+    <div><div class="cgr-bar red" style="width:100%"></div></div>
+    <div class="cgr-actual" style="color:#FF3B3B">98</div>
+    <div class="cgr-expected">50</div>
+    <div class="cgr-delta pos" style="color:#FF3B3B">+48</div>
+    <div class="cgr-luggage">7</div>
+    <div class="cgr-cong" style="color:#F5A623">68</div>
+    <div class="cgr-access" style="color:#4A9EFF">♿ C4-D1</div>
+  </div>
+
+  <div class="coach-grid-row">
+    <div class="cgr-coach">C5</div>
+    <div><div class="cgr-bar amber" style="width:66%"></div></div>
+    <div class="cgr-actual">62</div>
+    <div class="cgr-expected">50</div>
+    <div class="cgr-delta pos">+12</div>
+    <div class="cgr-luggage">4</div>
+    <div class="cgr-cong">41</div>
+    <div class="cgr-access">—</div>
+  </div>
+
+  <div class="coach-grid-row">
+    <div class="cgr-coach">C6</div>
+    <div><div class="cgr-bar green" style="width:38%"></div></div>
+    <div class="cgr-actual">36</div>
+    <div class="cgr-expected">50</div>
+    <div class="cgr-delta neg">−14</div>
+    <div class="cgr-luggage">2</div>
+    <div class="cgr-cong">22</div>
+    <div class="cgr-access">—</div>
+  </div>
+</div>
+
+<p style="text-align:center; color: #555; font-size: 11px; margin-top: 16px;">Mockup · Web dashboard · 1920×1080 optimised · Let me know what to change in the terminal</p>
+
+</body>
+</html>

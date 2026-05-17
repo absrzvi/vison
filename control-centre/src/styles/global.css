@@ -1,0 +1,55 @@
+@import './colors_and_type.css';
+@import './shared-tokens.css';
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--obb-surface-0);
+  color: var(--obb-text-on-dark-1);
+  font-family: var(--font-body);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar styling for dark ops surfaces */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--obb-surface-1); }
+::-webkit-scrollbar-thumb { background: var(--obb-surface-4); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--obb-surface-5); }
+
+/* Severity badge base */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.badge--green  { background: rgba(34,197,94,0.12);  color: var(--obb-sev-normal);   border: 1px solid rgba(34,197,94,0.25); }
+.badge--amber  { background: rgba(245,166,35,0.12); color: var(--obb-sev-medium);   border: 1px solid rgba(245,166,35,0.25); }
+.badge--red    { background: rgba(255,59,59,0.12);  color: var(--obb-sev-critical); border: 1px solid rgba(255,59,59,0.25); }
+.badge--blue   { background: rgba(74,158,255,0.12); color: var(--obb-sev-advisory); border: 1px solid rgba(74,158,255,0.25); }
+.badge--muted  { background: rgba(107,114,128,0.12); color: var(--obb-text-on-dark-3); border: 1px solid rgba(107,114,128,0.2); }
+
+/* Pulse animation for unacknowledged items */
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(255,59,59,0.4); }
+  70%  { box-shadow: 0 0 0 6px rgba(255,59,59,0); }
+  100% { box-shadow: 0 0 0 0 rgba(255,59,59,0); }
+}
+.pulse { animation: pulse-ring 2s ease-out infinite; }
+
+/* Stale data dimming */
+.stale { opacity: 0.5; }

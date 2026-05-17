@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Driver Display</title>
+<link rel="stylesheet" href="shared-tokens.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f0f1a; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; }
+  h2 { font-size: 18px; color: #fff; margin-bottom: 6px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 24px; }
+
+  .device-frame {
+    display: flex; gap: 40px; justify-content: center; align-items: flex-start; flex-wrap: wrap;
+  }
+
+  /* Cab display — landscape, fixed mounted */
+  .cab-display {
+    width: 580px;
+    background: #080810;
+    border-radius: 16px;
+    border: 3px solid #222;
+    padding: 24px;
+    box-shadow: 0 0 60px rgba(0,0,0,0.8), inset 0 0 40px rgba(0,0,0,0.5);
+  }
+
+  .display-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #1a1a2e;
+  }
+  .display-header .train { font-size: 13px; color: #444; }
+  .display-header .time { font-size: 32px; font-weight: 200; color: #fff; letter-spacing: 4px; }
+  .display-header .next-stop { text-align: right; }
+  .display-header .next-label { font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 2px; }
+  .display-header .next-name { font-size: 16px; color: #fff; font-weight: 600; margin-top: 2px; }
+  .display-header .next-eta { font-size: 12px; color: #555; }
+
+  /* Door status — primary element */
+  .door-section {
+    margin-bottom: 24px;
+  }
+  .door-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 3px;
+    color: #444; text-transform: uppercase; margin-bottom: 12px;
+  }
+  .door-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
+  .door-card {
+    border-radius: 10px;
+    padding: 12px 6px;
+    text-align: center;
+    border: 2px solid transparent;
+  }
+  .door-card.clear {
+    background: #041a0a;
+    border-color: #00c49f;
+  }
+  .door-card.blocked {
+    background: #1a0404;
+    border-color: #ef4444;
+    animation: pulse-red 1s infinite;
+  }
+  @keyframes pulse-red {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+    50% { box-shadow: 0 0 12px 4px rgba(239,68,68,0.4); }
+  }
+  .door-card .door-id { font-size: 10px; color: #444; margin-bottom: 6px; }
+  .door-card .door-icon { font-size: 22px; }
+  .door-card.clear .door-status { font-size: 10px; color: #00c49f; margin-top: 4px; font-weight: 700; }
+  .door-card.blocked .door-status { font-size: 10px; color: #ef4444; margin-top: 4px; font-weight: 700; }
+
+  /* All clear banner */
+  .all-clear {
+    background: #041a0a;
+    border: 1px solid #00c49f33;
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-top: 10px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; color: #00c49f;
+  }
+
+  /* Divider */
+  .divider { border: none; border-top: 1px solid #1a1a2e; margin: 20px 0; }
+
+  /* Critical fault — only shown when active */
+  .fault-section { margin-bottom: 20px; }
+  .fault-active {
+    background: #1a0404;
+    border: 2px solid #ef4444;
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .fault-icon { font-size: 32px; }
+  .fault-text { font-size: 18px; font-weight: 700; color: #ef4444; }
+  .fault-sub { font-size: 13px; color: #888; margin-top: 4px; }
+  .fault-action { font-size: 12px; color: #ef4444; margin-top: 6px; font-weight: 600; }
+
+  .fault-clear {
+    background: #0d0d1a;
+    border: 1px solid #1a1a2e;
+    border-radius: 12px;
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px;
+    color: #333; font-size: 14px;
+  }
+
+  /* Platform flag */
+  .platform-section { }
+  .platform-flag {
+    background: #1a1400;
+    border: 2px solid #ffaa00;
+    border-radius: 12px;
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .platform-icon { font-size: 28px; }
+  .platform-text { font-size: 16px; font-weight: 700; color: #ffaa00; }
+  .platform-sub { font-size: 12px; color: #888; margin-top: 4px; }
+
+  .platform-clear {
+    background: #0d0d1a;
+    border: 1px solid #1a1a2e;
+    border-radius: 12px;
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px;
+    color: #333; font-size: 14px;
+  }
+
+  /* State toggle UI for mockup */
+  .state-toggle {
+    margin-top: 20px;
+    background: #1a1a2e;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 11px;
+    color: #555;
+    text-align: center;
+  }
+
+  /* Annotations */
+  .annotations {
+    width: 200px;
+    display: flex; flex-direction: column; gap: 16px;
+    padding-top: 40px;
+  }
+  .annotation {
+    background: #1a1a2e; border-radius: 8px; padding: 12px;
+    border-left: 3px solid #ffaa00;
+  }
+  .annotation .ann-title { color: #ffaa00; font-weight: 700; margin-bottom: 4px; font-size: 11px; }
+  .annotation .ann-text { color: #888; font-size: 11px; line-height: 1.5; }
+
+  /* Showing two states side by side */
+  .states {
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .state-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; color: #444; margin-bottom: 8px;
+  }
+
+  /* ── State C: Fire/smoke takeover ── */
+  .driver-screen.fire-state {
+    background: #0A0C10;
+    border: 3px solid #FF3B3B;
+    border-radius: 10px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .fire-state::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    animation: fire-pulse 0.8s ease-in-out infinite;
+    pointer-events: none;
+    border-radius: 8px;
+  }
+  .fire-takeover-icon {
+    font-size: 48px;
+    text-align: center;
+    margin-bottom: 12px;
+    line-height: 1;
+  }
+  .fire-takeover-title {
+    font-size: 28px;
+    font-weight: 900;
+    color: #FF3B3B;
+    text-align: center;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .fire-takeover-detail {
+    font-size: 14px;
+    font-weight: 700;
+    color: #F0F2F5;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .fire-takeover-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .fire-action {
+    background: rgba(255,59,59,0.15);
+    border: 1px solid rgba(255,59,59,0.4);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #FF3B3B;
+    text-align: center;
+  }
+  .fire-action.secondary {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.1);
+    color: #9BA3AF;
+  }
+</style>
+</head>
+<body>
+
+<h2>Driver Display — Cab-Mounted Display</h2>
+<p class="subtitle">Fixed cab display · Display only · No interaction · 3 data points maximum</p>
+
+<div class="device-frame">
+
+  <div class="states">
+
+    <!-- STATE 1: Normal operation -->
+    <div>
+      <div class="state-label">State A — Normal operation · All clear</div>
+      <div class="cab-display">
+        <div class="display-header">
+          <div class="train">RJ 561 · K. Fischer</div>
+          <div class="time">09:42</div>
+          <div class="next-stop">
+            <div class="next-label">Next stop</div>
+            <div class="next-name">Linz Hbf</div>
+            <div class="next-eta">Arr. 10:12 · On time</div>
+          </div>
+        </div>
+
+        <div class="door-label">Door Status</div>
+        <div class="door-grid">
+          <div class="door-card clear"><div class="door-id">D1L</div><div class="door-icon">🚪</div><div class="door-status">CLEAR</div></div>
+          <div class="door-card clear"><div class="door-id">D2L</div><div class="door-icon">🚪</div><div class="door-status">CLEAR</div></div>
+          <div class="door-card clear"><div class="door-id">D3L</div><div class="door-icon">🚪</div><div class="door-status">CLEAR</div></div>
+          <div class="door-card clear"><div class="door-id">D1R</div><div class="door-icon">🚪</div><div class="door-status">CLEAR</div></div>
+          <div class="door-card clear"><div class="door-id">D2R</div><div class="door-icon">🚪</div><div class="door-status">CLEAR</div></div>
+          <div class="door-card clear"><div class="door-id">D3R</div><div class="door-icon">🚪</div><div class="door-status">CLEAR</div></div>
+        </div>
+        <div class="all-clear">✓ &nbsp; All doors clear — safe to depart</div>
+
+        <hr class="divider">
+        <div class="fault-clear">⚙️ &nbsp; No critical faults</div>
+        <hr class="divider">
+        <div class="platform-clear">🚉 &nbsp; Platform normal</div>
+      </div>
+    </div>
+
+    <!-- STATE 2: Active alerts -->
+    <div>
+      <div class="state-label">State B — Door obstruction + platform overcrowding</div>
+      <div class="cab-display">
+        <div class="display-header">
+          <div class="train">RJ 561 · K. Fischer</div>
+          <div class="time">10:12</div>
+          <div class="next-stop">
+            <div class="next-label">At station</div>
+            <div class="next-name">Linz Hbf</div>
+            <div class="next-eta">Doors open · Boarding</div>
+          </div>
+        </div>
+
+        <div class="door-label">Door Status</div>
+        <div class="door-grid">
+          <div class="door-card clear"><div class="door-id">D1L</div><div class="door-icon">🚪</div><div class="door-status">CLEAR</div></div>
+          <div class="door-card blocked"><div class="door-id">D2L</div><div class="door-icon">🚫</div><div class="door-status">BLOCKED</div></div>
+          <div class="door-card clear"><div class="door-id">D3L</div><div class="door-icon">🚪</div><div class="door-status">CLEAR</div></div>
+          <div class="door-card clear"><div class="door-id">D1R</div><div class="door-icon">🚪</div><div class="door-status">CLEAR</div></div>
+          <div class="door-card clear"><div class="door-id">D2R</div><div class="door-icon">🚪</div><div class="door-status">CLEAR</div></div>
+          <div class="door-card clear"><div class="door-id">D3R</div><div class="door-icon">🚪</div><div class="door-status">CLEAR</div></div>
+        </div>
+
+        <hr class="divider">
+        <div class="fault-active">
+          <div class="fault-icon">⚠️</div>
+          <div>
+            <div class="fault-text">HVAC Fault — Coach 3</div>
+            <div class="fault-sub">Alarm 0x3A12 · Non-safety-critical</div>
+            <div class="fault-action">Conductor notified · Continue service</div>
+          </div>
+        </div>
+
+        <hr class="divider">
+        <div class="platform-flag">
+          <div class="platform-icon">🚉</div>
+          <div>
+            <div class="platform-text">Platform congested — C1 + C2 area</div>
+            <div class="platform-sub">AI: heavy boarding expected · Allow extra dwell time</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Annotations -->
+  <div class="annotations">
+    <div class="annotation">
+      <div class="ann-title">🚪 Doors — always visible</div>
+      <div class="ann-text">Per-door clear/blocked status is the primary element. Always shown, always the largest element. Blocked door pulses red. Driver must not depart with a blocked door.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">⚠️ Faults — critical only</div>
+      <div class="ann-text">Only faults above a configurable severity threshold appear here. HVAC watch states, minor warnings — not shown. Only show what requires driver awareness. Non-critical faults go to Conductor/Technician apps only.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">🚉 Platform flag — advisory only</div>
+      <div class="ann-text">Shown when AI predicts heavy boarding at next stop. Advisory — driver decides whether to allow extra dwell. Not an alarm, lower visual weight than door status.</div>
+    </div>
+    <div class="annotation">
+      <div class="ann-title">Zero interaction</div>
+      <div class="ann-text">No buttons, no taps, no navigation. Display only. Driver interacts with their existing Stadler cab systems for all control functions. This display is information only.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- State C label -->
+<div style="text-align:center;margin:32px 0 16px">
+  <div style="display:inline-block;background:rgba(255,59,59,0.15);border:1px solid rgba(255,59,59,0.4);border-radius:20px;padding:5px 16px;font-size:11px;font-weight:700;color:#FF3B3B;text-transform:uppercase;letter-spacing:1px">
+    State C — Fire / Smoke Detected
+  </div>
+  <div style="font-size:12px;color:#6B7280;margin-top:8px">Hard cut — no transition. Full-screen takeover overrides all other states.</div>
+</div>
+
+<div style="display:flex;justify-content:center">
+  <div style="width:480px">
+    <div class="driver-screen fire-state">
+      <div class="fire-takeover-icon">🔥</div>
+      <div class="fire-takeover-title">Smoke Detected</div>
+      <div class="fire-takeover-detail">Coach 5 · Passenger Saloon · All parties alerted</div>
+      <div class="fire-takeover-actions">
+        <div class="fire-action">⚠ Follow emergency protocol · Contact Claudia</div>
+        <div class="fire-action">Next stop: Linz Hbf — 4 min</div>
+        <div class="fire-action secondary">Emergency services notified automatically</div>
+      </div>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:#6B7280;text-align:center">
+      This state can only be cleared by Control Centre (Claudia) after confirming safe resolution.
+    </div>
+  </div>
+</div>
+
+<p style="text-align:center; color: #555; font-size: 12px; margin-top: 24px;">Mockup · Cab-mounted display · Landscape orientation · Let me know what to change in the terminal</p>
+
+</body>
+</html>

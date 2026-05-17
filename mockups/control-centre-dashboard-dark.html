@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ÖBB Smart Rail — Passenger Intelligence Dashboard (Dark)</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --oebb-red:        #E2002A;
+    --oebb-red-dim:    rgba(226,0,42,0.10);
+    --oebb-blue:       #073D6E;
+    --oebb-blue-mid:   #0A5298;
+    --oebb-blue-bright:#1A6FBF;
+    --surface-0:       #0E1117;
+    --surface-1:       #141820;
+    --surface-2:       #191E28;
+    --surface-3:       #1E2430;
+    --surface-4:       #242B38;
+    --surface-5:       #2A3242;
+    --border:          rgba(255,255,255,0.06);
+    --border-bright:   rgba(255,255,255,0.10);
+    --text-primary:    #D8DCE8;
+    --text-secondary:  #7A8499;
+    --text-muted:      #485060;
+    --green:           #00A876;
+    --green-dim:       rgba(0,168,118,0.10);
+    --amber:           #E09900;
+    --amber-dim:       rgba(224,153,0,0.10);
+    --red:             #E2002A;
+    --red-dim:         rgba(226,0,42,0.10);
+    --blue-accent:     #4080D0;
+    --blue-dim:        rgba(64,128,208,0.10);
+    --purple:          #7C52D6;
+    --purple-dim:      rgba(124,82,214,0.10);
+  }
+
+  body {
+    background: radial-gradient(ellipse at 30% 0%, #0D1628 0%, var(--surface-0) 55%);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    min-height: 100vh;
+    padding: 40px 24px 80px;
+  }
+
+  /* ─── Cover ─── */
+  .cover {
+    max-width: 1280px; margin: 0 auto 48px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding-bottom: 24px; border-bottom: 1px solid var(--border);
+  }
+  .cover-product { font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--oebb-red); margin-bottom: 8px; }
+  .cover-title { font-size: 26px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 6px; }
+  .cover-sub { font-size: 13px; color: var(--text-secondary); }
+  .cover-badge { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; margin-bottom: 8px; }
+  .cover-meta { font-size: 11px; color: var(--text-muted); line-height: 1.8; text-align: right; }
+
+  /* ─── Section divider ─── */
+  .section-divider { max-width: 1280px; margin: 56px auto 36px; display: flex; align-items: center; gap: 16px; }
+  .sdl { flex: 1; height: 1px; background: var(--border); }
+  .sdp { font-size: 10px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--text-secondary); background: var(--surface-2); border: 1px solid var(--border-bright); border-radius: 20px; padding: 5px 14px; white-space: nowrap; }
+  .sdn { width: 24px; height: 24px; border-radius: 50%; background: var(--oebb-blue); color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+  /* ─── Dashboard frame ─── */
+  .dash-wrap { max-width: 1280px; margin: 0 auto; }
+  .dash-frame-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); text-align: center; margin-bottom: 12px; }
+  .dash { background: var(--surface-1); border: 1px solid var(--border-bright); border-radius: 16px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.3), 0 16px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04); }
+
+  /* ─── Top bar ─── */
+  .topbar { background: var(--oebb-blue); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .topbar-left { display: flex; align-items: center; gap: 20px; }
+  .topbar-logo { display: flex; align-items: center; gap: 10px; }
+  .topbar-logo img { height: 22px; filter: brightness(0) invert(1); display: block; }
+  .topbar-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.2); }
+  .topbar-product { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.85); text-transform: uppercase; letter-spacing: 0.08em; }
+  .topbar-nav { display: flex; gap: 4px; }
+  .nav-item { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.55); padding: 6px 14px; border-radius: 8px; cursor: pointer; }
+  .nav-item.active { background: rgba(255,255,255,0.12); color: #fff; }
+  .nav-badge { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--oebb-red); color: #fff; font-size: 9px; font-weight: 800; margin-left: 5px; }
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+  .topbar-time { font-size: 12px; color: rgba(255,255,255,0.5); font-variant-numeric: tabular-nums; }
+  .topbar-user { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,0.7); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--oebb-blue-bright); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: #fff; }
+
+  /* ─── Status bar ─── */
+  .statusbar { background: var(--surface-0); border-bottom: 1px solid var(--border); padding: 8px 24px; display: flex; align-items: center; gap: 24px; }
+  .stat-pill { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-secondary); }
+  .stat-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .stat-dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .stat-dot.amber { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+  .stat-dot.red   { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+  .stat-val { font-weight: 700; color: var(--text-primary); }
+  .stat-sep { width: 1px; height: 14px; background: var(--border-bright); }
+  .alert-chip { margin-left: auto; display: flex; align-items: center; gap: 6px; background: var(--red-dim); border: 1px solid var(--red); border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700; color: var(--red); }
+
+  /* ─── Main layout ─── */
+  .dash-body { display: flex; height: 680px; }
+
+  /* ─── Sidebar ─── */
+  .sidebar { width: 240px; flex-shrink: 0; background: var(--surface-0); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .sidebar-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
+  .sidebar-count { font-size: 11px; font-weight: 700; color: var(--text-muted); }
+  .sidebar-filter { padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; gap: 4px; }
+  .filter-chip { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; cursor: pointer; color: var(--text-muted); border: 1px solid transparent; }
+  .filter-chip.active { background: var(--surface-3); border-color: var(--border-bright); color: var(--text-secondary); }
+  .train-list { flex: 1; overflow-y: auto; }
+  .train-item { padding: 10px 16px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; gap: 10px; }
+  .train-item:hover { background: var(--surface-2); }
+  .train-item.selected { background: var(--surface-3); border-left: 2px solid var(--blue-accent); }
+  .train-item.alert { border-left: 2px solid var(--red); }
+  .train-occ-mini { flex: 1; }
+  .train-id { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+  .train-route { font-size: 10px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .train-occ-bars { display: flex; gap: 2px; margin-top: 5px; align-items: flex-end; height: 14px; }
+  .train-occ-bar { flex: 1; border-radius: 1px; min-height: 3px; }
+
+  /* ─── Main ─── */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .tab-bar { background: var(--surface-2); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: flex-end; height: 44px; }
+  .tab { font-size: 12px; font-weight: 600; color: var(--text-muted); padding: 0 18px; height: 44px; display: flex; align-items: center; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
+  .tab.active { color: var(--text-primary); border-bottom-color: var(--blue-accent); }
+  .tab .tab-badge { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: var(--red); color: #fff; font-size: 9px; font-weight: 800; margin-left: 5px; }
+  .content { flex: 1; overflow-y: auto; padding: 20px 24px 24px; background: var(--surface-1); }
+
+  /* ─── KPI row ─── */
+  .kpi-row { display: flex; gap: 12px; margin-bottom: 20px; }
+  .kpi-card { flex: 1; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .kpi-label { font-size: 10px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px; }
+  .kpi-val { font-size: 24px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em; line-height: 1; }
+  .kpi-sub { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+  .kpi-card.red-card { border-color: var(--red); background: var(--red-dim); }
+  .kpi-card.red-card .kpi-val { color: var(--red); }
+  .kpi-card.amber-card { border-color: var(--amber); background: var(--amber-dim); }
+  .kpi-card.amber-card .kpi-val { color: var(--amber); }
+  .kpi-card.green-card { border-color: rgba(0,168,118,0.25); }
+  .kpi-card.green-card .kpi-val { color: var(--green); }
+
+  /* ─── Section heading ─── */
+  .sec-heading { font-size: 11px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+  .sec-action { font-size: 11px; font-weight: 600; color: var(--blue-accent); cursor: pointer; text-transform: none; letter-spacing: 0; }
+
+  /* ─── Fleet Hailo-8 grid (Screen 1) ─── */
+  .fleet-ai-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  .fai-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; cursor: pointer; }
+  .fai-card:hover { border-color: var(--border-bright); }
+  .fai-card.alert-red { border-color: var(--red); background: var(--red-dim); }
+  .fai-card.alert-amber { border-color: var(--amber); background: var(--amber-dim); }
+  .fai-card.selected { border-color: var(--blue-accent); background: var(--blue-dim); }
+  .fai-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .fai-id { font-size: 12px; font-weight: 800; color: var(--text-primary); }
+  .fai-route { font-size: 10px; color: var(--text-secondary); margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Coach occupancy strip */
+  .coach-strip { display: flex; gap: 3px; margin-bottom: 6px; }
+  .coach-seg { flex: 1; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 800; color: rgba(255,255,255,0.85); }
+  .cs-lo { background: var(--green); }
+  .cs-md { background: #7BB840; }
+  .cs-hi { background: var(--amber); }
+  .cs-ov { background: var(--red); }
+  .fai-avg { font-size: 10px; color: var(--text-secondary); }
+  .fai-avg span { font-weight: 700; color: var(--text-primary); }
+  .ai-badge { font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; }
+  .ai-badge.green { background: var(--green-dim); border: 1px solid var(--green); color: var(--green); }
+  .ai-badge.amber { background: var(--amber-dim); border: 1px solid var(--amber); color: var(--amber); }
+  .ai-badge.red { background: var(--red-dim); border: 1px solid var(--red); color: var(--red); }
+
+  /* ─── Per-train drill-down (Screen 2) ─── */
+  .train-hero { background: var(--surface-2); border: 1px solid var(--border-bright); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
+  .train-hero-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+  .train-hero-id { font-size: 20px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.01em; }
+  .train-hero-route { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+  .train-hero-badges { display: flex; gap: 8px; margin-top: 10px; }
+  .badge { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 9px; border-radius: 6px; }
+  .badge-red { background: var(--red-dim); border: 1px solid var(--red); color: var(--red); }
+  .badge-amber { background: var(--amber-dim); border: 1px solid var(--amber); color: var(--amber); }
+  .badge-green { background: var(--green-dim); border: 1px solid var(--green); color: var(--green); }
+  .badge-blue { background: var(--blue-dim); border: 1px solid var(--blue-accent); color: var(--blue-accent); }
+  .badge-purple { background: var(--purple-dim); border: 1px solid var(--purple); color: var(--purple); }
+  .train-hero-stats { display: flex; gap: 20px; }
+  .ths { text-align: center; }
+  .ths-val { font-size: 22px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em; }
+  .ths-label { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+
+  /* Coach detail strip */
+  .coach-detail-strip { display: flex; gap: 6px; align-items: stretch; }
+  .coach-detail-card { flex: 1; background: var(--surface-3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 8px; text-align: center; }
+  .coach-detail-card.hi-load { border-color: var(--amber); background: var(--amber-dim); }
+  .coach-detail-card.over-cap { border-color: var(--red); background: var(--red-dim); }
+  .coach-detail-card.alert-bag { border-color: var(--purple); background: var(--purple-dim); }
+  .cdc-label { font-size: 9px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .cdc-bar-wrap { height: 48px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 6px; }
+  .cdc-bar { width: 24px; border-radius: 3px 3px 0 0; }
+  .cdc-pct { font-size: 13px; font-weight: 800; }
+  .cdc-zone { font-size: 9px; color: var(--text-muted); margin-top: 4px; }
+  .cdc-icon { font-size: 13px; margin-top: 4px; }
+
+  /* Zone heat row */
+  .zone-heat-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .zone-card { flex: 1; background: var(--surface-3); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .zone-card.hi { border-color: var(--amber); background: var(--amber-dim); }
+  .zone-card.crit { border-color: var(--red); background: var(--red-dim); }
+  .zone-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 4px; }
+  .zone-val { font-size: 18px; font-weight: 800; color: var(--text-primary); }
+  .zone-sub { font-size: 10px; color: var(--text-secondary); margin-top: 3px; }
+
+  /* Hailo-8 insights panel */
+  .ai-insights { background: var(--surface-2); border: 1px solid var(--border-bright); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+  .insight-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .insight-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .insight-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+  .insight-icon.amber { background: var(--amber-dim); border: 1px solid var(--amber); }
+  .insight-icon.red { background: var(--red-dim); border: 1px solid var(--red); }
+  .insight-icon.blue { background: var(--blue-dim); border: 1px solid var(--blue-accent); }
+  .insight-icon.purple { background: var(--purple-dim); border: 1px solid var(--purple); }
+  .insight-body { flex: 1; }
+  .insight-title { font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 3px; }
+  .insight-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.5; }
+  .insight-action { margin-top: 8px; font-size: 11px; font-weight: 700; color: var(--blue-accent); cursor: pointer; }
+  .insight-time { font-size: 10px; color: var(--text-muted); white-space: nowrap; margin-top: 2px; }
+
+  /* Hailo-8 Health mini (tab) */
+  .ai-health-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  .aih-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 14px; }
+  .aih-card.ok { border-color: rgba(0,168,118,0.2); }
+  .aih-card.warn { border-color: var(--amber); background: var(--amber-dim); }
+  .aih-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .aih-id { font-size: 12px; font-weight: 800; color: var(--text-primary); }
+  .aih-status { font-size: 10px; font-weight: 700; }
+  .aih-status.ok { color: var(--green); }
+  .aih-status.warn { color: var(--amber); }
+  .aih-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .aih-metric { }
+  .aih-metric-label { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+  .aih-metric-val { font-size: 13px; font-weight: 800; color: var(--text-primary); }
+
+  /* Analytics trend */
+  .trend-chart-mock { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+  .trend-bars { display: flex; align-items: flex-end; gap: 6px; height: 80px; margin: 12px 0 8px; }
+  .trend-bar-group { flex: 1; display: flex; gap: 2px; align-items: flex-end; }
+  .trend-bar { flex: 1; border-radius: 2px 2px 0 0; }
+  .trend-day-label { font-size: 9px; color: var(--text-muted); text-align: center; margin-top: 4px; }
+  .trend-legend { display: flex; gap: 16px; }
+  .tl-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-secondary); }
+  .tl-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+  /* Escalation card */
+  .escalation-card { background: var(--surface-2); border: 1px solid var(--border-bright); border-radius: 10px; padding: 16px 18px; margin-bottom: 12px; display: flex; align-items: flex-start; gap: 14px; }
+  .esc-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--amber-dim); border: 1px solid var(--amber); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .esc-body { flex: 1; }
+  .esc-title { font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+  .esc-meta { font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; }
+  .esc-trend { display: flex; gap: 4px; align-items: flex-end; height: 28px; }
+  .esc-trend-bar { width: 18px; border-radius: 2px 2px 0 0; }
+  .esc-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .esc-btn { font-size: 11px; font-weight: 700; padding: 6px 14px; border-radius: 6px; cursor: pointer; border: none; }
+  .esc-btn-primary { background: var(--oebb-blue-bright); color: #fff; }
+  .esc-btn-ghost { background: var(--surface-4); color: var(--text-secondary); }
+
+  /* Annotation */
+  .annotation { display: flex; align-items: flex-start; gap: 10px; background: var(--surface-0); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+  .annotation-num { width: 20px; height: 20px; border-radius: 50%; background: var(--oebb-blue); color: #fff; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  .annotation-text { font-size: 11px; color: var(--text-secondary); line-height: 1.5; }
+  .annotation-text strong { color: var(--text-primary); }
+
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--surface-5); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Cover -->
+<div class="cover">
+  <div>
+    <div class="cover-product">ÖBB Smart Rail — Passenger Intelligence</div>
+    <div class="cover-title">Hailo-8 Dashboard — Control Centre</div>
+    <div class="cover-sub">What the Hailo-8 sees · Roland + Claudia · 30+ DOSTO trains · Dark theme</div>
+  </div>
+  <div>
+    <div class="cover-badge">Phase 4 — UX Design</div>
+    <div class="cover-meta">Interface: Web — 1280px · tablet landscape<br>Date: 2026-05-14</div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════ -->
+<!-- SCREEN 1 — FLEET OVERVIEW                      -->
+<!-- ══════════════════════════════════════════════════ -->
+<div class="section-divider">
+  <div class="sdl"></div><div class="sdn">1</div>
+  <div class="sdp">Fleet overview · occupancy across 31 trains · 2 over capacity · Hailo-8 active on all</div>
+  <div class="sdl"></div>
+</div>
+
+<div class="dash-wrap">
+  <div class="dash-frame-label">SCREEN 1 — FLEET OVERVIEW</div>
+  <div class="dash">
+    <!-- topbar -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-logo">
+          <img src="../current-portal-design/Logos & Symbole/Logos railnet/OeBB_railnet.png" alt="ÖBB railnet">
+          <div class="topbar-divider"></div>
+          <div class="topbar-product">Passenger Intelligence</div>
+        </div>
+        <div class="topbar-nav">
+          <div class="nav-item active">Live Fleet</div>
+          <div class="nav-item">Analytics</div>
+          <div class="nav-item">Escalations <span class="nav-badge">1</span></div>
+          <div class="nav-item">Hailo-8 Health</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-time">09:48 · Wed 14 May</div>
+        <div class="topbar-user"><div class="avatar">CW</div> Claudia W.</div>
+      </div>
+    </div>
+    <!-- status bar -->
+    <div class="statusbar">
+      <div class="stat-pill"><div class="stat-dot green"></div> <span class="stat-val">31</span>&nbsp;trains · Hailo-8 active</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill"><div class="stat-dot red"></div> <span class="stat-val">2</span>&nbsp;over capacity</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill"><div class="stat-dot amber"></div> <span class="stat-val">5</span>&nbsp;approaching capacity</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill">Hailo-8 · <span class="stat-val">31/31</span>&nbsp;online · avg latency 18ms</div>
+      <div class="alert-chip">🔴 2 trains over capacity</div>
+    </div>
+    <!-- body -->
+    <div class="dash-body">
+      <!-- sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-header"><div class="sidebar-title">Trains</div><div class="sidebar-count">31 active</div></div>
+        <div class="sidebar-filter">
+          <div class="filter-chip active">All</div>
+          <div class="filter-chip">🔴 Alert</div>
+          <div class="filter-chip">Live</div>
+        </div>
+        <div class="train-list">
+          <div class="train-item alert">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--red);box-shadow:0 0 5px var(--red);flex-shrink:0"></div>
+            <div class="train-occ-mini">
+              <div class="train-id">R5001C-008</div>
+              <div class="train-route">Wien→München · 109%</div>
+              <div class="train-occ-bars">
+                <div class="train-occ-bar" style="height:10px;background:var(--red)"></div>
+                <div class="train-occ-bar" style="height:14px;background:var(--red)"></div>
+                <div class="train-occ-bar" style="height:11px;background:var(--amber)"></div>
+                <div class="train-occ-bar" style="height:12px;background:var(--red)"></div>
+                <div class="train-occ-bar" style="height:9px;background:var(--amber)"></div>
+                <div class="train-occ-bar" style="height:9px;background:var(--amber)"></div>
+              </div>
+            </div>
+          </div>
+          <div class="train-item alert">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--red);box-shadow:0 0 5px var(--red);flex-shrink:0"></div>
+            <div class="train-occ-mini">
+              <div class="train-id">R5001C-019</div>
+              <div class="train-route">Salzburg→Wien · 103%</div>
+              <div class="train-occ-bars">
+                <div class="train-occ-bar" style="height:11px;background:var(--amber)"></div>
+                <div class="train-occ-bar" style="height:13px;background:var(--red)"></div>
+                <div class="train-occ-bar" style="height:14px;background:var(--red)"></div>
+                <div class="train-occ-bar" style="height:10px;background:var(--amber)"></div>
+                <div class="train-occ-bar" style="height:8px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:6px;background:var(--green)"></div>
+              </div>
+            </div>
+          </div>
+          <div class="train-item selected">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--amber);flex-shrink:0"></div>
+            <div class="train-occ-mini">
+              <div class="train-id">R5001C-003</div>
+              <div class="train-route">Wien→Salzburg · 87%</div>
+              <div class="train-occ-bars">
+                <div class="train-occ-bar" style="height:9px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:11px;background:var(--amber)"></div>
+                <div class="train-occ-bar" style="height:11px;background:var(--amber)"></div>
+                <div class="train-occ-bar" style="height:10px;background:var(--amber)"></div>
+                <div class="train-occ-bar" style="height:9px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:8px;background:var(--green)"></div>
+              </div>
+            </div>
+          </div>
+          <div class="train-item">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></div>
+            <div class="train-occ-mini">
+              <div class="train-id">R5001C-009</div>
+              <div class="train-route">Graz→Wien · 61%</div>
+              <div class="train-occ-bars">
+                <div class="train-occ-bar" style="height:8px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:7px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:8px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:8px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:7px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:6px;background:var(--green)"></div>
+              </div>
+            </div>
+          </div>
+          <div class="train-item">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></div>
+            <div class="train-occ-mini">
+              <div class="train-id">R5001C-012</div>
+              <div class="train-route">Linz→Villach · 54%</div>
+              <div class="train-occ-bars">
+                <div class="train-occ-bar" style="height:7px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:8px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:7px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:6px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:7px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:5px;background:var(--green)"></div>
+              </div>
+            </div>
+          </div>
+          <div class="train-item">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></div>
+            <div class="train-occ-mini">
+              <div class="train-id">R5001C-021</div>
+              <div class="train-route">Salzburg→Bregenz · 48%</div>
+              <div class="train-occ-bars">
+                <div class="train-occ-bar" style="height:6px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:7px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:6px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:7px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:5px;background:var(--green)"></div>
+                <div class="train-occ-bar" style="height:5px;background:var(--green)"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- main -->
+      <div class="main">
+        <div class="tab-bar">
+          <div class="tab active">Occupancy</div>
+          <div class="tab">Congestion zones</div>
+          <div class="tab">Accessibility</div>
+          <div class="tab">Hailo-8 confidence</div>
+        </div>
+        <div class="content">
+          <div class="kpi-row">
+            <div class="kpi-card green-card">
+              <div class="kpi-label">Fleet avg occupancy</div>
+              <div class="kpi-val">63%</div>
+              <div class="kpi-sub">Live · 31 trains · updated 09:48</div>
+            </div>
+            <div class="kpi-card red-card">
+              <div class="kpi-label">Over capacity</div>
+              <div class="kpi-val">2</div>
+              <div class="kpi-sub">trains above 100% · action needed</div>
+            </div>
+            <div class="kpi-card amber-card">
+              <div class="kpi-label">Approaching cap</div>
+              <div class="kpi-val">5</div>
+              <div class="kpi-sub">trains 80–99% · monitor</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Congestion alerts</div>
+              <div class="kpi-val" style="color:var(--amber)">3</div>
+              <div class="kpi-sub">vestibule / luggage rack · active</div>
+            </div>
+          </div>
+
+          <div class="sec-heading">All trains — Live occupancy by coach <div class="sec-action">Sort: worst first ↓</div></div>
+          <div class="fleet-ai-grid">
+            <!-- Over capacity trains -->
+            <div class="fai-card alert-red">
+              <div class="fai-header">
+                <div class="fai-id">R5001C-008</div>
+                <div class="ai-badge red">109%</div>
+              </div>
+              <div class="fai-route">Wien Hbf → München · IC 890</div>
+              <div class="coach-strip">
+                <div class="coach-seg cs-ov">C1</div>
+                <div class="coach-seg cs-ov">C2</div>
+                <div class="coach-seg cs-hi">C3</div>
+                <div class="coach-seg cs-ov">C4</div>
+                <div class="coach-seg cs-hi">C5</div>
+                <div class="coach-seg cs-hi">C6</div>
+              </div>
+              <div class="fai-avg">Avg <span>109%</span> · vestibule C2 congested</div>
+            </div>
+            <div class="fai-card alert-red">
+              <div class="fai-header">
+                <div class="fai-id">R5001C-019</div>
+                <div class="ai-badge red">103%</div>
+              </div>
+              <div class="fai-route">Salzburg → Wien Hbf · IC 744</div>
+              <div class="coach-strip">
+                <div class="coach-seg cs-hi">C1</div>
+                <div class="coach-seg cs-ov">C2</div>
+                <div class="coach-seg cs-ov">C3</div>
+                <div class="coach-seg cs-hi">C4</div>
+                <div class="coach-seg cs-md">C5</div>
+                <div class="coach-seg cs-lo">C6</div>
+              </div>
+              <div class="fai-avg">Avg <span>103%</span> · C6 underutilised (52%)</div>
+            </div>
+            <!-- Approaching -->
+            <div class="fai-card alert-amber">
+              <div class="fai-header">
+                <div class="fai-id">R5001C-003</div>
+                <div class="ai-badge amber">87%</div>
+              </div>
+              <div class="fai-route">Wien Hbf → Salzburg · IC 631</div>
+              <div class="coach-strip">
+                <div class="coach-seg cs-md">C1</div>
+                <div class="coach-seg cs-hi">C2</div>
+                <div class="coach-seg cs-hi">C3</div>
+                <div class="coach-seg cs-hi">C4</div>
+                <div class="coach-seg cs-md">C5</div>
+                <div class="coach-seg cs-md">C6</div>
+              </div>
+              <div class="fai-avg">Avg <span>87%</span> · luggage rack C3 92%</div>
+            </div>
+            <div class="fai-card alert-amber">
+              <div class="fai-header">
+                <div class="fai-id">R5001C-027</div>
+                <div class="ai-badge amber">83%</div>
+              </div>
+              <div class="fai-route">Bregenz → Wien Hbf · IC 502</div>
+              <div class="coach-strip">
+                <div class="coach-seg cs-hi">C1</div>
+                <div class="coach-seg cs-hi">C2</div>
+                <div class="coach-seg cs-md">C3</div>
+                <div class="coach-seg cs-md">C4</div>
+                <div class="coach-seg cs-hi">C5</div>
+                <div class="coach-seg cs-md">C6</div>
+              </div>
+              <div class="fai-avg">Avg <span>83%</span> · filling fast (+12% last 20 min)</div>
+            </div>
+            <!-- Normal trains -->
+            <div class="fai-card">
+              <div class="fai-header">
+                <div class="fai-id">R5001C-009</div>
+                <div class="ai-badge green">61%</div>
+              </div>
+              <div class="fai-route">Graz → Wien Hbf · IC 810</div>
+              <div class="coach-strip">
+                <div class="coach-seg cs-md">C1</div>
+                <div class="coach-seg cs-md">C2</div>
+                <div class="coach-seg cs-md">C3</div>
+                <div class="coach-seg cs-md">C4</div>
+                <div class="coach-seg cs-md">C5</div>
+                <div class="coach-seg cs-lo">C6</div>
+              </div>
+              <div class="fai-avg">Avg <span>61%</span> · all zones clear</div>
+            </div>
+            <div class="fai-card">
+              <div class="fai-header">
+                <div class="fai-id">R5001C-012</div>
+                <div class="ai-badge green">54%</div>
+              </div>
+              <div class="fai-route">Linz → Villach · IC 322</div>
+              <div class="coach-strip">
+                <div class="coach-seg cs-md">C1</div>
+                <div class="coach-seg cs-md">C2</div>
+                <div class="coach-seg cs-lo">C3</div>
+                <div class="coach-seg cs-md">C4</div>
+                <div class="coach-seg cs-lo">C5</div>
+                <div class="coach-seg cs-lo">C6</div>
+              </div>
+              <div class="fai-avg">Avg <span>54%</span> · all zones clear</div>
+            </div>
+            <div class="fai-card">
+              <div class="fai-header">
+                <div class="fai-id">R5001C-021</div>
+                <div class="ai-badge green">48%</div>
+              </div>
+              <div class="fai-route">Salzburg → Bregenz · IC 411</div>
+              <div class="coach-strip">
+                <div class="coach-seg cs-lo">C1</div>
+                <div class="coach-seg cs-md">C2</div>
+                <div class="coach-seg cs-lo">C3</div>
+                <div class="coach-seg cs-lo">C4</div>
+                <div class="coach-seg cs-md">C5</div>
+                <div class="coach-seg cs-lo">C6</div>
+              </div>
+              <div class="fai-avg">Avg <span>48%</span> · comfortable</div>
+            </div>
+            <div class="fai-card">
+              <div class="fai-header">
+                <div class="fai-id">R5001C-024</div>
+                <div class="ai-badge green">41%</div>
+              </div>
+              <div class="fai-route">Wien Hbf → Feldkirch · IC 291</div>
+              <div class="coach-strip">
+                <div class="coach-seg cs-lo">C1</div>
+                <div class="coach-seg cs-lo">C2</div>
+                <div class="coach-seg cs-md">C3</div>
+                <div class="coach-seg cs-lo">C4</div>
+                <div class="coach-seg cs-lo">C5</div>
+                <div class="coach-seg cs-lo">C6</div>
+              </div>
+              <div class="fai-avg">Avg <span>41%</span> · comfortable</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dash-wrap" style="margin-top:16px">
+  <div class="annotation">
+    <div class="annotation-num">1</div>
+    <div class="annotation-text"><strong>The hero is what Hailo-8 sees, not what the network reports.</strong> Each train card shows the Hailo-8's per-coach occupancy read — colour-coded from the cameras, not from ticket sales or weight sensors. The fleet grid sorts worst-first so Claudia sees the two over-capacity trains immediately without scanning.</div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════ -->
+<!-- SCREEN 2 — PER-TRAIN DRILL-DOWN                -->
+<!-- ══════════════════════════════════════════════════ -->
+<div class="section-divider">
+  <div class="sdl"></div><div class="sdn">2</div>
+  <div class="sdp">Per-train drill-down · R5001C-019 · occupancy imbalance + vestibule congestion + Hailo-8 insights</div>
+  <div class="sdl"></div>
+</div>
+
+<div class="dash-wrap">
+  <div class="dash-frame-label">SCREEN 2 — PER-TRAIN VIEW · R5001C-019</div>
+  <div class="dash">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-logo">
+          <img src="../current-portal-design/Logos & Symbole/Logos railnet/OeBB_railnet.png" alt="ÖBB railnet">
+          <div class="topbar-divider"></div>
+          <div class="topbar-product">Passenger Intelligence</div>
+        </div>
+        <div class="topbar-nav">
+          <div class="nav-item active">Live Fleet</div>
+          <div class="nav-item">Analytics</div>
+          <div class="nav-item">Escalations <span class="nav-badge">1</span></div>
+          <div class="nav-item">Hailo-8 Health</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-time">09:49 · Wed 14 May</div>
+        <div class="topbar-user"><div class="avatar">CW</div> Claudia W.</div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <div class="stat-pill"><div class="stat-dot green"></div> <span class="stat-val">31</span>&nbsp;trains · Hailo-8 active</div>
+      <div class="stat-sep"></div>
+      <span style="font-size:11px;color:var(--text-secondary)">Viewing: <strong style="color:var(--text-primary)">R5001C-019</strong> · Salzburg → Wien Hbf · IC 744 · arr 10:52 (on time)</span>
+      <div class="alert-chip" style="margin-left:auto">🔴 Over capacity</div>
+    </div>
+    <div class="dash-body">
+      <div class="sidebar">
+        <div class="sidebar-header"><div class="sidebar-title">Trains</div><div class="sidebar-count">31 active</div></div>
+        <div class="sidebar-filter">
+          <div class="filter-chip active">All</div>
+          <div class="filter-chip">🔴 Alert</div>
+        </div>
+        <div class="train-list">
+          <div class="train-item alert"><div style="width:6px;height:6px;border-radius:50%;background:var(--red);box-shadow:0 0 5px var(--red);flex-shrink:0"></div><div class="train-occ-mini"><div class="train-id">R5001C-008</div><div class="train-route">Wien→München · 109%</div></div></div>
+          <div class="train-item alert selected"><div style="width:6px;height:6px;border-radius:50%;background:var(--red);box-shadow:0 0 5px var(--red);flex-shrink:0"></div><div class="train-occ-mini"><div class="train-id">R5001C-019</div><div class="train-route">Salzburg→Wien · 103%</div></div></div>
+          <div class="train-item"><div style="width:6px;height:6px;border-radius:50%;background:var(--amber);flex-shrink:0"></div><div class="train-occ-mini"><div class="train-id">R5001C-003</div><div class="train-route">Wien→Salzburg · 87%</div></div></div>
+          <div class="train-item"><div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></div><div class="train-occ-mini"><div class="train-id">R5001C-009</div><div class="train-route">Graz→Wien · 61%</div></div></div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="tab-bar">
+          <div class="tab active">Occupancy</div>
+          <div class="tab">Congestion zones</div>
+          <div class="tab">Accessibility</div>
+          <div class="tab">Hailo-8 confidence</div>
+          <div class="tab">History</div>
+        </div>
+        <div class="content">
+          <!-- Train hero -->
+          <div class="train-hero">
+            <div class="train-hero-top">
+              <div>
+                <div class="train-hero-id">R5001C-019 · Salzburg → Wien Hbf</div>
+                <div class="train-hero-route">IC 744 · Dep 08:05 · Arr 10:52 · On time · Last seen: St. Pölten 09:41</div>
+                <div class="train-hero-badges">
+                  <div class="badge badge-red">🔴 Over capacity</div>
+                  <div class="badge badge-amber">Vestibule C2 congested</div>
+                  <div class="badge badge-blue">C6 underutilised</div>
+                  <div class="badge badge-green">Hailo-8 OK · 21ms</div>
+                </div>
+              </div>
+              <div class="train-hero-stats">
+                <div class="ths"><div class="ths-val" style="color:var(--red)">103%</div><div class="ths-label">avg occupancy</div></div>
+                <div class="ths"><div class="ths-val" style="color:var(--amber)">C2</div><div class="ths-label">congestion zone</div></div>
+                <div class="ths"><div class="ths-val" style="color:var(--blue-accent)">52%</div><div class="ths-label">C6 (spare)</div></div>
+              </div>
+            </div>
+            <!-- Coach detail strip -->
+            <div class="coach-detail-strip">
+              <div class="coach-detail-card">
+                <div class="cdc-label">Coach 1</div>
+                <div class="cdc-bar-wrap"><div class="cdc-bar" style="height:38px;background:var(--amber)"></div></div>
+                <div class="cdc-pct" style="color:var(--amber)">97%</div>
+                <div class="cdc-zone">2 vestibules clear</div>
+              </div>
+              <div class="coach-detail-card over-cap">
+                <div class="cdc-label">Coach 2</div>
+                <div class="cdc-bar-wrap"><div class="cdc-bar" style="height:45px;background:var(--red)"></div></div>
+                <div class="cdc-pct" style="color:var(--red)">106%</div>
+                <div class="cdc-zone" style="color:var(--amber)">⚠ Vestibule full</div>
+                <div class="cdc-icon">🚇</div>
+              </div>
+              <div class="coach-detail-card over-cap">
+                <div class="cdc-label">Coach 3</div>
+                <div class="cdc-bar-wrap"><div class="cdc-bar" style="height:48px;background:var(--red)"></div></div>
+                <div class="cdc-pct" style="color:var(--red)">110%</div>
+                <div class="cdc-zone">Luggage rack 88%</div>
+              </div>
+              <div class="coach-detail-card hi-load">
+                <div class="cdc-label">Coach 4</div>
+                <div class="cdc-bar-wrap"><div class="cdc-bar" style="height:36px;background:var(--amber)"></div></div>
+                <div class="cdc-pct" style="color:var(--amber)">91%</div>
+                <div class="cdc-zone">Vestibule moderate</div>
+              </div>
+              <div class="coach-detail-card">
+                <div class="cdc-label">Coach 5</div>
+                <div class="cdc-bar-wrap"><div class="cdc-bar" style="height:28px;background:#7BB840"></div></div>
+                <div class="cdc-pct" style="color:#7BB840">74%</div>
+                <div class="cdc-zone">Comfortable</div>
+              </div>
+              <div class="coach-detail-card" style="border-color:var(--blue-accent);background:var(--blue-dim)">
+                <div class="cdc-label">Coach 6</div>
+                <div class="cdc-bar-wrap"><div class="cdc-bar" style="height:20px;background:var(--green)"></div></div>
+                <div class="cdc-pct" style="color:var(--green)">52%</div>
+                <div class="cdc-zone" style="color:var(--blue-accent)">Spare capacity</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Zone heat row -->
+          <div class="sec-heading">Congestion zones — Hailo-8 camera analysis</div>
+          <div class="zone-heat-row">
+            <div class="zone-card crit">
+              <div class="zone-label">C2 — Vestibule A</div>
+              <div class="zone-val" style="color:var(--red)">Full</div>
+              <div class="zone-sub">Passengers standing · blocking door area · Hailo-8 confidence 94%</div>
+            </div>
+            <div class="zone-card hi">
+              <div class="zone-label">C3 — Luggage rack</div>
+              <div class="zone-val" style="color:var(--amber)">88%</div>
+              <div class="zone-sub">Nearing saturation · overhead bins visible from camera</div>
+            </div>
+            <div class="zone-card">
+              <div class="zone-label">C1 — Vestibule B</div>
+              <div class="zone-val" style="color:var(--green)">Clear</div>
+              <div class="zone-sub">No obstruction · door area accessible</div>
+            </div>
+            <div class="zone-card">
+              <div class="zone-label">C5 — Vestibule A</div>
+              <div class="zone-val" style="color:var(--green)">Clear</div>
+              <div class="zone-sub">Low occupancy · passengers seated</div>
+            </div>
+          </div>
+
+          <!-- Hailo-8 insights -->
+          <div class="sec-heading">Hailo-8 insights — this train</div>
+          <div class="ai-insights">
+            <div class="insight-row">
+              <div class="insight-icon red">🚨</div>
+              <div class="insight-body">
+                <div class="insight-title">Occupancy imbalance — coaches C1–C4 over capacity, C6 at 52%</div>
+                <div class="insight-desc">Hailo-8 detects significant load imbalance. Passengers boarding at Salzburg clustered toward the front coaches. C6 has spare capacity that is not being used. A PA announcement redirecting passengers toward C6 could resolve the imbalance before Wien Hbf.</div>
+                <div class="insight-action">→ Suggest action to Conrad on train</div>
+              </div>
+              <div class="insight-time">09:41</div>
+            </div>
+            <div class="insight-row">
+              <div class="insight-icon amber">📦</div>
+              <div class="insight-body">
+                <div class="insight-title">Luggage rack saturation — coach C3 at 88% and rising</div>
+                <div class="insight-desc">Camera inference shows overhead bins in C3 filling faster than usual. If trend continues, rack saturation likely within 2 stops. Proactive announcement to use C5 and C6 overhead space recommended.</div>
+                <div class="insight-action">→ Draft PA announcement</div>
+              </div>
+              <div class="insight-time">09:43</div>
+            </div>
+            <div class="insight-row">
+              <div class="insight-icon blue">📈</div>
+              <div class="insight-body">
+                <div class="insight-title">This service is tracking 18% higher than the 7-day average for this time slot</div>
+                <div class="insight-desc">IC 744 (Salzburg→Wien, 08:05) has been over 95% average occupancy on 4 of the last 7 days. Pattern is strongest on Wed–Fri. Capacity review recommended for this service.</div>
+                <div class="insight-action">→ Add to analytics queue</div>
+              </div>
+              <div class="insight-time">Fleet Hailo-8</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dash-wrap" style="margin-top:16px">
+  <div class="annotation">
+    <div class="annotation-num">2</div>
+    <div class="annotation-text"><strong>Hailo-8 insights are interpretations, not raw numbers.</strong> The Hailo-8 gives Claudia three things the current system cannot: per-zone congestion (vestibule vs. seating area vs. luggage rack), confidence scores on every read, and pattern analysis across the 7-day history. The "→ Suggest action to Conrad" link is the closed-loop feature — Claudia can push a suggested action to the conductor's app without a phone call.</div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════ -->
+<!-- SCREEN 3 — ANALYTICS (Claudia morning review)     -->
+<!-- ══════════════════════════════════════════════════ -->
+<div class="section-divider">
+  <div class="sdl"></div><div class="sdn">3</div>
+  <div class="sdp">Analytics tab · Claudia's morning review · 7-day trend · exception list · Scenario 04</div>
+  <div class="sdl"></div>
+</div>
+
+<div class="dash-wrap">
+  <div class="dash-frame-label">SCREEN 3 — ANALYTICS · MORNING REVIEW</div>
+  <div class="dash">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-logo">
+          <img src="../current-portal-design/Logos & Symbole/Logos railnet/OeBB_railnet.png" alt="ÖBB railnet">
+          <div class="topbar-divider"></div>
+          <div class="topbar-product">Passenger Intelligence</div>
+        </div>
+        <div class="topbar-nav">
+          <div class="nav-item">Live Fleet</div>
+          <div class="nav-item active">Analytics</div>
+          <div class="nav-item">Escalations <span class="nav-badge">1</span></div>
+          <div class="nav-item">Hailo-8 Health</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-time">07:52 · Wed 14 May</div>
+        <div class="topbar-user"><div class="avatar">CW</div> Claudia W.</div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <div class="stat-pill">Yesterday's data · <span class="stat-val">13 May 2026</span></div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill"><div class="stat-dot red"></div> <span class="stat-val">3</span>&nbsp;services flagged red</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill"><div class="stat-dot amber"></div> <span class="stat-val">7</span>&nbsp;amber</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill">1 Conrad escalation attached</div>
+    </div>
+    <div class="dash-body">
+      <div class="sidebar">
+        <div class="sidebar-header"><div class="sidebar-title">Date range</div></div>
+        <div class="sidebar-filter" style="flex-direction:column;gap:2px">
+          <div class="filter-chip active" style="display:block;padding:6px 10px">Yesterday</div>
+          <div class="filter-chip" style="display:block;padding:6px 10px">Last 7 days</div>
+          <div class="filter-chip" style="display:block;padding:6px 10px">Last 30 days</div>
+        </div>
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+          <div class="sidebar-title" style="margin-bottom:8px">Routes</div>
+          <div style="font-size:11px;color:var(--text-secondary);line-height:2">
+            <div style="color:var(--text-primary);font-weight:600">All routes</div>
+            <div>Wien → Salzburg</div>
+            <div>Wien → München</div>
+            <div>Graz → Wien</div>
+            <div>Innsbruck → Wien</div>
+          </div>
+        </div>
+        <div style="padding:12px 16px">
+          <div class="sidebar-title" style="margin-bottom:8px">Exceptions only</div>
+          <div style="font-size:11px;color:var(--text-secondary)">3 red · 7 amber<br>1 Conrad escalation</div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="tab-bar">
+          <div class="tab active">Exception report</div>
+          <div class="tab">Route trends</div>
+          <div class="tab">Peak analysis</div>
+          <div class="tab">Export</div>
+        </div>
+        <div class="content">
+          <div class="kpi-row">
+            <div class="kpi-card"><div class="kpi-label">Services yesterday</div><div class="kpi-val">89</div><div class="kpi-sub">across 14 routes</div></div>
+            <div class="kpi-card red-card"><div class="kpi-label">Red — over capacity</div><div class="kpi-val">3</div><div class="kpi-sub">services · peak Fri evening</div></div>
+            <div class="kpi-card amber-card"><div class="kpi-label">Amber — 80–99%</div><div class="kpi-val">7</div><div class="kpi-sub">services · approaching capacity</div></div>
+            <div class="kpi-card"><div class="kpi-label">Escalations received</div><div class="kpi-val" style="color:var(--amber)">1</div><div class="kpi-sub">Conrad · IC 712 Fri 17:15</div></div>
+          </div>
+
+          <div class="sec-heading">Exception services — yesterday <div class="sec-action">Export to CSV ↗</div></div>
+
+          <!-- Escalation card (Conrad attached) -->
+          <div class="escalation-card" style="border-color:var(--amber)">
+            <div class="esc-icon">📋</div>
+            <div class="esc-body">
+              <div class="esc-title">IC 712 · Wien Hbf → Salzburg · Fri 17:15 — Conrad escalation attached</div>
+              <div class="esc-meta">Coaches C3, C4 · avg 118% · third consecutive Friday · Conrad note: "Third Friday, same pattern"</div>
+              <div style="display:flex;align-items:flex-end;gap:4px;height:32px;margin-bottom:8px">
+                <div style="width:20px;border-radius:2px 2px 0 0;background:var(--amber);height:18px"></div>
+                <div style="width:20px;border-radius:2px 2px 0 0;background:var(--amber);height:22px"></div>
+                <div style="width:20px;border-radius:2px 2px 0 0;background:var(--red);height:26px"></div>
+                <div style="width:20px;border-radius:2px 2px 0 0;background:var(--red);height:28px"></div>
+                <div style="width:20px;border-radius:2px 2px 0 0;background:var(--red);height:30px"></div>
+                <div style="width:20px;border-radius:2px 2px 0 0;background:var(--red);height:32px"></div>
+                <div style="width:20px;border-radius:2px 2px 0 0;background:var(--red);height:32px"></div>
+                <div style="font-size:10px;color:var(--text-muted);padding-bottom:2px;margin-left:4px">7-day trend ↑</div>
+              </div>
+              <div class="esc-actions">
+                <button class="esc-btn esc-btn-primary">Add to capacity review</button>
+                <button class="esc-btn esc-btn-ghost">View full data</button>
+                <button class="esc-btn esc-btn-ghost">Confirm receipt to Conrad</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 7-day trend chart -->
+          <div class="trend-chart-mock" style="margin-top:16px">
+            <div class="sec-heading" style="margin-bottom:4px">Fleet avg occupancy — last 7 days</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:12px">All routes · peak hour (07:00–09:00 + 16:00–19:00) vs. off-peak</div>
+            <!--
+              Each day column: two bars side-by-side, both growing upward from the same baseline.
+              Outer row: align-items:flex-end so all bars share a common bottom edge.
+              Each bar-pair: display:flex; align-items:flex-end; gap:3px so the two bars within a day also share the baseline.
+            -->
+            <div style="display:flex;gap:8px;align-items:flex-end;height:88px">
+              <!-- Thu: peak 48, off 24 -->
+              <div style="flex:1;display:flex;align-items:flex-end;gap:3px">
+                <div style="flex:1;height:48px;background:var(--oebb-blue-bright);border-radius:3px 3px 0 0;opacity:0.9"></div>
+                <div style="flex:1;height:24px;background:var(--surface-5);border-radius:3px 3px 0 0"></div>
+              </div>
+              <!-- Fri: peak over-cap 72, off 30 -->
+              <div style="flex:1;display:flex;align-items:flex-end;gap:3px">
+                <div style="flex:1;height:72px;background:var(--red);border-radius:3px 3px 0 0;opacity:0.9"></div>
+                <div style="flex:1;height:30px;background:var(--surface-5);border-radius:3px 3px 0 0"></div>
+              </div>
+              <!-- Sat: peak 36, off 40 -->
+              <div style="flex:1;display:flex;align-items:flex-end;gap:3px">
+                <div style="flex:1;height:36px;background:var(--oebb-blue-bright);border-radius:3px 3px 0 0;opacity:0.9"></div>
+                <div style="flex:1;height:40px;background:var(--surface-5);border-radius:3px 3px 0 0"></div>
+              </div>
+              <!-- Sun: peak 30, off 44 -->
+              <div style="flex:1;display:flex;align-items:flex-end;gap:3px">
+                <div style="flex:1;height:30px;background:var(--oebb-blue-bright);border-radius:3px 3px 0 0;opacity:0.9"></div>
+                <div style="flex:1;height:44px;background:var(--surface-5);border-radius:3px 3px 0 0"></div>
+              </div>
+              <!-- Mon: peak 52, off 22 -->
+              <div style="flex:1;display:flex;align-items:flex-end;gap:3px">
+                <div style="flex:1;height:52px;background:var(--oebb-blue-bright);border-radius:3px 3px 0 0;opacity:0.9"></div>
+                <div style="flex:1;height:22px;background:var(--surface-5);border-radius:3px 3px 0 0"></div>
+              </div>
+              <!-- Tue: peak 56, off 22 -->
+              <div style="flex:1;display:flex;align-items:flex-end;gap:3px">
+                <div style="flex:1;height:56px;background:var(--oebb-blue-bright);border-radius:3px 3px 0 0;opacity:0.9"></div>
+                <div style="flex:1;height:22px;background:var(--surface-5);border-radius:3px 3px 0 0"></div>
+              </div>
+              <!-- Wed (yesterday, highlighted): peak 60, off 26 -->
+              <div style="flex:1;display:flex;align-items:flex-end;gap:3px">
+                <div style="flex:1;height:60px;background:var(--oebb-blue-bright);border-radius:3px 3px 0 0;opacity:0.9;outline:1px solid var(--blue-accent)"></div>
+                <div style="flex:1;height:26px;background:var(--surface-5);border-radius:3px 3px 0 0;outline:1px solid var(--blue-accent)"></div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:4px">
+              <div style="flex:1;font-size:9px;color:var(--text-muted);text-align:center">Thu</div>
+              <div style="flex:1;font-size:9px;color:var(--red);text-align:center;font-weight:700">Fri</div>
+              <div style="flex:1;font-size:9px;color:var(--text-muted);text-align:center">Sat</div>
+              <div style="flex:1;font-size:9px;color:var(--text-muted);text-align:center">Sun</div>
+              <div style="flex:1;font-size:9px;color:var(--text-muted);text-align:center">Mon</div>
+              <div style="flex:1;font-size:9px;color:var(--text-muted);text-align:center">Tue</div>
+              <div style="flex:1;font-size:9px;color:var(--blue-accent);text-align:center;font-weight:700">Wed ◀</div>
+            </div>
+            <div style="display:flex;gap:16px;margin-top:12px">
+              <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-secondary)"><div style="width:12px;height:8px;border-radius:2px;background:var(--oebb-blue-bright)"></div> Peak hour</div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-secondary)"><div style="width:12px;height:8px;border-radius:2px;background:var(--surface-5)"></div> Off-peak</div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-secondary)"><div style="width:12px;height:8px;border-radius:2px;background:var(--red)"></div> Over capacity</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dash-wrap" style="margin-top:16px">
+  <div class="annotation">
+    <div class="annotation-num">3</div>
+    <div class="annotation-text"><strong>Exceptions first, not raw data.</strong> Claudia opens the Analytics tab and sees 3 red services immediately — she doesn't scan 89 rows. The Conrad escalation is visually linked to the relevant service with the 7-day trend already attached. One click adds it to the capacity review queue. Morning review takes under 10 minutes.</div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════ -->
+<!-- SCREEN 4 — HAILO-8 HEALTH · FLEET OVERVIEW        -->
+<!-- ══════════════════════════════════════════════════ -->
+<div class="section-divider">
+  <div class="sdl"></div><div class="sdn">4</div>
+  <div class="sdp">Hailo-8 Health · fleet device status · Claudia trust view + Roland technical drill-down</div>
+  <div class="sdl"></div>
+</div>
+
+<div class="dash-wrap">
+  <div class="dash-frame-label">SCREEN 4A — HAILO-8 HEALTH · FLEET OVERVIEW (Claudia's trust view)</div>
+  <div class="dash">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-logo">
+          <img src="../current-portal-design/Logos & Symbole/Logos railnet/OeBB_railnet.png" alt="ÖBB railnet">
+          <div class="topbar-divider"></div>
+          <div class="topbar-product">Passenger Intelligence</div>
+        </div>
+        <div class="topbar-nav">
+          <div class="nav-item">Live Fleet</div>
+          <div class="nav-item">Analytics</div>
+          <div class="nav-item">Escalations <span class="nav-badge">1</span></div>
+          <div class="nav-item active">Hailo-8 Health</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-time">09:48 · Wed 14 May</div>
+        <div class="topbar-user"><div class="avatar">CW</div> Claudia W.</div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <div class="stat-pill"><div class="stat-dot green"></div> <span class="stat-val">29</span>&nbsp;devices healthy</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill"><div class="stat-dot amber"></div> <span class="stat-val">1</span>&nbsp;camera feed lost</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill"><div class="stat-dot red"></div> <span class="stat-val">1</span>&nbsp;device offline</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill">Model v2.4.1 · <span class="stat-val">31/31</span>&nbsp;units current</div>
+      <div class="alert-chip" style="background:var(--red-dim);border-color:var(--red);color:var(--red)">⚠ R5001C-031 offline · data gap</div>
+    </div>
+    <div class="dash-body">
+      <!-- sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-header"><div class="sidebar-title">Devices</div><div class="sidebar-count">31 units</div></div>
+        <div class="sidebar-filter">
+          <div class="filter-chip active">All</div>
+          <div class="filter-chip">⚠ Issues</div>
+        </div>
+        <div class="train-list">
+          <!-- offline -->
+          <div class="train-item alert">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--red);box-shadow:0 0 5px var(--red);flex-shrink:0"></div>
+            <div class="train-occ-mini">
+              <div class="train-id">R5001C-031</div>
+              <div class="train-route">Offline · no data · depot</div>
+            </div>
+          </div>
+          <!-- camera fault -->
+          <div class="train-item" style="border-left:2px solid var(--amber)">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--amber);box-shadow:0 0 5px var(--amber);flex-shrink:0"></div>
+            <div class="train-occ-mini">
+              <div class="train-id">R5001C-017</div>
+              <div class="train-route">Camera C3 feed lost</div>
+            </div>
+          </div>
+          <!-- healthy -->
+          <div class="train-item selected">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></div>
+            <div class="train-occ-mini"><div class="train-id">R5001C-003</div><div class="train-route">All cameras · 18ms latency</div></div>
+          </div>
+          <div class="train-item">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></div>
+            <div class="train-occ-mini"><div class="train-id">R5001C-008</div><div class="train-route">All cameras · 21ms latency</div></div>
+          </div>
+          <div class="train-item">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></div>
+            <div class="train-occ-mini"><div class="train-id">R5001C-009</div><div class="train-route">All cameras · 17ms latency</div></div>
+          </div>
+          <div class="train-item">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></div>
+            <div class="train-occ-mini"><div class="train-id">R5001C-012</div><div class="train-route">All cameras · 19ms latency</div></div>
+          </div>
+          <div class="train-item">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></div>
+            <div class="train-occ-mini"><div class="train-id">R5001C-019</div><div class="train-route">All cameras · 22ms latency</div></div>
+          </div>
+        </div>
+      </div>
+      <!-- main -->
+      <div class="main">
+        <div class="tab-bar">
+          <div class="tab active">Device status</div>
+          <div class="tab">Camera feeds</div>
+          <div class="tab">Model versions</div>
+          <div class="tab">Uptime history</div>
+          <div class="tab">Alerts log</div>
+        </div>
+        <div class="content">
+          <!-- KPI row -->
+          <div class="kpi-row">
+            <div class="kpi-card green-card">
+              <div class="kpi-label">Devices healthy</div>
+              <div class="kpi-val">29</div>
+              <div class="kpi-sub">of 31 · inference running</div>
+            </div>
+            <div class="kpi-card red-card">
+              <div class="kpi-label">Device offline</div>
+              <div class="kpi-val">1</div>
+              <div class="kpi-sub">R5001C-031 · no heartbeat 4h 12m</div>
+            </div>
+            <div class="kpi-card amber-card">
+              <div class="kpi-label">Camera feed lost</div>
+              <div class="kpi-val">1</div>
+              <div class="kpi-sub">R5001C-017 · coach C3 · 23 min</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Fleet avg latency</div>
+              <div class="kpi-val" style="color:var(--green)">18ms</div>
+              <div class="kpi-sub">model v2.4.1 · all units current</div>
+            </div>
+          </div>
+
+          <!-- Claudia data trust notice -->
+          <div style="background:var(--amber-dim);border:1px solid var(--amber);border-radius:10px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
+            <div style="font-size:18px;flex-shrink:0">⚠</div>
+            <div>
+              <div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:3px">Occupancy data for R5001C-017 coach C3 is incomplete</div>
+              <div style="font-size:11px;color:var(--text-secondary)">Camera feed lost at 09:25. Hailo-8 is running but coach C3 occupancy reads as 0 — treat as unreliable. Coaches C1, C2, C4–C6 unaffected. Roland has been notified.</div>
+            </div>
+          </div>
+
+          <!-- Fleet device grid -->
+          <div class="sec-heading">All Hailo-8 devices — fleet status <div class="sec-action">Export report ↗</div></div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:20px">
+
+            <!-- Offline -->
+            <div style="background:var(--red-dim);border:1px solid var(--red);border-radius:10px;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div style="font-size:12px;font-weight:800;color:var(--text-primary)">R5001C-031</div>
+                <div style="font-size:9px;font-weight:700;background:var(--red-dim);border:1px solid var(--red);color:var(--red);padding:2px 6px;border-radius:4px;text-transform:uppercase">Offline</div>
+              </div>
+              <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px">Depot · no heartbeat</div>
+              <div style="font-size:10px;color:var(--text-muted)">Last seen: 05:36 · 4h 12m ago</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Cameras: unknown</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Model: last v2.4.1</div>
+            </div>
+
+            <!-- Camera fault -->
+            <div style="background:var(--amber-dim);border:1px solid var(--amber);border-radius:10px;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div style="font-size:12px;font-weight:800;color:var(--text-primary)">R5001C-017</div>
+                <div style="font-size:9px;font-weight:700;background:var(--amber-dim);border:1px solid var(--amber);color:var(--amber);padding:2px 6px;border-radius:4px;text-transform:uppercase">Degraded</div>
+              </div>
+              <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px">Innsbruck→Wien · in service</div>
+              <div style="font-size:10px;color:var(--amber)">⚠ Camera C3 feed lost · 09:25</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">5/6 cameras active · 21ms</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Model: v2.4.1 ✓</div>
+            </div>
+
+            <!-- Healthy units (repeated pattern) -->
+            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div style="font-size:12px;font-weight:800;color:var(--text-primary)">R5001C-003</div>
+                <div style="font-size:9px;font-weight:700;background:var(--green-dim);border:1px solid var(--green);color:var(--green);padding:2px 6px;border-radius:4px;text-transform:uppercase">Healthy</div>
+              </div>
+              <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px">Wien→Salzburg · in service</div>
+              <div style="font-size:10px;color:var(--green)">6/6 cameras active</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Latency: 18ms · conf. 96%</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Model: v2.4.1 ✓</div>
+            </div>
+
+            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div style="font-size:12px;font-weight:800;color:var(--text-primary)">R5001C-008</div>
+                <div style="font-size:9px;font-weight:700;background:var(--green-dim);border:1px solid var(--green);color:var(--green);padding:2px 6px;border-radius:4px;text-transform:uppercase">Healthy</div>
+              </div>
+              <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px">Wien→München · in service</div>
+              <div style="font-size:10px;color:var(--green)">6/6 cameras active</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Latency: 21ms · conf. 94%</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Model: v2.4.1 ✓</div>
+            </div>
+
+            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div style="font-size:12px;font-weight:800;color:var(--text-primary)">R5001C-009</div>
+                <div style="font-size:9px;font-weight:700;background:var(--green-dim);border:1px solid var(--green);color:var(--green);padding:2px 6px;border-radius:4px;text-transform:uppercase">Healthy</div>
+              </div>
+              <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px">Graz→Wien · in service</div>
+              <div style="font-size:10px;color:var(--green)">6/6 cameras active</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Latency: 17ms · conf. 97%</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Model: v2.4.1 ✓</div>
+            </div>
+
+            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div style="font-size:12px;font-weight:800;color:var(--text-primary)">R5001C-012</div>
+                <div style="font-size:9px;font-weight:700;background:var(--green-dim);border:1px solid var(--green);color:var(--green);padding:2px 6px;border-radius:4px;text-transform:uppercase">Healthy</div>
+              </div>
+              <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px">Linz→Villach · in service</div>
+              <div style="font-size:10px;color:var(--green)">6/6 cameras active</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Latency: 19ms · conf. 95%</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Model: v2.4.1 ✓</div>
+            </div>
+
+            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div style="font-size:12px;font-weight:800;color:var(--text-primary)">R5001C-019</div>
+                <div style="font-size:9px;font-weight:700;background:var(--green-dim);border:1px solid var(--green);color:var(--green);padding:2px 6px;border-radius:4px;text-transform:uppercase">Healthy</div>
+              </div>
+              <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px">Salzburg→Wien · in service</div>
+              <div style="font-size:10px;color:var(--green)">6/6 cameras active</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Latency: 22ms · conf. 93%</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Model: v2.4.1 ✓</div>
+            </div>
+
+            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div style="font-size:12px;font-weight:800;color:var(--text-primary)">R5001C-021</div>
+                <div style="font-size:9px;font-weight:700;background:var(--green-dim);border:1px solid var(--green);color:var(--green);padding:2px 6px;border-radius:4px;text-transform:uppercase">Healthy</div>
+              </div>
+              <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px">Salzburg→Bregenz · in service</div>
+              <div style="font-size:10px;color:var(--green)">6/6 cameras active</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Latency: 20ms · conf. 95%</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Model: v2.4.1 ✓</div>
+            </div>
+
+            <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;opacity:0.5">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div style="font-size:12px;font-weight:800;color:var(--text-primary)">R5001C-024</div>
+                <div style="font-size:9px;font-weight:700;background:var(--surface-4);border:1px solid var(--border-bright);color:var(--text-muted);padding:2px 6px;border-radius:4px;text-transform:uppercase">Depot</div>
+              </div>
+              <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px">Not in service</div>
+              <div style="font-size:10px;color:var(--green)">6/6 cameras standby</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Heartbeat OK · idle</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Model: v2.4.1 ✓</div>
+            </div>
+
+            <!-- +23 more placeholder -->
+            <div style="background:var(--surface-2);border:1px dashed var(--border-bright);border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:center">
+              <div style="text-align:center">
+                <div style="font-size:18px;color:var(--text-muted);margin-bottom:4px">+22</div>
+                <div style="font-size:10px;color:var(--text-muted)">more healthy</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dash-wrap" style="margin-top:16px">
+  <div class="annotation">
+    <div class="annotation-num">4</div>
+    <div class="annotation-text"><strong>Claudia's trust layer:</strong> The amber banner at the top of the occupancy data tells Claudia immediately that one coach on one train is producing unreliable data — and why. She doesn't need to understand Hailo-8 internals; she just needs to know which numbers to trust. Roland gets the technical detail in Screen 4B.</div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════ -->
+<!-- SCREEN 4B — HAILO-8 HEALTH · PER-DEVICE (Roland) -->
+<!-- ══════════════════════════════════════════════════ -->
+<div class="section-divider">
+  <div class="sdl"></div><div class="sdn" style="background:var(--oebb-red)">4B</div>
+  <div class="sdp">Hailo-8 Health · R5001C-017 drill-down · Roland's technical view · camera fault + actions</div>
+  <div class="sdl"></div>
+</div>
+
+<div class="dash-wrap">
+  <div class="dash-frame-label">SCREEN 4B — HAILO-8 DEVICE DETAIL · R5001C-017 (Roland's view)</div>
+  <div class="dash">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-logo">
+          <img src="../current-portal-design/Logos & Symbole/Logos railnet/OeBB_railnet.png" alt="ÖBB railnet">
+          <div class="topbar-divider"></div>
+          <div class="topbar-product">Passenger Intelligence</div>
+        </div>
+        <div class="topbar-nav">
+          <div class="nav-item">Live Fleet</div>
+          <div class="nav-item">Analytics</div>
+          <div class="nav-item">Escalations <span class="nav-badge">1</span></div>
+          <div class="nav-item active">Hailo-8 Health</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-time">09:48 · Wed 14 May</div>
+        <div class="topbar-user"><div class="avatar">RK</div> Roland K.</div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <div class="stat-pill"><div class="stat-dot amber"></div> Viewing: <strong style="color:var(--text-primary);margin-left:4px">R5001C-017</strong></div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill">Hailo-8 · online · <span class="stat-val">21ms</span> avg latency</div>
+      <div class="stat-sep"></div>
+      <div class="stat-pill"><div class="stat-dot amber"></div> Camera C3 feed lost · 09:25 · <span class="stat-val">23 min</span></div>
+      <div class="alert-chip">⚠ Occupancy data gap on C3</div>
+    </div>
+    <div class="dash-body">
+      <div class="sidebar">
+        <div class="sidebar-header"><div class="sidebar-title">Devices</div><div class="sidebar-count">31 units</div></div>
+        <div class="sidebar-filter">
+          <div class="filter-chip active">All</div>
+          <div class="filter-chip">⚠ Issues</div>
+        </div>
+        <div class="train-list">
+          <div class="train-item alert"><div style="width:6px;height:6px;border-radius:50%;background:var(--red);box-shadow:0 0 5px var(--red);flex-shrink:0"></div><div class="train-occ-mini"><div class="train-id">R5001C-031</div><div class="train-route">Offline · depot · 4h 12m</div></div></div>
+          <div class="train-item selected" style="border-left:2px solid var(--amber)"><div style="width:6px;height:6px;border-radius:50%;background:var(--amber);box-shadow:0 0 5px var(--amber);flex-shrink:0"></div><div class="train-occ-mini"><div class="train-id">R5001C-017</div><div class="train-route">Camera C3 lost · 09:25</div></div></div>
+          <div class="train-item"><div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></div><div class="train-occ-mini"><div class="train-id">R5001C-003</div><div class="train-route">All cameras · 18ms</div></div></div>
+          <div class="train-item"><div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></div><div class="train-occ-mini"><div class="train-id">R5001C-008</div><div class="train-route">All cameras · 21ms</div></div></div>
+          <div class="train-item"><div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></div><div class="train-occ-mini"><div class="train-id">R5001C-009</div><div class="train-route">All cameras · 17ms</div></div></div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="tab-bar">
+          <div class="tab active">Device overview</div>
+          <div class="tab">Camera feeds <span class="tab-badge">1</span></div>
+          <div class="tab">Inference metrics</div>
+          <div class="tab">Model</div>
+          <div class="tab">Uptime log</div>
+        </div>
+        <div class="content">
+
+          <!-- Device header -->
+          <div class="train-hero" style="margin-bottom:16px">
+            <div class="train-hero-top">
+              <div>
+                <div class="train-hero-id">Hailo-8 M.2 · R5001C-017</div>
+                <div class="train-hero-route">Innsbruck Hbf → Wien Hbf · IC 712 · Device serial HLO-017-004 · Installed 2025-11-03</div>
+                <div class="train-hero-badges">
+                  <div class="badge badge-amber">⚠ Camera C3 lost</div>
+                  <div class="badge badge-green">Device online</div>
+                  <div class="badge badge-green">Model v2.4.1</div>
+                  <div class="badge badge-blue">21ms avg latency</div>
+                </div>
+              </div>
+              <div class="train-hero-stats">
+                <div class="ths"><div class="ths-val" style="color:var(--green)">5/6</div><div class="ths-label">cameras active</div></div>
+                <div class="ths"><div class="ths-val" style="color:var(--blue-accent)">21ms</div><div class="ths-label">inference latency</div></div>
+                <div class="ths"><div class="ths-val" style="color:var(--green)">94%</div><div class="ths-label">avg confidence</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Camera feed status grid -->
+          <div class="sec-heading">Camera feeds — 6 cameras per train</div>
+          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:20px">
+
+            <!-- C1 vestibule — OK -->
+            <div style="background:var(--surface-2);border:1px solid var(--green);border-radius:10px;padding:12px 10px;text-align:center">
+              <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Coach 1</div>
+              <div style="font-size:22px;margin-bottom:4px">📹</div>
+              <div style="font-size:10px;font-weight:700;color:var(--green)">Live</div>
+              <div style="font-size:9px;color:var(--text-muted);margin-top:3px">Vestibule · 24fps</div>
+              <div style="font-size:9px;color:var(--text-muted)">Conf. 96%</div>
+            </div>
+            <!-- C2 — OK -->
+            <div style="background:var(--surface-2);border:1px solid var(--green);border-radius:10px;padding:12px 10px;text-align:center">
+              <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Coach 2</div>
+              <div style="font-size:22px;margin-bottom:4px">📹</div>
+              <div style="font-size:10px;font-weight:700;color:var(--green)">Live</div>
+              <div style="font-size:9px;color:var(--text-muted);margin-top:3px">Vestibule · 24fps</div>
+              <div style="font-size:9px;color:var(--text-muted)">Conf. 94%</div>
+            </div>
+            <!-- C3 — FAULT -->
+            <div style="background:var(--amber-dim);border:1px solid var(--amber);border-radius:10px;padding:12px 10px;text-align:center">
+              <div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Coach 3</div>
+              <div style="font-size:22px;margin-bottom:4px">📷</div>
+              <div style="font-size:10px;font-weight:700;color:var(--amber)">Feed lost</div>
+              <div style="font-size:9px;color:var(--amber);margin-top:3px">Since 09:25 · 23 min</div>
+              <div style="font-size:9px;color:var(--text-muted)">Last frame: 09:24:58</div>
+            </div>
+            <!-- C4 — OK -->
+            <div style="background:var(--surface-2);border:1px solid var(--green);border-radius:10px;padding:12px 10px;text-align:center">
+              <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Coach 4</div>
+              <div style="font-size:22px;margin-bottom:4px">📹</div>
+              <div style="font-size:10px;font-weight:700;color:var(--green)">Live</div>
+              <div style="font-size:9px;color:var(--text-muted);margin-top:3px">Vestibule · 24fps</div>
+              <div style="font-size:9px;color:var(--text-muted)">Conf. 93%</div>
+            </div>
+            <!-- C5 — OK -->
+            <div style="background:var(--surface-2);border:1px solid var(--green);border-radius:10px;padding:12px 10px;text-align:center">
+              <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Coach 5</div>
+              <div style="font-size:22px;margin-bottom:4px">📹</div>
+              <div style="font-size:10px;font-weight:700;color:var(--green)">Live</div>
+              <div style="font-size:9px;color:var(--text-muted);margin-top:3px">Vestibule · 24fps</div>
+              <div style="font-size:9px;color:var(--text-muted)">Conf. 95%</div>
+            </div>
+            <!-- C6 — OK -->
+            <div style="background:var(--surface-2);border:1px solid var(--green);border-radius:10px;padding:12px 10px;text-align:center">
+              <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Coach 6</div>
+              <div style="font-size:22px;margin-bottom:4px">📹</div>
+              <div style="font-size:10px;font-weight:700;color:var(--green)">Live</div>
+              <div style="font-size:9px;color:var(--text-muted);margin-top:3px">Vestibule · 24fps</div>
+              <div style="font-size:9px;color:var(--text-muted)">Conf. 92%</div>
+            </div>
+          </div>
+
+          <!-- Fault detail + actions -->
+          <div style="display:flex;gap:12px;margin-bottom:16px">
+            <!-- Fault detail -->
+            <div style="flex:1;background:var(--amber-dim);border:1px solid var(--amber);border-radius:10px;padding:16px 18px">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+                <div style="width:32px;height:32px;border-radius:8px;background:var(--amber-dim);border:1px solid var(--amber);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">📷</div>
+                <div>
+                  <div style="font-size:13px;font-weight:700;color:var(--amber)">Camera C3 — feed lost</div>
+                  <div style="font-size:11px;color:var(--text-secondary);margin-top:2px">No frames received since 09:24:58 · Hailo-8 device itself is online and running</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:16px;margin-bottom:12px">
+                <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px">Duration</div><div style="font-size:14px;font-weight:800;color:var(--amber)">23 min</div></div>
+                <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px">Last frame</div><div style="font-size:14px;font-weight:800;color:var(--text-primary)">09:24:58</div></div>
+                <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px">Likely cause</div><div style="font-size:14px;font-weight:800;color:var(--text-primary)">Cable / connector</div></div>
+              </div>
+              <div style="font-size:11px;color:var(--text-secondary);background:var(--surface-0);border-radius:6px;padding:8px 12px;line-height:1.6">
+                The Hailo-8 is receiving no frames from the Coach 3 camera. The device has not crashed — inference continues on coaches 1, 2, 4, 5, 6. This is likely a camera cable or connector fault, not a Hailo-8 hardware failure. Inspect camera RTSP connection at next depot stop (Wien Hbf · arr 11:22).
+              </div>
+            </div>
+
+            <!-- Actions panel -->
+            <div style="width:260px;flex-shrink:0;background:var(--surface-2);border:1px solid var(--border-bright);border-radius:10px;padding:16px 18px">
+              <div class="sec-heading" style="margin-bottom:14px">Actions</div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <button style="background:var(--oebb-blue-bright);color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:12px;font-weight:700;text-align:left;cursor:pointer;display:flex;align-items:center;gap:8px">
+                  <span>📋</span> Log fault for depot inspection
+                </button>
+                <button style="background:var(--surface-4);color:var(--text-secondary);border:1px solid var(--border-bright);border-radius:8px;padding:10px 14px;font-size:12px;font-weight:700;text-align:left;cursor:pointer;display:flex;align-items:center;gap:8px">
+                  <span>🔄</span> Restart camera feed (remote)
+                </button>
+                <button style="background:var(--surface-4);color:var(--text-secondary);border:1px solid var(--border-bright);border-radius:8px;padding:10px 14px;font-size:12px;font-weight:700;text-align:left;cursor:pointer;display:flex;align-items:center;gap:8px">
+                  <span>📊</span> View inference metrics
+                </button>
+                <button style="background:var(--surface-4);color:var(--text-secondary);border:1px solid var(--border-bright);border-radius:8px;padding:10px 14px;font-size:12px;font-weight:700;text-align:left;cursor:pointer;display:flex;align-items:center;gap:8px">
+                  <span>📩</span> Notify maintenance team
+                </button>
+              </div>
+              <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+                <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Next depot opportunity</div>
+                <div style="font-size:13px;font-weight:700;color:var(--text-primary)">Wien Hbf · arr 11:22</div>
+                <div style="font-size:10px;color:var(--text-muted);margin-top:2px">1h 34m from now</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Uptime sparkline -->
+          <div class="sec-heading">Device uptime — last 7 days</div>
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+            <div style="display:flex;gap:3px;height:20px;align-items:stretch;margin-bottom:6px">
+              <!-- 7 days × 24 segments each — simplified as coloured blocks per day -->
+              <div style="flex:1;background:var(--green);border-radius:2px;opacity:0.85" title="Thu · 100% uptime"></div>
+              <div style="flex:1;background:var(--green);border-radius:2px;opacity:0.85" title="Fri · 100%"></div>
+              <div style="flex:1;background:var(--green);border-radius:2px;opacity:0.85" title="Sat · 100%"></div>
+              <div style="flex:1;background:var(--green);border-radius:2px;opacity:0.85" title="Sun · 100%"></div>
+              <div style="flex:1;background:var(--green);border-radius:2px;opacity:0.85" title="Mon · 100%"></div>
+              <div style="flex:1;background:var(--green);border-radius:2px;opacity:0.85" title="Tue · 100%"></div>
+              <!-- Wed — mostly green, small amber gap -->
+              <div style="flex:1;display:flex;gap:1px;border-radius:2px;overflow:hidden">
+                <div style="flex:22;background:var(--green);opacity:0.85"></div>
+                <div style="flex:2;background:var(--amber)"></div>
+              </div>
+            </div>
+            <div style="display:flex;gap:0">
+              <div style="flex:1;font-size:9px;color:var(--text-muted);text-align:center">Thu</div>
+              <div style="flex:1;font-size:9px;color:var(--text-muted);text-align:center">Fri</div>
+              <div style="flex:1;font-size:9px;color:var(--text-muted);text-align:center">Sat</div>
+              <div style="flex:1;font-size:9px;color:var(--text-muted);text-align:center">Sun</div>
+              <div style="flex:1;font-size:9px;color:var(--text-muted);text-align:center">Mon</div>
+              <div style="flex:1;font-size:9px;color:var(--text-muted);text-align:center">Tue</div>
+              <div style="flex:1;font-size:9px;color:var(--blue-accent);text-align:center;font-weight:700">Wed ◀</div>
+            </div>
+            <div style="display:flex;gap:16px;margin-top:10px">
+              <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-secondary)"><div style="width:12px;height:8px;border-radius:2px;background:var(--green)"></div> Device + all cameras healthy</div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-secondary)"><div style="width:12px;height:8px;border-radius:2px;background:var(--amber)"></div> Degraded (camera fault / partial)</div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-secondary)"><div style="width:12px;height:8px;border-radius:2px;background:var(--red)"></div> Device offline</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dash-wrap" style="margin-top:16px">
+  <div class="annotation">
+    <div class="annotation-num">5</div>
+    <div class="annotation-text"><strong>Two failure modes, clearly separated:</strong> The device is online but the camera cable has failed — Hailo-8 is running inference on 5/6 coaches. Roland can see immediately that this is a camera connector fault, not a device failure. The remote restart action and depot logging actions mean he doesn't need SSH or a phone call to the train. The uptime log gives him a 7-day picture of reliability per device.</div>
+  </div>
+  <div class="annotation">
+    <div class="annotation-num">6</div>
+    <div class="annotation-text"><strong>Operations and maintenance built in:</strong> Model version tracking (all 31 units on v2.4.1), per-camera live/dead status, inference latency and confidence per device, fault logging direct to depot queue, and remote restart — none of this comes from the Hailo-8 hardware out of the box. This is the Nomad platform's operations layer on top of the edge device.</div>
+  </div>
+</div>
+
+<div style="max-width:1280px;margin:48px auto 0;padding-top:24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+  <div style="font-size:11px;color:var(--text-muted)">ÖBB Smart Rail — Passenger Intelligence · Hailo-8 Dashboard · Dark theme · Phase 4 UX Design · 2026-05-14</div>
+  <div style="font-size:11px;color:var(--text-muted)">Nomad Digital · Confidential</div>
+</div>
+
+</body>
+</html>

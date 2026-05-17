@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control Centre Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #080814; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; font-size: 13px; }
+  h2 { font-size: 16px; color: #fff; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 12px; margin-bottom: 20px; }
+
+  /* Top bar */
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #0d0d1f; border-bottom: 1px solid #1e1e3a;
+    padding: 10px 16px; border-radius: 10px 10px 0 0; margin-bottom: 0;
+  }
+  .topbar .brand { font-size: 14px; font-weight: 700; color: #4a9eff; }
+  .topbar .context { font-size: 11px; color: #555; }
+  .topbar .live { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #00c49f; }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #00c49f; animation: blink 1.5s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* Dashboard grid */
+  .dashboard {
+    background: #0d0d1f;
+    border: 1px solid #1e1e3a;
+    border-radius: 0 0 10px 10px;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    grid-template-rows: auto auto;
+    gap: 14px;
+  }
+
+  /* KPI strip */
+  .kpi-strip {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+  }
+  .kpi-card {
+    background: #12122a;
+    border-radius: 8px;
+    padding: 12px 14px;
+    border-top: 3px solid transparent;
+  }
+  .kpi-card.blue { border-color: #4a9eff; }
+  .kpi-card.green { border-color: #00c49f; }
+  .kpi-card.amber { border-color: #ffaa00; }
+  .kpi-card.red { border-color: #ef4444; }
+  .kpi-card.purple { border-color: #a855f7; }
+  .kpi-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .kpi-value { font-size: 24px; font-weight: 700; color: #fff; }
+  .kpi-sub { font-size: 10px; color: #555; margin-top: 3px; }
+
+  /* Fleet map */
+  .fleet-panel {
+    background: #12122a;
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .panel-title {
+    font-size: 11px; font-weight: 700; color: #555;
+    text-transform: uppercase; letter-spacing: 1.5px;
+    margin-bottom: 12px;
+  }
+
+  .train-card {
+    background: #0d0d20;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    border-left: 4px solid transparent;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .train-card:hover { background: #151530; }
+  .train-card.ok { border-color: #00c49f; }
+  .train-card.warn { border-color: #ffaa00; }
+  .train-card.alert { border-color: #ef4444; }
+
+  .train-card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px;
+  }
+  .train-name { font-size: 13px; font-weight: 700; color: #fff; }
+  .train-route { font-size: 10px; color: #555; }
+  .train-badge {
+    font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700;
+  }
+  .train-badge.ok { background: #0a2a14; color: #00c49f; }
+  .train-badge.warn { background: #2a1e00; color: #ffaa00; }
+  .train-badge.alert { background: #2a0a0a; color: #ef4444; }
+
+  /* Mini coach bar */
+  .mini-coaches { display: flex; gap: 3px; }
+  .mini-coach {
+    flex: 1; height: 8px; border-radius: 3px;
+  }
+  .mini-coach.green { background: #00c49f44; border: 1px solid #00c49f; }
+  .mini-coach.amber { background: #ffaa0044; border: 1px solid #ffaa00; }
+  .mini-coach.red { background: #ef444444; border: 1px solid #ef4444; }
+
+  .train-meta {
+    display: flex; justify-content: space-between; margin-top: 6px;
+    font-size: 10px; color: #555;
+  }
+
+  /* Right column */
+  .right-col {
+    display: flex; flex-direction: column; gap: 14px;
+  }
+
+  /* Incident feed */
+  .incident-feed {
+    background: #12122a;
+    border-radius: 10px;
+    padding: 14px;
+    flex: 1;
+  }
+  .incident-item {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 8px 0; border-bottom: 1px solid #1a1a2e;
+  }
+  .incident-item:last-child { border-bottom: none; }
+  .inc-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .inc-dot.red { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+  .inc-dot.amber { background: #ffaa00; }
+  .inc-dot.blue { background: #4a9eff; }
+  .inc-dot.purple { background: #a855f7; }
+  .inc-body { flex: 1; }
+  .inc-title { font-size: 12px; color: #ddd; font-weight: 600; }
+  .inc-sub { font-size: 11px; color: #555; margin-top: 2px; }
+  .inc-time { font-size: 10px; color: #444; white-space: nowrap; }
+
+  /* Fault summary */
+  .fault-summary {
+    background: #12122a;
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .fault-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0; border-bottom: 1px solid #1a1a2e;
+    font-size: 12px;
+  }
+  .fault-row:last-child { border-bottom: none; }
+  .fault-row .subsys { color: #888; }
+  .fault-row .count {
+    font-weight: 700; padding: 2px 8px; border-radius: 10px;
+    font-size: 11px;
+  }
+  .fault-row .count.red { background: #2a0a0a; color: #ef4444; }
+  .fault-row .count.amber { background: #2a1e00; color: #ffaa00; }
+  .fault-row .count.green { background: #0a2a14; color: #00c49f; }
+</style>
+</head>
+<body>
+
+<h2>Control Centre Dashboard — Fleet Operations View</h2>
+<p class="subtitle">Web · Landside · Real-time · Both AI services · OEBB Vienna Control</p>
+
+<div class="topbar">
+  <div>
+    <div class="brand">OEBB Smart Rail · Control Centre</div>
+    <div class="context">Vienna Operations · Shift: 06:00–14:00 · Operator: M. Wagner</div>
+  </div>
+  <div class="live"><div class="live-dot"></div> LIVE · Last update 3s ago</div>
+</div>
+
+<div class="dashboard">
+
+  <!-- KPI Strip -->
+  <div class="kpi-strip">
+    <div class="kpi-card blue">
+      <div class="kpi-label">Active Trains</div>
+      <div class="kpi-value">14</div>
+      <div class="kpi-sub">of 18 scheduled</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Avg Occupancy</div>
+      <div class="kpi-value">61%</div>
+      <div class="kpi-sub">↓ 4% vs yesterday</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Active Incidents</div>
+      <div class="kpi-value">3</div>
+      <div class="kpi-sub">2 safety · 1 fault</div>
+    </div>
+    <div class="kpi-card amber">
+      <div class="kpi-label">Overcrowded Coaches</div>
+      <div class="kpi-value">7</div>
+      <div class="kpi-sub">>85% capacity</div>
+    </div>
+    <div class="kpi-card purple">
+      <div class="kpi-label">Fleet Health</div>
+      <div class="kpi-value">81</div>
+      <div class="kpi-sub">↓ 3pts · 2 faults active</div>
+    </div>
+  </div>
+
+  <!-- Fleet train list -->
+  <div class="fleet-panel">
+    <div class="panel-title">Fleet Status · 14 Active Trains</div>
+
+    <div class="train-card alert">
+      <div class="train-card-top">
+        <div>
+          <div class="train-name">RJ 561</div>
+          <div class="train-route">Wien Hbf → Salzburg · Next: Linz 10:12</div>
+        </div>
+        <div class="train-badge alert">⚠ Alert</div>
+      </div>
+      <div class="mini-coaches">
+        <div class="mini-coach green"></div>
+        <div class="mini-coach green"></div>
+        <div class="mini-coach amber"></div>
+        <div class="mini-coach red"></div>
+        <div class="mini-coach amber"></div>
+        <div class="mini-coach green"></div>
+      </div>
+      <div class="train-meta">
+        <span>🧳 Unattended luggage · C4</span>
+        <span>⚠ HVAC fault · C3</span>
+      </div>
+    </div>
+
+    <div class="train-card warn">
+      <div class="train-card-top">
+        <div>
+          <div class="train-name">ICE 724</div>
+          <div class="train-route">Salzburg → Wien · Next: Wels 09:58</div>
+        </div>
+        <div class="train-badge warn">△ Watch</div>
+      </div>
+      <div class="mini-coaches">
+        <div class="mini-coach red"></div>
+        <div class="mini-coach red"></div>
+        <div class="mini-coach amber"></div>
+        <div class="mini-coach amber"></div>
+        <div class="mini-coach green"></div>
+        <div class="mini-coach green"></div>
+      </div>
+      <div class="train-meta">
+        <span>🧍 C1+C2 overcrowded</span>
+        <span>↑ boarding at next stop</span>
+      </div>
+    </div>
+
+    <div class="train-card ok">
+      <div class="train-card-top">
+        <div>
+          <div class="train-name">RJ 847</div>
+          <div class="train-route">Graz → Wien · Next: Bruck 10:34</div>
+        </div>
+        <div class="train-badge ok">✓ Normal</div>
+      </div>
+      <div class="mini-coaches">
+        <div class="mini-coach green"></div>
+        <div class="mini-coach green"></div>
+        <div class="mini-coach green"></div>
+        <div class="mini-coach amber"></div>
+        <div class="mini-coach green"></div>
+        <div class="mini-coach green"></div>
+      </div>
+      <div class="train-meta">
+        <span>Avg 48% · All systems OK</span>
+        <span>On time</span>
+      </div>
+    </div>
+
+    <div class="train-card ok">
+      <div class="train-card-top">
+        <div>
+          <div class="train-name">S7 112</div>
+          <div class="train-route">Floridsdorf → Raasdorf</div>
+        </div>
+        <div class="train-badge ok">✓ Normal</div>
+      </div>
+      <div class="mini-coaches">
+        <div class="mini-coach amber"></div>
+        <div class="mini-coach amber"></div>
+        <div class="mini-coach green"></div>
+        <div class="mini-coach green"></div>
+      </div>
+      <div class="train-meta">
+        <span>Avg 54%</span>
+        <span>All systems OK</span>
+      </div>
+    </div>
+
+    <div style="text-align:center; padding: 8px; font-size: 11px; color: #444;">
+      + 10 more trains · All normal
+    </div>
+
+  </div>
+
+  <!-- Right column -->
+  <div class="right-col">
+
+    <!-- Incident feed -->
+    <div class="incident-feed">
+      <div class="panel-title">Live Incident Feed</div>
+
+      <div class="incident-item">
+        <div class="inc-dot red"></div>
+        <div class="inc-body">
+          <div class="inc-title">🧳 Unattended luggage — RJ 561 C4</div>
+          <div class="inc-sub">AI: 6m 44s stationary · No owner · Conductor notified</div>
+        </div>
+        <div class="inc-time">09:33</div>
+      </div>
+
+      <div class="incident-item">
+        <div class="inc-dot red"></div>
+        <div class="inc-body">
+          <div class="inc-title">🚨 Coach overcrowding — ICE 724 C1</div>
+          <div class="inc-sub">94% capacity · Guidance pushed to portal</div>
+        </div>
+        <div class="inc-time">09:41</div>
+      </div>
+
+      <div class="incident-item">
+        <div class="inc-dot amber"></div>
+        <div class="inc-body">
+          <div class="inc-title">⚠️ HVAC fault — RJ 561 C3</div>
+          <div class="inc-sub">Diag AI: bearing wear · Flag for Salzburg depot</div>
+        </div>
+        <div class="inc-time">09:33</div>
+      </div>
+
+      <div class="incident-item">
+        <div class="inc-dot blue"></div>
+        <div class="inc-body">
+          <div class="inc-title">♿ Wheelchair user — RJ 561 C4</div>
+          <div class="inc-sub">Linz Hbf exit assist needed · Station notified</div>
+        </div>
+        <div class="inc-time">09:38</div>
+      </div>
+
+      <div class="incident-item">
+        <div class="inc-dot purple"></div>
+        <div class="inc-body">
+          <div class="inc-title">🔮 Predicted: HVAC failure — RJ 561</div>
+          <div class="inc-sub">Diag AI: 48–72h window · Work order created</div>
+        </div>
+        <div class="inc-time">09:34</div>
+      </div>
+
+    </div>
+
+    <!-- Fleet fault summary -->
+    <div class="fault-summary">
+      <div class="panel-title">Fleet Fault Summary</div>
+      <div class="fault-row">
+        <span class="subsys">HVAC</span>
+        <span class="count red">2 active</span>
+      </div>
+      <div class="fault-row">
+        <span class="subsys">Brakes</span>
+        <span class="count amber">1 warning</span>
+      </div>
+      <div class="fault-row">
+        <span class="subsys">Doors</span>
+        <span class="count green">Clear</span>
+      </div>
+      <div class="fault-row">
+        <span class="subsys">Traction</span>
+        <span class="count green">Clear</span>
+      </div>
+      <div class="fault-row">
+        <span class="subsys">Passenger Info</span>
+        <span class="count amber">1 warning</span>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<p style="text-align:center; color: #555; font-size: 11px; margin-top: 16px;">Mockup · Web dashboard · 1920×1080 optimised · Let me know what to change in the terminal</p>
+
+</body>
+</html>

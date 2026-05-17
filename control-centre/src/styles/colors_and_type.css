@@ -1,0 +1,265 @@
+/* ============================================================
+   ÖBB Railnet Portal — design tokens
+   ------------------------------------------------------------
+   Drop this file in and reference variables via var(--…).
+   Type ramp is metric-compatible with Verdana / ÖBB Iconic.
+   Webfont: Open Sans (Google Fonts) as a substitute — see README.
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&display=swap");
+
+:root {
+  /* ------------------------------------------------------------------
+     COLOUR — house red + monochrome ramp
+     ------------------------------------------------------------------ */
+  --obb-red:          #E2002A;   /* ÖBB house red — logo, primary CTA */
+  --obb-red-press:    #B70022;   /* pressed / active */
+  --obb-red-tint:     #FCE5E9;   /* 8% red on white — hover wash on secondary */
+  --obb-red-dark:     #8C0019;   /* deep red — only for high-contrast text on tint */
+
+  --obb-ink:          #1F1F20;   /* highest-contrast text */
+  --obb-body:         #383838;   /* body copy */
+  --obb-graphite:     #58585A;   /* dark half of railnet wordmark */
+  --obb-silver:       #9C9E9F;   /* light half of railnet wordmark, secondary text */
+  --obb-mute:         #B8B9BA;   /* disabled labels, captions */
+  --obb-line:         #E1E1E2;   /* hairline dividers / card borders */
+  --obb-fog:          #E8E8E8;   /* subtle fill */
+  --obb-bg:           #F5F5F5;   /* app background */
+  --obb-surface:      #FFFFFF;   /* card surface */
+
+  --obb-success:      #1F8A4C;   /* status — connected */
+  --obb-warning:      #C9871F;   /* status — degraded */
+  --obb-info:         #1F6BC9;   /* status — informational */
+
+  /* Semantic aliases (use these in component CSS) */
+  --fg-1:             var(--obb-ink);
+  --fg-2:             var(--obb-body);
+  --fg-3:             var(--obb-graphite);
+  --fg-4:             var(--obb-silver);
+  --fg-mute:          var(--obb-mute);
+  --fg-on-red:        #FFFFFF;
+  --fg-link:          var(--obb-red);
+
+  --bg-app:           var(--obb-bg);
+  --bg-surface:       var(--obb-surface);
+  --bg-elev:          #FFFFFF;
+  --bg-tint:          var(--obb-fog);
+
+  --border-line:      var(--obb-line);
+  --border-strong:    var(--obb-graphite);
+  --border-focus:     var(--obb-red);
+
+  /* ------------------------------------------------------------------
+     TYPOGRAPHY
+     ------------------------------------------------------------------ */
+  --font-display:  "Open Sans", "Verdana", "Segoe UI", system-ui, sans-serif;
+  --font-body:     "Open Sans", "Verdana", "Segoe UI", system-ui, sans-serif;
+  --font-mono:     ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /* Type scale — tuned for captive-portal phone viewport */
+  --fs-display:    28px;   /* welcome / success titles */
+  --fs-h1:         22px;
+  --fs-h2:         18px;
+  --fs-h3:         16px;
+  --fs-body:       15px;   /* default paragraph */
+  --fs-small:      13px;
+  --fs-micro:      12px;
+  --fs-button:     15px;
+
+  --lh-tight:      1.15;
+  --lh-snug:       1.30;
+  --lh-body:       1.50;
+  --lh-loose:      1.65;
+
+  --fw-regular:    400;
+  --fw-medium:     500;
+  --fw-semibold:   600;
+  --fw-bold:       700;
+  --fw-heavy:      800;
+
+  --ls-tight:      -0.01em;
+  --ls-normal:     0;
+  --ls-wide:       0.04em;
+  --ls-caps:       0.08em;
+
+  /* ------------------------------------------------------------------
+     SPACING (8 pt grid)
+     ------------------------------------------------------------------ */
+  --space-0:   0;
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
+
+  /* ------------------------------------------------------------------
+     RADII
+     ------------------------------------------------------------------ */
+  --radius-xs:    4px;
+  --radius-sm:    6px;
+  --radius-md:    8px;    /* buttons, inputs */
+  --radius-lg:    12px;   /* cards */
+  --radius-xl:    16px;
+  --radius-pill:  999px;
+
+  /* ------------------------------------------------------------------
+     ELEVATION
+     ------------------------------------------------------------------ */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04),
+                 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-pop:  0 6px 24px rgba(0, 0, 0, 0.10),
+                 0 2px 6px rgba(0, 0, 0, 0.06);
+  --shadow-cta:  0 2px 6px rgba(226, 0, 42, 0.30);
+
+  /* ------------------------------------------------------------------
+     MOTION
+     ------------------------------------------------------------------ */
+  --ease-out:     cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in-out:  cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast:     100ms;
+  --dur-base:     240ms;
+  --dur-slow:     280ms;
+
+  /* ------------------------------------------------------------------
+     LAYOUT
+     ------------------------------------------------------------------ */
+  --portal-width:     390px;   /* mobile captive-portal mini-browser target */
+  --portal-pad:       20px;
+  --portal-radius:    16px;
+
+  /* ==================================================================
+     DARK / OPERATIONS MODE
+     ------------------------------------------------------------------
+     Used by ÖBB Smart Rail — Conductor / Driver / Technician / Bistro
+     apps and the Control-Centre web dashboards. These run in trains
+     and 24/7 operations rooms, so the palette is AMOLED-friendly
+     (true-black-ish base) with a 6-step graphite surface ramp and
+     a deep ÖBB-blue accent next to the house red.
+     ================================================================== */
+  --obb-blue:           #073D6E;    /* ÖBB house blue — primary chrome on ops products */
+  --obb-blue-mid:       #0A5298;
+  --obb-blue-bright:    #1A6FBF;
+  --obb-blue-accent:    #4080D0;    /* mid-bright accent — chat AI, info links */
+  --obb-blue-dim:       rgba(64,128,208,0.10);
+
+  /* Surface ramp — 0 (deepest) → 5 (highest elevation) */
+  --obb-surface-0:      #0E1117;
+  --obb-surface-1:      #141820;
+  --obb-surface-2:      #191E28;
+  --obb-surface-3:      #1E2430;
+  --obb-surface-4:      #242B38;
+  --obb-surface-5:      #2A3242;
+
+  --obb-border-dark:    rgba(255,255,255,0.06);
+  --obb-border-bright:  rgba(255,255,255,0.10);
+
+  --obb-text-on-dark-1: #D8DCE8;   /* primary text */
+  --obb-text-on-dark-2: #9BA3AF;   /* secondary */
+  --obb-text-on-dark-3: #7A8499;   /* tertiary */
+  --obb-text-on-dark-4: #485060;   /* muted / disabled */
+
+  /* Operational severity ramp — used by all Smart Rail surfaces */
+  --obb-sev-critical:   #FF3B3B;   /* fire/smoke, urgent escalations */
+  --obb-sev-high:       #FF6B00;   /* vandalism, hazards */
+  --obb-sev-medium:     #F5A623;   /* warnings, advisories */
+  --obb-sev-advisory:   #4A9EFF;   /* informational, review-required */
+  --obb-sev-normal:     #22C55E;   /* resolved, healthy */
+
+  /* Older mockups use these names — kept as aliases */
+  --obb-green:          #00A876;
+  --obb-green-dim:      rgba(0,168,118,0.10);
+  --obb-amber:          #E09900;
+  --obb-amber-dim:      rgba(224,153,0,0.10);
+  --obb-red-dim:        rgba(226,0,42,0.10);
+  --obb-red-glow:       rgba(226,0,42,0.18);
+  --obb-purple:         #7C52D6;
+  --obb-purple-dim:     rgba(124,82,214,0.10);
+}
+
+/* ==================================================================
+   .obb-dark — opt-in dark-theme scope
+   ------------------------------------------------------------------
+   Apply <body class="obb-dark"> on any operations surface to remap
+   the semantic aliases (fg-*, bg-*, border-*) to the ops palette.
+   ================================================================== */
+.obb-dark {
+  --fg-1:        var(--obb-text-on-dark-1);
+  --fg-2:        var(--obb-text-on-dark-2);
+  --fg-3:        var(--obb-text-on-dark-3);
+  --fg-4:        var(--obb-text-on-dark-4);
+  --fg-mute:     var(--obb-text-on-dark-4);
+
+  --bg-app:      var(--obb-surface-0);
+  --bg-surface:  var(--obb-surface-2);
+  --bg-elev:     var(--obb-surface-3);
+  --bg-tint:     var(--obb-surface-4);
+
+  --border-line:   var(--obb-border-dark);
+  --border-strong: var(--obb-border-bright);
+
+  background: var(--bg-app);
+  color: var(--fg-1);
+}
+
+/* ============================================================
+   Semantic CSS — apply these to bare HTML
+   ============================================================ */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--fg-2);
+  background: var(--bg-app);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  color: var(--fg-1);
+  margin: 0 0 var(--space-3);
+  letter-spacing: var(--ls-tight);
+}
+h1 { font-size: var(--fs-display); line-height: var(--lh-tight); font-weight: var(--fw-bold); }
+h2 { font-size: var(--fs-h1);      line-height: var(--lh-snug);  font-weight: var(--fw-bold); }
+h3 { font-size: var(--fs-h2);      line-height: var(--lh-snug);  font-weight: var(--fw-semibold); }
+h4 { font-size: var(--fs-h3);      line-height: var(--lh-snug);  font-weight: var(--fw-semibold); }
+
+p   { margin: 0 0 var(--space-3); color: var(--fg-2); text-wrap: pretty; }
+small { font-size: var(--fs-small); color: var(--fg-3); }
+
+a {
+  color: var(--fg-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+a:hover { color: var(--obb-red-press); }
+
+code, kbd, pre { font-family: var(--font-mono); font-size: 0.92em; }
+hr { border: 0; border-top: 1px solid var(--border-line); margin: var(--space-6) 0; }
+
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* utility — caps label used on category chips, status pills */
+.obb-caps {
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caps);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+}

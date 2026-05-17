@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analytics & Station View</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #080814; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; font-size: 13px; }
+  h2 { font-size: 16px; color: #fff; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 12px; margin-bottom: 16px; }
+
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #0d0d1f; border-bottom: 1px solid #1e1e3a;
+    padding: 10px 16px; border-radius: 10px 10px 0 0;
+  }
+  .topbar .brand { font-size: 14px; font-weight: 700; color: #00c49f; }
+  .topbar .context { font-size: 11px; color: #555; }
+
+  /* Tab bar */
+  .tabs {
+    display: flex; background: #0d0d1f; border-bottom: 1px solid #1e1e3a;
+    padding: 0 16px;
+  }
+  .tab {
+    padding: 10px 20px; font-size: 12px; color: #555; cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab.active { color: #00c49f; border-bottom-color: #00c49f; }
+
+  .dashboard {
+    background: #0d0d1f; border: 1px solid #1e1e3a;
+    border-top: none; border-radius: 0 0 10px 10px; padding: 16px;
+  }
+
+  /* ── ANALYTICS TAB ── */
+  .analytics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 14px;
+  }
+
+  .panel { background: #12122a; border-radius: 10px; padding: 14px; }
+  .panel-title {
+    font-size: 11px; font-weight: 700; color: #555;
+    text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .export-btn {
+    font-size: 10px; background: #1e1e3a; border: none; color: #888;
+    padding: 3px 10px; border-radius: 6px; cursor: pointer;
+  }
+
+  /* KPI strip */
+  .kpi-strip {
+    grid-column: 1 / -1;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
+  }
+  .kpi-card {
+    background: #12122a; border-radius: 8px; padding: 12px 14px;
+    border-top: 3px solid transparent;
+  }
+  .kpi-card.green { border-color: #00c49f; }
+  .kpi-card.blue { border-color: #4a9eff; }
+  .kpi-card.amber { border-color: #fbbf24; }
+  .kpi-card.purple { border-color: #a855f7; }
+  .kpi-card.teal { border-color: #06b6d4; }
+  .kpi-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .kpi-value { font-size: 24px; font-weight: 700; color: #fff; }
+  .kpi-sub { font-size: 10px; color: #555; margin-top: 3px; }
+
+  /* Bar chart CSS */
+  .chart-wrap { margin-bottom: 4px; }
+  .chart-bars {
+    display: flex; align-items: flex-end; gap: 4px;
+    height: 80px; border-bottom: 1px solid #1e1e3a; margin-bottom: 6px;
+  }
+  .bar-col { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
+  .bar { width: 100%; border-radius: 3px 3px 0 0; }
+  .bar.green { background: #00c49f55; border-top: 2px solid #00c49f; }
+  .bar.blue { background: #4a9eff44; border-top: 2px solid #4a9eff; }
+  .bar.amber { background: #fbbf2444; border-top: 2px solid #fbbf24; }
+  .bar-date { font-size: 9px; color: #444; }
+
+  /* Heatmap grid */
+  .heatmap { display: grid; grid-template-columns: 40px repeat(7, 1fr); gap: 3px; }
+  .hm-label { font-size: 9px; color: #444; display: flex; align-items: center; }
+  .hm-cell {
+    height: 18px; border-radius: 3px;
+  }
+  .hm-cell.l0 { background: #1e1e3a; }
+  .hm-cell.l1 { background: #00c49f22; }
+  .hm-cell.l2 { background: #00c49f55; }
+  .hm-cell.l3 { background: #00c49f88; }
+  .hm-cell.l4 { background: #00c49fcc; }
+  .hm-cell.l5 { background: #00c49f; }
+  .hm-day { font-size: 9px; color: #444; text-align: center; }
+
+  /* Dwell time */
+  .dwell-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 0; border-bottom: 1px solid #1a1a2e; font-size: 12px;
+  }
+  .dwell-row:last-child { border-bottom: none; }
+  .dwell-stop { color: #888; width: 100px; flex-shrink: 0; }
+  .dwell-track { flex: 1; height: 8px; background: #1e1e3a; border-radius: 4px; overflow: hidden; }
+  .dwell-fill { height: 100%; border-radius: 4px; }
+  .dwell-fill.ok { background: #00c49f; }
+  .dwell-fill.slow { background: #fbbf24; }
+  .dwell-fill.bottleneck { background: #ef4444; }
+  .dwell-time { color: #fff; font-weight: 700; width: 36px; text-align: right; font-size: 11px; }
+  .dwell-flag { font-size: 10px; width: 70px; }
+
+  /* Route comparison */
+  .route-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 0; border-bottom: 1px solid #1a1a2e; font-size: 12px;
+  }
+  .route-row:last-child { border-bottom: none; }
+  .route-name { color: #ccc; flex: 1; font-weight: 600; }
+  .route-pct { font-weight: 700; width: 36px; text-align: right; }
+  .route-trend { font-size: 11px; width: 40px; text-align: right; }
+  .trend-up { color: #00c49f; }
+  .trend-dn { color: #ef4444; }
+
+  /* ── STATION VIEW ── */
+  .station-grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 14px;
+  }
+
+  /* Incoming train card */
+  .incoming-card {
+    background: #12122a; border-radius: 12px; padding: 16px; margin-bottom: 14px;
+  }
+  .incoming-header {
+    display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;
+  }
+  .incoming-train { font-size: 22px; font-weight: 700; color: #fff; }
+  .incoming-route { font-size: 12px; color: #555; margin-top: 2px; }
+  .incoming-eta { text-align: right; }
+  .eta-time { font-size: 28px; font-weight: 300; color: #00c49f; }
+  .eta-label { font-size: 10px; color: #555; }
+  .eta-track { font-size: 13px; color: #fbbf24; margin-top: 2px; font-weight: 600; }
+
+  /* Large coach bar for station */
+  .station-coaches { display: flex; gap: 6px; margin-bottom: 10px; }
+  .station-coach {
+    flex: 1; border-radius: 10px; padding: 14px 6px; text-align: center;
+    border: 2px solid transparent; cursor: default;
+  }
+  .station-coach.green { background: #0a2a14; border-color: #00c49f; }
+  .station-coach.amber { background: #2a1e00; border-color: #fbbf24; }
+  .station-coach.red { background: #2a0a0a; border-color: #ef4444; }
+  .sc-num { font-size: 11px; color: #555; margin-bottom: 6px; }
+  .sc-pct { font-size: 18px; font-weight: 700; }
+  .station-coach.green .sc-pct { color: #00c49f; }
+  .station-coach.amber .sc-pct { color: #fbbf24; }
+  .station-coach.red .sc-pct { color: #ef4444; }
+  .sc-guide { font-size: 10px; margin-top: 6px; }
+  .station-coach.green .sc-guide { color: #00c49f; }
+  .station-coach.amber .sc-guide { color: #fbbf24; }
+  .station-coach.red .sc-guide { color: #ef4444; }
+
+  /* Guidance banner */
+  .guidance-banner {
+    background: #0a2a14; border: 1px solid #00c49f;
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;
+    font-size: 13px; color: #00c49f; font-weight: 600;
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  /* Accessibility flags */
+  .access-panel { background: #12122a; border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+  .access-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 0; border-bottom: 1px solid #1a1a2e;
+  }
+  .access-item:last-child { border-bottom: none; }
+  .access-icon { font-size: 22px; }
+  .access-text { font-size: 12px; color: #ddd; font-weight: 600; }
+  .access-sub { font-size: 11px; color: #555; margin-top: 2px; }
+  .access-badge {
+    margin-left: auto; font-size: 10px; padding: 3px 10px;
+    border-radius: 10px; font-weight: 700;
+    background: #0d1b2e; color: #4a9eff;
+  }
+
+  /* Boarding prediction panel */
+  .boarding-panel { background: #12122a; border-radius: 12px; padding: 14px; }
+  .boarding-big { font-size: 48px; font-weight: 700; color: #fbbf24; line-height: 1; }
+  .boarding-unit { font-size: 13px; color: #666; margin-bottom: 10px; }
+  .boarding-breakdown {
+    display: flex; gap: 8px; flex-direction: column;
+  }
+  .bd-row {
+    display: flex; justify-content: space-between; font-size: 12px;
+    padding: 5px 0; border-bottom: 1px solid #1a1a2e;
+  }
+  .bd-row:last-child { border-bottom: none; }
+  .bd-label { color: #666; }
+  .bd-val { color: #fff; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h2>Analytics & Station View</h2>
+<p class="subtitle">Two sub-views: Capacity Planner analytics (web) and Platform Staff real-time station display</p>
+
+<div class="topbar">
+  <div>
+    <div class="brand">OEBB Smart Rail · Analytics & Station</div>
+    <div class="context">May 2026 · Route: Wien–Salzburg</div>
+  </div>
+  <div style="font-size:11px; color:#555;">Data product · Tier 3</div>
+</div>
+
+<!-- Tab bar -->
+<div class="tabs">
+  <div class="tab active">📊 Analytics — Capacity Planner</div>
+  <div class="tab">🚉 Station View — Platform Staff</div>
+</div>
+
+<div class="dashboard">
+
+  <!-- ══ ANALYTICS TAB (shown) ══ -->
+  <div class="analytics-grid">
+
+    <!-- KPI strip -->
+    <div class="kpi-strip">
+      <div class="kpi-card green">
+        <div class="kpi-label">Monthly Boardings</div>
+        <div class="kpi-value">142k</div>
+        <div class="kpi-sub">↑ 8% vs April</div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-label">Avg Occupancy</div>
+        <div class="kpi-value">63%</div>
+        <div class="kpi-sub">Peak: 89% · Fri 17:00</div>
+      </div>
+      <div class="kpi-card amber">
+        <div class="kpi-label">Avg Dwell Time</div>
+        <div class="kpi-value">2m 14s</div>
+        <div class="kpi-sub">↑ 18s vs target</div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">No-show Rate</div>
+        <div class="kpi-value">11%</div>
+        <div class="kpi-sub">Reserved seats unused</div>
+      </div>
+      <div class="kpi-card teal">
+        <div class="kpi-label">Energy / Pax-km</div>
+        <div class="kpi-value">0.31</div>
+        <div class="kpi-sub">kWh · ↓ 4% vs target</div>
+      </div>
+    </div>
+
+    <!-- Ridership bar chart -->
+    <div class="panel">
+      <div class="panel-title">Daily Boardings — May 2026 <button class="export-btn">Export CSV</button></div>
+      <div class="chart-wrap">
+        <div class="chart-bars">
+          <div class="bar-col"><div class="bar green" style="height:55%"></div><div class="bar-date">6</div></div>
+          <div class="bar-col"><div class="bar green" style="height:70%"></div><div class="bar-date">7</div></div>
+          <div class="bar-col"><div class="bar green" style="height:60%"></div><div class="bar-date">8</div></div>
+          <div class="bar-col"><div class="bar green" style="height:80%"></div><div class="bar-date">9</div></div>
+          <div class="bar-col"><div class="bar green" style="height:65%"></div><div class="bar-date">10</div></div>
+          <div class="bar-col"><div class="bar green" style="height:90%"></div><div class="bar-date">11</div></div>
+          <div class="bar-col"><div class="bar green" style="height:100%"></div><div class="bar-date">12</div></div>
+          <div class="bar-col"><div class="bar green" style="height:85%"></div><div class="bar-date">13</div></div>
+        </div>
+      </div>
+      <div style="margin-top:12px;">
+        <div class="panel-title" style="margin-bottom:8px;">Occupancy Heatmap — By Hour & Day</div>
+        <div class="heatmap">
+          <div></div>
+          <div class="hm-day">Mon</div><div class="hm-day">Tue</div><div class="hm-day">Wed</div>
+          <div class="hm-day">Thu</div><div class="hm-day">Fri</div><div class="hm-day">Sat</div><div class="hm-day">Sun</div>
+
+          <div class="hm-label">06:00</div>
+          <div class="hm-cell l2"></div><div class="hm-cell l2"></div><div class="hm-cell l1"></div>
+          <div class="hm-cell l2"></div><div class="hm-cell l3"></div><div class="hm-cell l1"></div><div class="hm-cell l1"></div>
+
+          <div class="hm-label">09:00</div>
+          <div class="hm-cell l4"></div><div class="hm-cell l4"></div><div class="hm-cell l3"></div>
+          <div class="hm-cell l4"></div><div class="hm-cell l5"></div><div class="hm-cell l2"></div><div class="hm-cell l2"></div>
+
+          <div class="hm-label">12:00</div>
+          <div class="hm-cell l3"></div><div class="hm-cell l2"></div><div class="hm-cell l3"></div>
+          <div class="hm-cell l3"></div><div class="hm-cell l4"></div><div class="hm-cell l4"></div><div class="hm-cell l3"></div>
+
+          <div class="hm-label">17:00</div>
+          <div class="hm-cell l5"></div><div class="hm-cell l4"></div><div class="hm-cell l4"></div>
+          <div class="hm-cell l5"></div><div class="hm-cell l5"></div><div class="hm-cell l3"></div><div class="hm-cell l2"></div>
+
+          <div class="hm-label">20:00</div>
+          <div class="hm-cell l2"></div><div class="hm-cell l2"></div><div class="hm-cell l2"></div>
+          <div class="hm-cell l2"></div><div class="hm-cell l3"></div><div class="hm-cell l4"></div><div class="hm-cell l3"></div>
+        </div>
+        <div style="display:flex; gap:4px; margin-top:6px; align-items:center;">
+          <span style="font-size:10px; color:#444;">Low</span>
+          <div class="hm-cell l1" style="width:16px; height:10px; display:inline-block;"></div>
+          <div class="hm-cell l2" style="width:16px; height:10px; display:inline-block;"></div>
+          <div class="hm-cell l3" style="width:16px; height:10px; display:inline-block;"></div>
+          <div class="hm-cell l4" style="width:16px; height:10px; display:inline-block;"></div>
+          <div class="hm-cell l5" style="width:16px; height:10px; display:inline-block;"></div>
+          <span style="font-size:10px; color:#444;">High</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dwell time -->
+    <div class="panel">
+      <div class="panel-title">Dwell Time by Stop <button class="export-btn">Export</button></div>
+      <div class="dwell-row">
+        <div class="dwell-stop">Wien Hbf</div>
+        <div class="dwell-track"><div class="dwell-fill ok" style="width:45%"></div></div>
+        <div class="dwell-time">1m 52s</div>
+        <div class="dwell-flag" style="color:#00c49f">✓ On target</div>
+      </div>
+      <div class="dwell-row">
+        <div class="dwell-stop">St. Pölten</div>
+        <div class="dwell-track"><div class="dwell-fill ok" style="width:50%"></div></div>
+        <div class="dwell-time">2m 05s</div>
+        <div class="dwell-flag" style="color:#00c49f">✓ On target</div>
+      </div>
+      <div class="dwell-row">
+        <div class="dwell-stop">Linz Hbf</div>
+        <div class="dwell-track"><div class="dwell-fill bottleneck" style="width:85%"></div></div>
+        <div class="dwell-time">3m 31s</div>
+        <div class="dwell-flag" style="color:#ef4444">⚠ Bottleneck</div>
+      </div>
+      <div class="dwell-row">
+        <div class="dwell-stop">Wels</div>
+        <div class="dwell-track"><div class="dwell-fill slow" style="width:65%"></div></div>
+        <div class="dwell-time">2m 42s</div>
+        <div class="dwell-flag" style="color:#fbbf24">△ Slow</div>
+      </div>
+      <div class="dwell-row">
+        <div class="dwell-stop">Salzburg Hbf</div>
+        <div class="dwell-track"><div class="dwell-fill ok" style="width:40%"></div></div>
+        <div class="dwell-time">1m 38s</div>
+        <div class="dwell-flag" style="color:#00c49f">✓ On target</div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <div class="panel-title" style="margin-bottom:8px;">Route Occupancy Comparison</div>
+        <div class="route-row">
+          <div class="route-name">Wien–Salzburg</div>
+          <div class="route-pct" style="color:#ef4444">89%</div>
+          <div class="route-trend trend-up">↑ 8%</div>
+        </div>
+        <div class="route-row">
+          <div class="route-name">Wien–Graz</div>
+          <div class="route-pct" style="color:#fbbf24">71%</div>
+          <div class="route-trend trend-up">↑ 3%</div>
+        </div>
+        <div class="route-row">
+          <div class="route-name">Wien–Innsbruck</div>
+          <div class="route-pct" style="color:#fbbf24">64%</div>
+          <div class="route-trend trend-dn">↓ 2%</div>
+        </div>
+        <div class="route-row">
+          <div class="route-name">Salzburg–Graz</div>
+          <div class="route-pct" style="color:#00c49f">48%</div>
+          <div class="route-trend trend-dn">↓ 1%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Energy + no-show -->
+    <div class="panel">
+      <div class="panel-title">Energy Efficiency <button class="export-btn">Export PDF</button></div>
+      <div style="margin-bottom:14px;">
+        <div style="font-size:11px; color:#555; margin-bottom:8px;">kWh per passenger-km · Monthly avg</div>
+        <div class="chart-bars" style="height:60px;">
+          <div class="bar-col"><div class="bar blue" style="height:70%"></div><div class="bar-date">Jan</div></div>
+          <div class="bar-col"><div class="bar blue" style="height:65%"></div><div class="bar-date">Feb</div></div>
+          <div class="bar-col"><div class="bar blue" style="height:75%"></div><div class="bar-date">Mar</div></div>
+          <div class="bar-col"><div class="bar blue" style="height:60%"></div><div class="bar-date">Apr</div></div>
+          <div class="bar-col"><div class="bar blue" style="height:55%"></div><div class="bar-date">May</div></div>
+        </div>
+        <div style="font-size:11px; color:#00c49f; margin-top:4px;">↓ Improving — higher occupancy = better efficiency per pax</div>
+      </div>
+
+      <div class="panel-title" style="margin-bottom:8px;">No-show Analysis</div>
+      <div style="font-size:11px; color:#555; margin-bottom:8px;">Reserved seats detected as empty after 10 min</div>
+      <div class="dwell-row">
+        <div class="dwell-stop">1st Class</div>
+        <div class="dwell-track"><div class="dwell-fill slow" style="width:55%"></div></div>
+        <div class="dwell-time">18%</div>
+        <div class="dwell-flag" style="color:#fbbf24">△ High</div>
+      </div>
+      <div class="dwell-row">
+        <div class="dwell-stop">2nd Class</div>
+        <div class="dwell-track"><div class="dwell-fill ok" style="width:25%"></div></div>
+        <div class="dwell-time">8%</div>
+        <div class="dwell-flag" style="color:#00c49f">✓ Normal</div>
+      </div>
+      <div class="dwell-row">
+        <div class="dwell-stop">Fri/Weekend</div>
+        <div class="dwell-track"><div class="dwell-fill bottleneck" style="width:75%"></div></div>
+        <div class="dwell-time">24%</div>
+        <div class="dwell-flag" style="color:#ef4444">⚠ Review</div>
+      </div>
+      <div style="font-size:11px; color:#a855f7; margin-top:8px;">💡 Recommendation: release unoccupied 1st class seats to standby passengers after 10 min</div>
+    </div>
+
+  </div>
+
+  <!-- ══ STATION VIEW (shown below as second tab preview) ══ -->
+  <div style="margin-top: 24px; border-top: 1px solid #1e1e3a; padding-top: 20px;">
+    <div style="font-size: 11px; font-weight: 700; letter-spacing: 2px; color: #4a9eff; text-transform: uppercase; margin-bottom: 14px;">🚉 Station View Tab — Platform Staff · Linz Hbf</div>
+
+    <div class="station-grid">
+      <div>
+        <!-- Incoming train -->
+        <div class="incoming-card">
+          <div class="incoming-header">
+            <div>
+              <div class="incoming-train">RJ 561</div>
+              <div class="incoming-route">Wien Hbf → Salzburg Hbf · 6 coaches</div>
+            </div>
+            <div class="incoming-eta">
+              <div class="eta-time">4 min</div>
+              <div class="eta-label">to arrival</div>
+              <div class="eta-track">Platform 3</div>
+            </div>
+          </div>
+
+          <!-- Large coach bar -->
+          <div style="font-size:10px; color:#555; text-transform:uppercase; letter-spacing:2px; margin-bottom:8px;">Coach occupancy on arrival</div>
+          <div class="station-coaches">
+            <div class="station-coach green"><div class="sc-num">C1</div><div class="sc-pct">34%</div><div class="sc-guide">Board here</div></div>
+            <div class="station-coach green"><div class="sc-num">C2</div><div class="sc-pct">41%</div><div class="sc-guide">Board here</div></div>
+            <div class="station-coach amber"><div class="sc-num">C3</div><div class="sc-pct">67%</div><div class="sc-guide">Limited</div></div>
+            <div class="station-coach red"><div class="sc-num">C4</div><div class="sc-pct">91%</div><div class="sc-guide">Avoid</div></div>
+            <div class="station-coach amber"><div class="sc-num">C5</div><div class="sc-pct">58%</div><div class="sc-guide">Limited</div></div>
+            <div class="station-coach green"><div class="sc-num">C6</div><div class="sc-pct">29%</div><div class="sc-guide">Board here</div></div>
+          </div>
+
+          <div class="guidance-banner" style="margin-top:10px;">
+            📢 &nbsp; Guide passengers to Coaches 1, 2 and 6 — most space available
+          </div>
+        </div>
+
+        <!-- Accessibility -->
+        <div class="access-panel">
+          <div class="panel-title">Accessibility — Action Required</div>
+          <div class="access-item">
+            <div class="access-icon">♿</div>
+            <div>
+              <div class="access-text">Wheelchair user — Coach 4</div>
+              <div class="access-sub">Needs exit assistance · Position ramp at C4 door</div>
+            </div>
+            <div class="access-badge">C4 · Door 2</div>
+          </div>
+          <div class="access-item">
+            <div class="access-icon">👶</div>
+            <div>
+              <div class="access-text">Pushchair — Coach 3</div>
+              <div class="access-sub">Wide door boarding area recommended</div>
+            </div>
+            <div class="access-badge">C3 · Door 1</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: boarding prediction -->
+      <div>
+        <div class="boarding-panel">
+          <div class="panel-title">Expected Boarding at Linz Hbf</div>
+          <div class="boarding-big">42</div>
+          <div class="boarding-unit">passengers predicted to board</div>
+          <div style="height:1px; background:#1e1e3a; margin: 12px 0;"></div>
+          <div class="boarding-breakdown">
+            <div class="bd-row"><span class="bd-label">From reservations</span><span class="bd-val">31 confirmed</span></div>
+            <div class="bd-row"><span class="bd-label">Walk-up estimate</span><span class="bd-val">~11 pax</span></div>
+            <div class="bd-row"><span class="bd-label">Alighting here</span><span class="bd-val">~8 pax</span></div>
+            <div class="bd-row"><span class="bd-label">Net change</span><span class="bd-val" style="color:#f97316">+34 passengers</span></div>
+            <div class="bd-row"><span class="bd-label">Post-boarding C4</span><span class="bd-val" style="color:#ef4444">~99% — overcrowded</span></div>
+          </div>
+          <div style="margin-top:12px; background:#1a0820; border-radius:8px; padding:10px; font-size:11px; color:#a855f7;">
+            💡 AI: Coach 4 will exceed capacity after boarding. Recommend guiding new boarders to C1/C2/C6 before doors open.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p style="text-align:center; color: #555; font-size: 11px; margin-top: 16px;">Mockup · Web dashboard · Analytics tab + Station View tab · Let me know what to change in the terminal</p>
+
+</body>
+</html>

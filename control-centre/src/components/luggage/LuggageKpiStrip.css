@@ -1,0 +1,43 @@
+.luggage-kpi-strip {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--obb-border-dark);
+  flex-shrink: 0;
+  background: var(--obb-surface-1);
+}
+
+.lkpi {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12px 24px;
+  gap: 3px;
+  min-width: 120px;
+}
+
+.lkpi__value {
+  font-size: 26px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--obb-text-on-dark-1);
+  line-height: 1;
+}
+
+.lkpi__label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--obb-text-on-dark-4);
+}
+
+.lkpi--red   .lkpi__value { color: var(--obb-sev-critical); }
+.lkpi--amber .lkpi__value { color: var(--obb-sev-medium); }
+.lkpi--green .lkpi__value { color: var(--obb-sev-normal); }
+
+.lkpi-divider {
+  width: 1px;
+  background: var(--obb-border-dark);
+  margin: 8px 0;
+  flex-shrink: 0;
+}
