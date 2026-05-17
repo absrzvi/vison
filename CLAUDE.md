@@ -2,6 +2,21 @@
 
 Project-specific behavioral guidelines for the OEBB Smart Rail PoC. These override defaults.
 
+## Codebase Navigation
+
+This is a monorepo with four subpackages. Each has its own `CLAUDE.md` with stack, test commands, file conventions, and gotchas. **Read the subpackage CLAUDE.md before touching any files in that package.**
+
+| Subpackage | Language | Role |
+|---|---|---|
+| `control-centre/` | React 18 + JSX | Landside operator dashboard SPA |
+| `shared/` | Python 3.11 | Shared event schemas + adapters (`oebb-shared`) |
+| `cloud-backend/` | Python 3.11 + FastAPI | Landside REST API + SSE push, PostgreSQL |
+| `event-store/` | Python 3.11 + FastAPI | Edge event ingest + sync cursor, SQLite |
+
+A `.claudeignore` at the root excludes build outputs, caches, binary assets, and brainstorm scratchpads. You do not need to read those paths.
+
+**CLAUDE.md review cadence:** Re-read and trim this file and the subpackage files every 3–6 months or after a major model release. Rules written for older model behaviours become overhead — remove them when they no longer apply.
+
 ---
 
 ## Project Context

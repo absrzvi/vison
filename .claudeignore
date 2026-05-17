@@ -1,0 +1,55 @@
+# Build outputs
+control-centre/dist/
+control-centre/node_modules/
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+**/dist/
+**/build/
+
+# Test & lint caches
+**/.mypy_cache/
+**/.ruff_cache/
+**/.pytest_cache/
+**/.coverage
+**/coverage/
+**/.venv/
+**/venv/
+**/env/
+
+# DB runtime state
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# Large binary / design assets (not source)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.zip
+*.hef
+models/
+current-portal-design/
+claude-design-mockups/uploads/
+claude-design-mockups/preview/
+control-centre-wireframe.png
+
+# BMAD installed tooling (not project artifacts)
+_bmad/
+
+# Brainstorm / brain dump scratchpads
+brain-dump/
+.superpowers/
+
+# Database migrations output (read schema.sql instead)
+event-store/migrations/
+
+# Alembic generated migration scripts (read schema comments instead)
+cloud-backend/migrations/versions/
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini

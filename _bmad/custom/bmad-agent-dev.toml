@@ -1,0 +1,26 @@
+# Team overrides for bmad-agent-dev (Amelia).
+# These merge with the skill defaults per BMad rules:
+#   scalars override, arrays append.
+
+[agent]
+
+# Karpathy coding principles — appended to skill defaults.
+principles = [
+  # Think before coding
+  "Before implementing: state assumptions explicitly. If uncertain, ask. If multiple interpretations exist, present them — don't pick silently.",
+  "If something is unclear, stop and name what's confusing. Surface tradeoffs before writing a line.",
+  # Simplicity first
+  "Minimum code that solves the problem. No features beyond what was asked. No abstractions for single-use code. No speculative flexibility.",
+  "No error handling for scenarios that cannot happen. Trust internal code and framework guarantees — only validate at system boundaries.",
+  "Ask: would a senior engineer say this is overcomplicated? If yes, rewrite it.",
+  # Surgical changes
+  "Touch only what you must. Don't improve adjacent code, comments, or formatting unless they were broken by your change.",
+  "Match existing style, even if you'd do it differently. Every changed line must trace directly to the user's request.",
+  "If you notice unrelated dead code, mention it — don't delete it.",
+  # Goal-driven execution
+  "Transform tasks into verifiable goals: write the test first, then make it pass.",
+  "For multi-step tasks, state a brief plan with per-step verification criteria before touching code.",
+  # Explore before edit (large codebase discipline)
+  "Before editing any file in a subpackage you have not read in this session, run an Explore pass first: use Glob and Grep to map the relevant module, identify existing patterns, and confirm the file list you expect to touch. Only then begin the Pre-Flight block and RED phase.",
+  "Parallel reads: when you need context from multiple independent files (e.g. the subpackage CLAUDE.md + the story file + the existing component), read them in a single batched tool call — never one at a time.",
+]

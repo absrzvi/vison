@@ -6,25 +6,43 @@
       "Bash(dir *)",
       "Bash(pwd)",
       "Bash(mkdir *)",
+      "Bash(find *)",
+      "Bash(cat *)",
       "Bash(docker ps*)",
       "Bash(docker logs*)",
       "Bash(docker compose*)",
       "Bash(python *)",
       "Bash(pip *)",
       "Bash(npm *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(npx *)",
+      "PowerShell(cd *)",
+      "PowerShell(* ; *)"
     ]
   },
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "$sprintFile = Get-ChildItem -Path '.' -Recurse -Filter 'sprint-status.yaml' -ErrorAction SilentlyContinue | Select-Object -First 1; $storyFile = Get-ChildItem -Path '.' -Recurse -Filter '*.md' -ErrorAction SilentlyContinue | Where-Object { (Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue) -match 'Status: in-progress' } | Select-Object -First 1; $msgs = @(); if ($sprintFile) { $content = Get-Content $sprintFile.FullName -Raw; $inProgress = [regex]::Matches($content, 'in-progress'); $readyForDev = [regex]::Matches($content, 'ready-for-dev'); $msgs += \"Sprint: $($inProgress.Count) in-progress, $($readyForDev.Count) ready-for-dev\" }; if ($storyFile) { $msgs += \"Active story: $($storyFile.Name)\" }; if ($msgs.Count -gt 0) { $msg = $msgs -join ' | '; Write-Output \"{`\"systemMessage`\": `\"$msg`\"}\" }",
+            "timeout": 8,
+            "statusMessage": "Loading sprint context..."
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
             "shell": "powershell",
-            "command": "$handoff = Get-ChildItem -Path '.' -Filter 'handoff-*.md' | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($handoff) { $age = (Get-Date) - $handoff.LastWriteTime; if ($age.TotalHours -lt 8) { Write-Output ('{\"systemMessage\": \"Handoff up to date: ' + $handoff.Name + '\"}') } else { Write-Output '{\"systemMessage\": \"HANDOFF NOT UPDATED: Update handoff-*.md or run WDS /wrap before closing.\"}' } } else { Write-Output '{\"systemMessage\": \"NO HANDOFF FILE: Create a handoff file before closing.\"}' }",
+            "command": "$handoff = Get-ChildItem -Path '.' -Filter 'handoff-*.md' | Sort-Object LastWriteTime -Descending | Select-Object -First 1; $msgs = @(); if ($handoff) { $age = (Get-Date) - $handoff.LastWriteTime; if ($age.TotalHours -lt 8) { $msgs += \"Handoff up to date: $($handoff.Name)\" } else { $msgs += \"HANDOFF NOT UPDATED: Update handoff-*.md or run WDS /wrap before closing.\" } } else { $msgs += 'NO HANDOFF FILE: Create a handoff file before closing.' }; $msgs += 'CLAUDE.md tip: if you discovered a convention, gotcha, or tooling quirk this session that is not in any CLAUDE.md, add it now while context is fresh.'; $msg = $msgs -join ' | '; Write-Output \"{`\"systemMessage`\": `\"$msg`\"}\"",
             "timeout": 10,
-            "statusMessage": "Checking handoff file..."
+            "statusMessage": "Session wrap-up checks..."
           }
         ]
       }
