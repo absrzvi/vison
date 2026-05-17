@@ -16,6 +16,7 @@ control-centre/dist/
 
 # ── BMAD agent runtime (installed tooling, not project artifacts) ──────────────
 _bmad/
+!_bmad/custom/config.toml
 
 # ── Superpowers brainstorm scratchpad ─────────────────────────────────────────
 .superpowers/
