@@ -37,6 +37,11 @@ class IngestResponse(BaseModel):
     duplicate_ids: list[str] = Field(default_factory=list)
 
 
+class IngestSingleResponse(BaseModel):
+    event_id: str
+    stored: bool
+
+
 class HealthLiveResponse(BaseModel):
     status: str = "ok"
 

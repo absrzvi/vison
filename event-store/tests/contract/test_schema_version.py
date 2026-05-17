@@ -1,17 +1,17 @@
 """Contract tests: schema_version compatibility (ADR-5, AC19)."""
 import sqlite3
+from pathlib import Path
 
 import pytest
 from oebb_shared.events.envelope import SUPPORTED_SCHEMA_VERSIONS as SHARED_VERSIONS
 
-from event_store.database import SUPPORTED_SCHEMA_VERSIONS, init_db, insert_event
+from event_store.database import SUPPORTED_SCHEMA_VERSIONS, get_connection, init_db, insert_event
 from event_store.exceptions import UnsupportedSchemaVersionError
 
 
 @pytest.fixture
-def db() -> sqlite3.Connection:
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
+def db(tmp_path: Path) -> sqlite3.Connection:
+    conn = get_connection(str(tmp_path / "contract_test.db"))
     init_db(conn)
     return conn
 

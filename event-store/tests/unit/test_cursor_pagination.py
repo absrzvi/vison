@@ -10,7 +10,7 @@ def test_event_page_has_next_cursor_when_full_page() -> None:
     items = [
         EventModel(
             event_id=f"id-{i}",
-            journey_id="j1",
+            journey_id="V001_RJ-0001_20260517",
             vehicle_id="V001",
             event_type="OCCUPANCY_UPDATE",
             severity="info",
@@ -29,7 +29,7 @@ def test_event_page_has_no_cursor_on_last_page() -> None:
     items = [
         EventModel(
             event_id="id-0",
-            journey_id="j1",
+            journey_id="V001_RJ-0001_20260517",
             vehicle_id="V001",
             event_type="OCCUPANCY_UPDATE",
             severity="info",

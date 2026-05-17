@@ -1,10 +1,12 @@
 """Integration tests: real SQLite — insert, page, cursor, sync_state."""
 import sqlite3
+from pathlib import Path
 
 import pytest
 
 from event_store.database import (
     advance_sync_cursor,
+    get_connection,
     get_events_page,
     get_sync_cursor,
     init_db,
@@ -14,9 +16,8 @@ from event_store.exceptions import JourneyNotFoundError, UnsupportedSchemaVersio
 
 
 @pytest.fixture
-def db() -> sqlite3.Connection:
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
+def db(tmp_path: Path) -> sqlite3.Connection:
+    conn = get_connection(str(tmp_path / "test.db"))
     init_db(conn)
     return conn
 

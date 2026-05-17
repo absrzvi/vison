@@ -5,11 +5,11 @@ from collections.abc import Generator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from oebb_shared.events.envelope import EventModel
+from oebb_shared.events.envelope import EventEnvelope, EventModel
 
 from ..database import get_connection, get_events_page, insert_event
 from ..exceptions import JourneyNotFoundError, UnsupportedSchemaVersionError
-from ..models import EventPage, IngestRequest, IngestResponse
+from ..models import EventPage, IngestSingleResponse
 
 router = APIRouter(prefix="/api/v1/events")
 
@@ -22,30 +22,34 @@ def _get_db() -> Generator[sqlite3.Connection, None, None]:
         conn.close()
 
 
-@router.post("", response_model=IngestResponse, status_code=202)
-def ingest_events(
-    body: IngestRequest,
+@router.post("", response_model=IngestSingleResponse, status_code=201)
+def ingest_event(
+    body: EventEnvelope,
     conn: sqlite3.Connection = Depends(_get_db),
-) -> IngestResponse:
-    accepted = 0
-    duplicates: list[str] = []
-    for ev in body.events:
-        try:
-            inserted = insert_event(conn, ev.model_dump())
-            if inserted:
-                accepted += 1
-            else:
-                duplicates.append(ev.event_id)
-        except UnsupportedSchemaVersionError as exc:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "error": "UNSUPPORTED_SCHEMA_VERSION",
-                    "detail": str(exc),
-                    "recoverable": False,
-                },
-            ) from exc
-    return IngestResponse(accepted=accepted, duplicate_ids=duplicates)
+) -> IngestSingleResponse:
+    try:
+        inserted = insert_event(conn, body.model_dump())
+    except UnsupportedSchemaVersionError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "UNSUPPORTED_SCHEMA_VERSION",
+                "detail": str(exc),
+                "recoverable": False,
+            },
+        ) from exc
+
+    if not inserted:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "DUPLICATE_EVENT",
+                "detail": f"Duplicate event: (journey_id={body.journey_id}, "
+                          f"event_type={body.event_type}, timestamp={body.timestamp})",
+                "recoverable": False,
+            },
+        )
+    return IngestSingleResponse(event_id=body.event_id, stored=True)
 
 
 @router.get("", response_model=EventPage)
