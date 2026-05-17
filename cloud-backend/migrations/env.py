@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -13,24 +14,26 @@ if config.config_file_name is not None:
 target_metadata = None
 
 
+def _get_url() -> str:
+    url = os.environ.get("DATABASE_URL") or config.get_main_option("sqlalchemy.url", "")
+    return url
+
+
 def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
-    context.configure(url=url, target_metadata=target_metadata, literal_binds=True)
+    context.configure(url=_get_url(), target_metadata=target_metadata, literal_binds=True)
     with context.begin_transaction():
         context.run_migrations()
 
 
 async def run_migrations_online() -> None:
-    url = config.get_main_option("sqlalchemy.url")
-    connectable = create_async_engine(url)
+    connectable = create_async_engine(_get_url())
     async with connectable.connect() as connection:
         await connection.run_sync(
-            lambda conn: context.configure(
-                connection=conn, target_metadata=target_metadata
-            )
+            lambda conn: context.configure(connection=conn, target_metadata=target_metadata)
         )
         async with connection.begin():
             await connection.run_sync(lambda conn: context.run_migrations())
+    await connectable.dispose()
 
 
 if context.is_offline_mode():
