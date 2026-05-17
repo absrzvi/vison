@@ -18,12 +18,6 @@ class MockAPCAdapter:
         return _MOCK_OCCUPANCY[car_id]
 
     async def get_door_state(self, car_id: str) -> DoorState:
+        if car_id not in _MOCK_OCCUPANCY:
+            raise KeyError(f"Unknown car_id: {car_id}")
         return DoorState(car_id=car_id, is_open=False, timestamp="2026-05-17T10:00:00Z")
-
-
-# Runtime check: MockAPCAdapter must satisfy APCAdapter Protocol
-def _assert_protocol() -> None:
-    _: APCAdapter = MockAPCAdapter()
-
-
-_assert_protocol()

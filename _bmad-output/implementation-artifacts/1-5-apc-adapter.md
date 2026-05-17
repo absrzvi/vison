@@ -3,7 +3,7 @@
 **Epic:** 1 — Foundation & Shared Infrastructure
 **Story:** E1-S5
 **Story Key:** 1-5-apc-adapter
-**Status:** review
+**Status:** done
 **Date Created:** 2026-05-17
 
 ---
@@ -90,3 +90,28 @@
 ## Change Log
 
 - 2026-05-17: E1-S5 implemented — APCAdapter Protocol + MockAPCAdapter; 100% coverage; mypy strict clean
+
+---
+
+### Review Findings
+
+**Decision-Needed**
+- [ ] [Review][Decision] Should `OccupancyReading.count` enforce `>= 0` via `__post_init__`? — APC sensors can emit negative delta counts on door-close miscounts; `count: int` currently accepts negatives silently. If the dataclass is the canonical validation boundary, add `__post_init__`. If validation belongs in the real adapter (not the schema), defer. [adapter.py:9]
+- [ ] [Review][Decision] Should `APCAdapter` be decorated `@runtime_checkable`? — Without it, `isinstance(MockAPCAdapter(), APCAdapter)` raises `TypeError`. The current `_assert_protocol()` guard is mypy-only and gives false runtime confidence. If runtime protocol checks are needed (e.g. by fusion container injection), add `@runtime_checkable`. [adapter.py:21]
+
+**Patch**
+- [x] [Review][Patch] Move `_assert_protocol()` out of module-level into a test [mock.py:29]
+- [x] [Review][Patch] `get_door_state` silently accepts unknown `car_id` — asymmetric with `get_occupancy` which raises KeyError [mock.py:20]
+- [x] [Review][Patch] Use `@pytest.mark.asyncio` + `async def` tests instead of bare `asyncio.run()` [test_apc_adapter.py]
+- [x] [Review][Patch] Add `is_open=True` fixture path test for `DoorState` — currently always `False`, open-door path untested [test_apc_adapter.py]
+- [x] [Review][Patch] Add test for unknown `car_id` in `get_door_state` (mirrors existing occupancy test) [test_apc_adapter.py]
+- [x] [Review][Patch] `test_door_state_fields` does not assert `timestamp` — asymmetric with `test_occupancy_reading_fields` [test_apc_adapter.py:34]
+- [x] [Review][Patch] `test_runtime_protocol_check_passes` removed; replaced with `test_mock_satisfies_protocol_isinstance` using @runtime_checkable [test_apc_adapter.py]
+
+**Deferred**
+- [x] [Review][Defer] `timestamp` is an unvalidated raw string [adapter.py:11,18] — deferred, pre-existing design decision; timestamp validation scope is broader than this story
+- [x] [Review][Defer] Hardcoded stale timestamps in mock data [mock.py:3-8] — deferred, intentional determinism per spec; staleness logic is downstream concern
+- [x] [Review][Defer] `_MOCK_OCCUPANCY` is a mutable module-level dict (test isolation risk) [mock.py:3] — deferred, no evidence of mutation in current tests
+- [x] [Review][Defer] `car-2 count=182` exceeds realistic car capacity, no ceiling enforced [mock.py:5] — deferred, capacity constant out of scope for this story
+- [x] [Review][Defer] `car_id` accepts empty string / whitespace without `ValueError` [mock.py:16] — deferred, input validation not in scope; real format not yet confirmed
+- [x] [Review][Defer] `car_id` case sensitivity untested [mock.py] — deferred, real APC identifier format not yet confirmed per story context

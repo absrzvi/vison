@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 
 @dataclass
@@ -18,6 +18,7 @@ class DoorState:
     timestamp: str  # ISO-8601 UTC with Z
 
 
+@runtime_checkable
 class APCAdapter(Protocol):
     async def get_occupancy(self, car_id: str) -> OccupancyReading: ...
 
