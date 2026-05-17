@@ -1,4 +1,4 @@
-
+import { useState } from 'react';
 import './FleetList.css';
 
 const SEVERITY_DOT = { red: '#FF3B3B', amber: '#F5A623', green: '#22C55E' };
@@ -53,23 +53,28 @@ function TrainCard({ train, selectedTrainId, onSelect }) {
 }
 
 export function FleetList({ trains, selectedTrainId, onSelect, sortBy, onSortChange }) {
-
+  const [showNormal, setShowNormal] = useState(false);
 
   const nonNormal = trains.filter(t => t.severity !== 'green');
   const normal    = trains.filter(t => t.severity === 'green');
+
+  const handleSortChange = (sort) => {
+    localStorage.setItem('fleet-sort-pref', sort);
+    onSortChange(sort);
+  };
 
   return (
     <div className="fleet-list">
       <div className="fleet-list__header">
         <span className="fleet-list__heading">Fleet</span>
-        <div className="fleet-sort-toggle">
+        <div className="fleet-sort-toggle" data-testid="fleet-sort-toggle">
           <button
-            className={`fleet-sort-btn ${sortBy === 'occupancy' ? 'fleet-sort-btn--active' : ''}`}
-            onClick={() => onSortChange('occupancy')}
-          >Occupancy</button>
+            className={`fleet-sort-btn ${sortBy === 'passengers' ? 'fleet-sort-btn--active' : ''}`}
+            onClick={() => handleSortChange('passengers')}
+          >Passengers</button>
           <button
             className={`fleet-sort-btn ${sortBy === 'severity' ? 'fleet-sort-btn--active' : ''}`}
-            onClick={() => onSortChange('severity')}
+            onClick={() => handleSortChange('severity')}
           >Severity</button>
         </div>
       </div>
@@ -78,7 +83,13 @@ export function FleetList({ trains, selectedTrainId, onSelect, sortBy, onSortCha
         <TrainCard key={train.id} train={train} selectedTrainId={selectedTrainId} onSelect={onSelect} />
       ))}
 
-      {normal.map(train => (
+      {normal.length > 0 && (
+        <button className="fleet-list__normal-toggle" onClick={() => setShowNormal(v => !v)}>
+          {showNormal ? `Hide normal trains` : `Show ${normal.length} normal train${normal.length !== 1 ? 's' : ''}`}
+        </button>
+      )}
+
+      {showNormal && normal.map(train => (
         <TrainCard key={train.id} train={train} selectedTrainId={selectedTrainId} onSelect={onSelect} />
       ))}
     </div>

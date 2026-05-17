@@ -14,7 +14,7 @@ export function LiveMonitoring() {
   const location = useLocation();
   const navigate = useNavigate();
   const [selectedTrainId, setSelectedTrainId] = useState(location.state?.selectTrainId ?? null);
-  const [fleetSort, setFleetSort] = useState('occupancy');
+  const [fleetSort, setFleetSort] = useState(() => localStorage.getItem('fleet-sort-pref') ?? 'passengers');
 
   useEffect(() => {
     if (location.state?.selectTrainId) {
@@ -40,13 +40,20 @@ export function LiveMonitoring() {
   const selectedTrain = fleet.find(t => t.id === selectedTrainId) ?? null;
   const isStale = lastUpdate && (Date.now() - lastUpdate.getTime()) > 60000;
 
-  const sortedFleet = useMemo(() => [...fleet].sort((a, b) => {
-    if (fleetSort === 'severity') {
-      const order = { red: 0, amber: 1, green: 2 };
-      return order[a.severity] - order[b.severity];
-    }
-    return b.avgOccupancy - a.avgOccupancy;
-  }), [fleet, fleetSort]);
+  const totalPassengers = (train) => train.coaches.reduce((s, c) => s + (c.headCount ?? 0), 0);
+
+  const sortedFleet = useMemo(() => {
+    const sevOrder = { red: 0, amber: 1, green: 2 };
+    return [...fleet].sort((a, b) => {
+      if (fleetSort === 'severity') {
+        const sevDiff = sevOrder[a.severity] - sevOrder[b.severity];
+        return sevDiff !== 0 ? sevDiff : totalPassengers(b) - totalPassengers(a);
+      }
+      // passengers sort: desc total passengers, tiebreak by severity
+      const passDiff = totalPassengers(b) - totalPassengers(a);
+      return passDiff !== 0 ? passDiff : sevOrder[a.severity] - sevOrder[b.severity];
+    });
+  }, [fleet, fleetSort]);
 
   if (!connected) {
     return (
