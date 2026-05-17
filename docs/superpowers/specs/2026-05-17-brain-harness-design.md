@@ -138,6 +138,8 @@ class IntentPacket(BaseModel):
 
 Nomad provides the plumbing, context, and UI. ÖBB provides the reasoning engine (their own API key). The harness is a *transparent reasoning amplifier* — not an oracle. Every answer surfaces its source packets.
 
+The orchestration runtime is **Hermes Agent** (Nous Research, MIT licence, released Feb 2026). Rather than building a custom query engine, tool registry, and session state layer from scratch, we use Hermes as the agent runtime and expose all rail data as MCP tools it can call. This eliminates the FastAPI query engine and LiteLLM abstraction as custom-built components — Hermes handles both natively.
+
 ### 4.2 Architecture Layers
 
 ```
@@ -148,47 +150,72 @@ Train intent packets (MQTT)
           │
           ▼
   PostgreSQL + pgvector
-  (intent packet store + RAG)
+  (intent packet store + embeddings)
           │
-    ┌─────┴──────────────────────┐
-    ▼                            ▼
-Context hydration            Query engine
-(HAFAS API, Depot API)       (FastAPI)
-    │                            │
-    └──────────┬─────────────────┘
-               ▼
-    LiteLLM abstraction layer
-    (routes to ÖBB's model endpoint)
-               │
-               ▼
-    Pydantic output validation
-               │
-               ▼
-    Fleet manager UI (70/30 layout)
+          ▼
+  Rail MCP Server (Nomad-built)
+  exposes PostgreSQL + HAFAS + Depot API
+  as typed MCP tools
+          │
+          ▼
+  Hermes Agent runtime
+  (conversation loop, persistent memory,
+   skills, MCP client, BYOK model endpoint)
+          │
+          ▼
+  Fleet manager UI (70/30 layout)
+  — chat sidebar = Hermes frontend
 ```
 
-### 4.3 BYOK Model Gateway
+### 4.3 Hermes Agent Runtime
 
-ÖBB administrators configure their model endpoint via an admin panel:
-- Supported providers: Azure OpenAI, AWS Bedrock, private vLLM (ChatML format)
-- Abstraction: LiteLLM (single dependency, handles format differences)
-- Spend guardrails: per-query token budget cap configurable per user role
-- Data privacy: all token processing enforced within EU-Central region; no-training-on-data header flag required
+Hermes Agent is the landside orchestration engine. Key capabilities used:
 
-**Implementation note (Amelia):** Build for one provider first (Azure OpenAI). Extract the LiteLLM abstraction after the second provider is added — not before.
+| Hermes capability | How we use it |
+|---|---|
+| **BYOK model endpoint** | Point Hermes at ÖBB's Azure OpenAI / Bedrock / vLLM endpoint — Hermes handles the rest |
+| **MCP client** | Connects to our Rail MCP Server at startup, auto-discovers rail tools, makes them first-class callable in every conversation |
+| **Persistent memory (SQLite + FTS5)** | Fleet manager session memory — Hermes remembers prior queries cross-session without custom state management |
+| **Skills system** | Markdown skill docs describe scheduled report procedures (weekly fleet health, fault frequency, occupancy trends) — portable, version-controlled alongside the codebase |
+| **Structured function calling** | Hermes Function Calling standard (`<tools>` / `<tool_call>` / `<tool_response>`) ensures typed, validated tool invocations against our MCP schema |
+| **Spend guardrails** | Per-role token budget caps configured in Hermes — ÖBB's key is charged only for actual queries |
 
-### 4.4 Intent Packet Storage
+### 4.4 Rail MCP Server (Nomad-built)
 
-- **Store:** PostgreSQL (structured fields) + pgvector (embedding of `incident_summary` for semantic search)
+The one component Nomad builds from scratch is a **Rail MCP Server** — an HTTP MCP endpoint that exposes fleet data as typed tools Hermes can call:
+
+| Tool | Description |
+|---|---|
+| `get_fleet_events(train_id?, time_range, severity?)` | Query intent packets from PostgreSQL |
+| `get_fleet_summary(time_range)` | Aggregated fleet health across all trains |
+| `get_hafas_timetable(train_id, stop)` | Live ÖBB HAFAS timetable lookup |
+| `get_depot_schedule(depot_id, date)` | Depot slot and parts availability |
+| `search_fleet_events(query)` | Semantic search over intent packet embeddings (pgvector) |
+| `schedule_report(report_type, cadence, delivery)` | Register a recurring report (stored in Postgres, executed by Hermes skill) |
+
+All tools return structured JSON. Pydantic models enforce schema at the MCP server boundary — Hermes never receives untyped responses.
+
+**Implementation note (Amelia):** Build the MCP server for one provider (Azure OpenAI) first. Hermes' built-in provider routing handles additional providers without MCP server changes — no premature abstraction needed on our side.
+
+### 4.5 BYOK Model Gateway
+
+ÖBB administrators configure their model endpoint in Hermes' config (`~/.hermes/config.yaml`), surfaced via a Nomad-built admin panel:
+- Supported providers: Azure OpenAI, AWS Bedrock, private vLLM — Hermes handles format normalisation natively
+- Spend guardrails: per-query token budget cap per user role (Hermes config)
+- Data privacy: EU-Central region enforcement + no-training-on-data header required — configured at the provider endpoint level
+
+### 4.6 Intent Packet Storage
+
+- **Store:** PostgreSQL (structured fields) + pgvector (embedding of `incident_summary` for semantic search via `search_fleet_events` MCP tool)
 - **Ingest pipe:** Redis Streams → consumer group → Postgres insert
 - **Retention:** configurable per ÖBB data policy (default 90 days)
 - **Query latency AC:** packet arrives → queryable within 500ms
 
-### 4.5 Data Freshness
+### 4.7 Data Freshness
 
 Fleet manager operates on daily/weekly horizon — 40-minute-stale data is acceptable for their use cases. Every query response surfaces packet age inline (not in a tooltip — visually prominent).
 
-### 4.6 Trust Model
+### 4.8 Trust Model
 
 - Every LLM response shows: source packet count, oldest packet timestamp, anomaly flags present in source data
 - Zero-source responses (hallucination risk): hard visual interrupt — different UI state, not a warning badge
@@ -268,14 +295,17 @@ Schema drift without version bump = silent production break across potentially 5
 - No ReAct agentic loop onboard
 - No LLM-generated commands sent directly to train systems — all suggestions go through HITL approval
 - No custom LLM training or fine-tuning
-- No provider-specific optimisation beyond LiteLLM routing
+- No custom query engine or LiteLLM abstraction layer — Hermes Agent handles this natively
+- No custom session state management — Hermes persistent memory (SQLite + FTS5) handles this
 - No chat interface for on-train staff — dashboards and alerts only for conductor, technician, driver, bistro
+- No Hermes Agent modification — we consume it as-is via its MCP client and skills system
 
 ---
 
 ## 8. Open Questions
 
 1. Who at ÖBB owns the decision to graduate "experimental" chat to "standard"? Named sponsor + success metric needed before launch.
-2. Which provider does ÖBB have an active enterprise agreement with? Determines which provider to build for first.
+2. Which provider does ÖBB have an active enterprise agreement with? Determines which provider to configure in Hermes first.
 3. What is the depot API schema — is there an existing endpoint or does it need to be built?
-4. Scheduled reports: push (email/Slack) or pull (dashboard panel only) for v1?
+4. Scheduled reports: push (email/Slack) or pull (dashboard panel only) for v1? Hermes supports both via its integrations (Telegram, Discord, email) — delivery channel is a config choice not an architecture choice.
+5. Hermes Agent version pinning strategy — MIT licence, fast-moving repo (95k stars, active). Need to pin to a release tag and define an upgrade review cadence.
