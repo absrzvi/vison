@@ -724,10 +724,12 @@ Preferences are stored per operator in a `operator_preferences` PostgreSQL table
 
 ```sql
 CREATE TABLE operator_preferences (
-  operator_id   TEXT PRIMARY KEY,          -- from session / API key identity
-  threshold_sec INTEGER NOT NULL DEFAULT 60
+  operator_id          TEXT PRIMARY KEY,   -- derived server-side from X-API-Key
+  threshold_sec        INTEGER NOT NULL DEFAULT 60
     CHECK (threshold_sec IN (30, 60, 90, 120)),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  staleness_threshold_sec INTEGER NOT NULL DEFAULT 120
+    CHECK (staleness_threshold_sec IN (60, 120, 180, 300)),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
@@ -735,13 +737,13 @@ CREATE TABLE operator_preferences (
 
 ```
 GET  /api/v1/operators/me/preferences
-     → 200 { operator_id, threshold_sec }
-     → 404 { error: "NOT_FOUND", ... } when no row exists (use default 60)
+     → 200 { operator_id, threshold_sec, staleness_threshold_sec }
+     → 404 { error: "NOT_FOUND", ... } when no row exists (use defaults: threshold_sec=60, staleness_threshold_sec=120)
 
 PATCH /api/v1/operators/me/preferences
-     body: { threshold_sec: 30 | 60 | 90 | 120 }
-     → 200 { operator_id, threshold_sec, updated_at }
-     → 422 { error: "INVALID_THRESHOLD", detail: "threshold_sec must be one of: 30, 60, 90, 120", recoverable: true }
+     body: { threshold_sec?: 30|60|90|120, staleness_threshold_sec?: 60|120|180|300 }
+     → 200 { operator_id, threshold_sec, staleness_threshold_sec, updated_at }
+     → 422 { error: "INVALID_PREFERENCE", detail: "...", recoverable: true }
 ```
 
 `operator_id` is derived server-side from the `X-API-Key` header — never sent in the request body.
@@ -750,7 +752,7 @@ PATCH /api/v1/operators/me/preferences
 
 **Given** the operator opens their preferences (settings icon in top nav)  
 **When** the preferences panel renders  
-**Then** `GET /api/v1/operators/me/preferences` is called; the "Critical alert threshold" control shows options 30s / 60s / 90s / 120s with the returned `threshold_sec` highlighted; if the endpoint returns 404, 60s is highlighted as the default
+**Then** `GET /api/v1/operators/me/preferences` is called; two controls are shown: "Critical alert threshold" (30s / 60s / 90s / 120s, default 60s) and "Connection staleness warning" (60s / 120s / 180s / 300s, default 120s); returned values are highlighted; 404 uses defaults
 
 **Given** the operator selects a new threshold and confirms  
 **When** the selection is confirmed  
@@ -811,7 +813,7 @@ PATCH /api/v1/operators/me/preferences
 
 **And** `lastHealthy` timestamps in the prototype (hardcoded `'09:43'`, `'10:51'`) are removed; the component uses server-sourced ISO-8601 strings exclusively  
 **And** `Math.random()` ticket ref generation in `SystemHealth.jsx` remains unchanged — server-generated ticket IDs are a Phase 2 concern (flag `MAINTENANCE_APP_ENABLED = false` unchanged)  
-**And** staleness detection (amber "reconnecting…" banner at >2 min without WS message) is implemented using the threshold from OQ2; default assumption is 120s until ÖBB operations confirms
+**And** staleness detection (amber "reconnecting…" banner) triggers when no WS message has been received for longer than the operator's `staleness_threshold_sec` preference (default 120s); the threshold is read from `FleetContext` which sources it from `operator_preferences` with `localStorage` cache
 
 **Dependencies:** E3-S1 (backend `/api/v1/analytics/system-health` endpoint), E2-S1 (FleetContext with CAMERA_DEGRADED/RECOVERED event handling), E2-S7 (shared skeleton animation class)  
 **Files changed:** `src/components/health/SystemHealth.jsx`  
@@ -904,12 +906,38 @@ Control Centre operators and capacity planners can analyse historical exceptions
 **When** confirmed  
 **Then** `POST /api/v1/analytics/exceptions/{id}/dismiss` is called; on success the exception moves to the dismissed section; "Reopen" ghost button calls `POST /api/v1/analytics/exceptions/{id}/reopen`
 
+**Given** the operator clicks the "Export CSV" button in the Analytics tab bar  
+**When** the request completes  
+**Then** `GET /api/v1/capacity-review-queue/export?format=csv` is called; the browser downloads a file named `capacity-review-{YYYY-MM-DD}.csv` containing all queued and in-review exceptions with columns: `exception_id`, `route`, `train_id`, `departure_date`, `priority`, `note`, `queued_by`, `queued_at`, `status`; dismissed exceptions are excluded
+
+**Given** the capacity review queue is empty  
+**When** the operator clicks "Export CSV"  
+**Then** the download still proceeds; the CSV contains the header row only; no error toast
+
 **And** `GET /api/v1/analytics/exceptions` API error shows: "Exception data unavailable — retry" with a retry button; no crash  
-**And** the "View Conrad's full flag →" link is wired to navigate to the Conductor App capacity flag deep-link URL (stored in `VITE_CONDUCTOR_APP_URL` env var); if env var is absent the link is hidden
+**And** the "View Conrad's full flag →" link is wired to navigate to the Conductor App capacity flag deep-link URL (stored in `VITE_CONDUCTOR_APP_URL` env var); if env var is absent the link is hidden  
+**And** the capacity review queue is stored in an internal `capacity_review_queue` PostgreSQL table — no integration with external ÖBB fleet planning systems in PoC scope
 
 **Dependencies:** E3-S1 (backend endpoint), E2-S1 (FleetContext for WS connection state)  
 **Files changed:** `src/components/analytics/ExceptionWorkflow.jsx`, new `src/api/analytics.js`  
-**Backend required:** `POST /api/v1/analytics/exceptions/{id}/review`, `/dismiss`, `/reopen`
+**Backend required:** `POST /api/v1/analytics/exceptions/{id}/review`, `/dismiss`, `/reopen`, `GET /api/v1/capacity-review-queue/export`
+
+**Data model (new table):**
+```sql
+CREATE TABLE capacity_review_queue (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  exception_id TEXT NOT NULL,
+  route        TEXT NOT NULL,
+  train_id     TEXT NOT NULL,
+  departure_date DATE NOT NULL,
+  priority     TEXT NOT NULL CHECK (priority IN ('low', 'medium', 'high')),
+  note         TEXT,
+  queued_by    TEXT NOT NULL,   -- operator_id from X-API-Key
+  queued_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  status       TEXT NOT NULL DEFAULT 'in_review'
+               CHECK (status IN ('in_review', 'dismissed'))
+);
+```
 
 ---
 
@@ -1298,7 +1326,7 @@ The system detects occupancy, congestion, luggage, door obstructions, accessibil
 **Then** a `DOOR_OBSTRUCTION` candidate is emitted to `fusion` for cross-reference with ZFR door state; `inference` does NOT post the alert directly — fusion is authoritative for door obstruction alerts (FR7)
 
 **Given** `detector.py` detects a `bicycle` class detection (COCO proxy for wheelchair/pushchair) in a vestibule or door zone  
-**When** the detection confidence is ≥ the configured threshold (default: 0.70)  
+**When** the detection confidence is ≥ the configured threshold (default: 0.80 — resolved OQ3)  
 **Then** an `ACCESSIBILITY_DETECTED` event is POSTed to `event-store` with payload: `car_id`, `zone`, `detection_type` (`wheelchair | pushchair`), `door_id` (nearest door), `confidence`; payload matches `event-payload-schemas.md`
 
 **Given** `vlan-pollers` context state includes a `ramp_deployed: true` signal from TCMS  

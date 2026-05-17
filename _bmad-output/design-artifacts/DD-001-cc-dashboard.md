@@ -433,11 +433,11 @@ These were open at spec time and remain unresolved. Development cannot proceed o
 | # | Question | Blocking | Owner |
 |---|----------|----------|-------|
 | 1 | Is `pose_estimation` feasible per coach for seated/standing split? | Coach drill-in seated/standing columns | Hailo-8 / Nomad Digital |
-| 2 | WebSocket staleness threshold — default assumed 2 minutes | Staleness banner trigger | ÖBB operations |
-| 3 | AI escalation confidence threshold | Alert overload risk | ÖBB operations |
+| 2 | ~~WebSocket staleness threshold~~ | ~~Staleness banner trigger~~ | **Resolved 2026-05-17** — 120s default, configurable per operator via `operator_preferences.staleness_threshold_sec` (options: 60/120/180/300s) |
+| 3 | ~~AI escalation confidence threshold~~ | ~~Alert overload risk~~ | **Resolved 2026-05-17** — 80% minimum confidence to emit an alert (OQ3). Start conservative; tune down post-PoC if incidents are missed. Named constant `ALERT_CONFIDENCE_THRESHOLD = 0.80` in `inference/src/inference/detector.py`. |
 | 4 | Maintenance App deep-link URL scheme + auth handoff | System Health CTA | Maintenance App team |
 | 5 | 7-day trend query key — by train number or route+timeslot? | Analytics trend chart accuracy | Nomad Digital backend |
-| 6 | Fleet planning queue — internal PostgreSQL or ÖBB external system? | Analytics "Add to review" action | ÖBB operations |
+| 6 | ~~Fleet planning queue — internal PostgreSQL or ÖBB external system?~~ | ~~Analytics "Add to review" action~~ | **Resolved 2026-05-17** — Internal PostgreSQL `capacity_review_queue` table for PoC. Claudia can export as CSV (`GET /api/v1/capacity-review-queue/export`) to share with Passenger Experience / Fleet Management teams. External system integration is out of PoC scope. |
 | 7 | CCTV stream amber vs red threshold definition | System Health badge logic | ÖBB / Nomad Digital |
 | 8 | Applications amber vs red threshold (restarting vs exited) | System Health badge logic | ÖBB / Nomad Digital |
 | 9 | Health poll interval for `rtsp-ingest` and `event-store` | "Updated Xs ago" freshness logic | Nomad Digital |
