@@ -21,8 +21,39 @@ Nomad Digital / OEBB Hailo-8 AI Insights-as-a-Service platform. Single Hailo-8 M
 ## Git & Version Control
 
 - After every major milestone (epic/story batch, ADR, architecture doc, design delivery, skill workflow step), commit relevant files and push to `origin master` — do this automatically, without being asked.
-- Stage only files changed in that milestone. Write descriptive commit messages.
+- Stage only files changed in that milestone.
 - Remote: `https://github.com/absrzvi/vison`
+
+### Commit Message Format
+
+Every commit must follow this exact structure:
+
+```
+type(scope): short description (under 72 chars)
+
+Agent: <name> | Phase: <phase-id> Step <n> (<step name>)
+Next: <one actionable sentence — include file ref where relevant>
+Blocked: <one line or — if clear>
+```
+
+**Types:** `feat` `fix` `docs` `chore` `refactor` `test` `style`
+
+**Scopes:** match the interface or module being changed — e.g. `control-centre`, `conductor-app`, `hailo-ingest`, `architecture`, `config`
+
+**Agent names:** Freya, Saga, Amelia, Winston, Mary, Paige (or `Claude` for harness/config work)
+
+**Phase IDs:** WDS-0 through WDS-8, BMAD-PRD, BMAD-ARCH, BMAD-EPIC, BMAD-STORY, BMAD-DEV
+
+**Example:**
+```
+feat(control-centre): add occupancy heatmap component
+
+Agent: Freya | Phase: WDS-4 Step 3 (UX Design)
+Next: Spec the alert panel — ref _bmad-output/design-artifacts/D-UX-Design/control-centre.md §4
+Blocked: —
+```
+
+The agent block must always be present. Use `—` for Blocked when there are no blockers. Keep Next to one sentence.
 
 ---
 
