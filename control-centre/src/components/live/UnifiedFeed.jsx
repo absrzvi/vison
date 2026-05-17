@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { EscalationDetail } from './EscalationDetail';
 import { SOURCE_LABEL, SEV_CLASS } from '../../constants/escalation';
 import './UnifiedFeed.css';
@@ -28,6 +28,10 @@ export function UnifiedFeed({ escalations, activeFilter, onFilterChange, statusF
   const [selectedEscId, setSelectedEscId] = useState(null);
   const [localStatusFilter, setLocalStatusFilter] = useState(null);
   const [sevFilter, setSevFilter] = useState(null);
+  const [newCount, setNewCount] = useState(0);
+  const listRef = useRef(null);
+  const isAtTopRef = useRef(true);
+  const prevFilteredIdsRef = useRef(null);
 
   // Use prop-controlled statusFilter if provided, otherwise local state
   const statusFilter = statusFilterProp !== undefined ? statusFilterProp : localStatusFilter;
@@ -44,6 +48,39 @@ export function UnifiedFeed({ escalations, activeFilter, onFilterChange, statusF
 
   const toggleStatus = (key) => setStatusFilter(statusFilter === key ? null : key);
   const toggleSev    = (key) => setSevFilter(prev => prev === key ? null : key);
+
+  // New-item detection: diff filtered ids vs previous render
+  useEffect(() => {
+    const currentIds = new Set(filtered.map(e => e.id));
+    if (prevFilteredIdsRef.current === null) {
+      // first render — establish baseline, no chip
+      prevFilteredIdsRef.current = currentIds;
+      return;
+    }
+    const genuinelyNew = [...currentIds].filter(id => !prevFilteredIdsRef.current.has(id));
+    prevFilteredIdsRef.current = currentIds;
+    if (genuinelyNew.length === 0) return;
+    if (isAtTopRef.current) {
+      listRef.current?.scrollTo({ top: 0 });
+    } else {
+      setNewCount(prev => prev + genuinelyNew.length);
+    }
+  }, [filtered]);
+
+  const handleScroll = (e) => {
+    const atTop = e.target.scrollTop === 0;
+    isAtTopRef.current = atTop;
+    if (atTop && newCount > 0) setNewCount(0);
+  };
+
+  const scrollToTop = () => {
+    listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    setNewCount(0);
+  };
+
+  const handleChipKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); scrollToTop(); }
+  };
 
   // Derive modal escalation from live props so status stays current
   const selectedEsc = escalations.find(e => e.id === selectedEscId) ?? null;
@@ -97,7 +134,19 @@ export function UnifiedFeed({ escalations, activeFilter, onFilterChange, statusF
         </div>
       </div>
 
-      <div className="unified-feed__list">
+      <div className="unified-feed__list" ref={listRef} onScroll={handleScroll}>
+        {newCount > 0 && (
+          <div
+            id="pid-feed-new-chip"
+            className="unified-feed__new-chip"
+            role="button"
+            tabIndex={0}
+            onClick={scrollToTop}
+            onKeyDown={handleChipKeyDown}
+          >
+            ↑ {newCount} new {newCount === 1 ? 'item' : 'items'}
+          </div>
+        )}
         {filtered.length === 0 && (
           <div className="unified-feed__empty">No escalations matching this filter.</div>
         )}
