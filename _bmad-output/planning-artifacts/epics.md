@@ -447,7 +447,7 @@ Developers can deploy a working system skeleton — event envelope, shared types
 ### Epic 2: Control Centre Dashboard — Live Operations
 Control Centre operators (Claudia) can monitor the full fleet in real time — live train cards with occupancy and severity, unified escalation feed, acknowledge/resolve actions, and escalation detail panel.
 
-**FRs covered:** FR20, FR21, FR24, FR25, FR27
+**FRs covered:** FR20, FR21, FR24, FR25, FR26, FR27
 **UX-DRs covered:** UX-DR1–UX-DR6, UX-DR13–UX-DR15
 **Prototype reference:** `control-centre/` — DD-001 accepted 2026-05-16
 **Component files:** `src/components/shell/`, `src/components/live/`, `src/components/train-detail/`, `src/context/FleetContext.jsx`, `src/hooks/useFleetData.js`, `src/mock/MockWebSocketClient.js`
@@ -718,33 +718,104 @@ Control Centre operators (Claudia) can monitor the full fleet in real time — l
 **I want** to configure the threshold at which the critical alert hook (pulsing red pill) activates,
 **so that** I can tune alert sensitivity to match my operational context rather than using a hardcoded 60-second default.
 
+**Data model:**
+
+Preferences are stored per operator in a `operator_preferences` PostgreSQL table:
+
+```sql
+CREATE TABLE operator_preferences (
+  operator_id   TEXT PRIMARY KEY,          -- from session / API key identity
+  threshold_sec INTEGER NOT NULL DEFAULT 60
+    CHECK (threshold_sec IN (30, 60, 90, 120)),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**API shape:**
+
+```
+GET  /api/v1/operators/me/preferences
+     → 200 { operator_id, threshold_sec }
+     → 404 { error: "NOT_FOUND", ... } when no row exists (use default 60)
+
+PATCH /api/v1/operators/me/preferences
+     body: { threshold_sec: 30 | 60 | 90 | 120 }
+     → 200 { operator_id, threshold_sec, updated_at }
+     → 422 { error: "INVALID_THRESHOLD", detail: "threshold_sec must be one of: 30, 60, 90, 120", recoverable: true }
+```
+
+`operator_id` is derived server-side from the `X-API-Key` header — never sent in the request body.
+
 **Acceptance criteria:**
 
-**Given** the operator opens their preferences (accessible via a settings icon in the top nav)  
+**Given** the operator opens their preferences (settings icon in top nav)  
 **When** the preferences panel renders  
-**Then** a "Critical alert threshold" control is shown with options: 30s / 60s (default) / 90s / 120s; the current value is highlighted
+**Then** `GET /api/v1/operators/me/preferences` is called; the "Critical alert threshold" control shows options 30s / 60s / 90s / 120s with the returned `threshold_sec` highlighted; if the endpoint returns 404, 60s is highlighted as the default
 
-**Given** the operator selects a new threshold  
+**Given** the operator selects a new threshold and confirms  
 **When** the selection is confirmed  
-**Then** the preference is saved to `localStorage` under key `oebb.cc.alertThresholdSeconds`; the critical alert hook immediately uses the new threshold for subsequent evaluations
+**Then** `PATCH /api/v1/operators/me/preferences` is called with `{ threshold_sec: N }`; on HTTP 200 the alert hook immediately uses the new value; the preference is also persisted to `localStorage` key `oebb.cc.alertThresholdSeconds` as a cache for offline / fast-load
 
 **Given** the operator reloads the page  
 **When** `FleetContext` initialises  
-**Then** the threshold is read from `localStorage`; if absent, 60 is used; the alert hook uses the restored value from the first render
+**Then** `localStorage` is read first (instant); a background `GET /api/v1/operators/me/preferences` call reconciles the server value; if they differ, the server value wins and `localStorage` is updated
+
+**Given** the `PATCH` call fails (4xx/5xx)  
+**When** the error is returned  
+**Then** the threshold control reverts to the previous value; a toast error appears: "Preference not saved — please retry"; `localStorage` is not updated
 
 **Given** an unacknowledged critical escalation exists  
-**When** the elapsed time since the escalation arrived exceeds the operator's configured threshold  
-**Then** the critical alert hook pill (`pid-app-shell-alert-hook`) becomes visible and pulses red; it navigates to `/dashboard/live` when clicked
+**When** elapsed time since arrival exceeds the operator's configured threshold  
+**Then** `pid-app-shell-alert-hook` pulses red and navigates to `/dashboard/live` when clicked
 
 **Given** the escalation is acknowledged  
-**When** acknowledgement is processed in `FleetContext`  
-**Then** the alert hook pill disappears regardless of the configured threshold
+**When** `FleetContext` processes acknowledgement  
+**Then** the alert hook disappears regardless of threshold
 
-**And** the threshold control is keyboard accessible: arrow keys cycle through options, Enter confirms  
-**And** the 60s default is a named constant `DEFAULT_ALERT_THRESHOLD_SECONDS = 60` — no magic numbers
+**And** the threshold control is keyboard accessible: arrow keys cycle options, Enter confirms  
+**And** `DEFAULT_ALERT_THRESHOLD_SECONDS = 60` is the named constant — no magic numbers anywhere
 
-**Dependencies:** E2-S1 (FleetContext with escalation state), E2-S5 (acknowledge action updates context)  
-**Files changed:** `src/components/shell/AppShell.jsx`, new `src/components/shell/OperatorPreferences.jsx`, `src/context/FleetContext.jsx`
+**Dependencies:** E2-S1 (FleetContext + escalation state), E2-S5 (acknowledge action), E1-S7 (API auth + error envelope), E1-S3 (PostgreSQL schema — migration adds `operator_preferences` table)  
+**Files changed:** `src/components/shell/AppShell.jsx`, new `src/components/shell/OperatorPreferences.jsx`, `src/context/FleetContext.jsx`, new `src/api/preferences.js`  
+**Backend required:** `GET /api/v1/operators/me/preferences`, `PATCH /api/v1/operators/me/preferences`, Alembic migration for `operator_preferences` table
+
+---
+
+#### Story E2-S9 — System Health Data Feed Integration
+
+**As a** Control Centre operator,
+**I want** the System Health view to show live CCTV, application, and connectivity status from the backend rather than mock data,
+**so that** I can detect real train health degradations and act on accurate container and device status.
+
+**Acceptance criteria:**
+
+**Given** the operator navigates to `/dashboard/health`  
+**When** `SystemHealth` mounts  
+**Then** `GET /api/v1/analytics/system-health` is called; a loading skeleton (3 skeleton rows matching the grid layout) is shown while the request is in flight; on success the fleet health grid renders with real data
+
+**Given** the API response contains a train with `appStatus: "red"` and `appDetail` array  
+**When** the operator clicks that train's row  
+**Then** the inline detail panel renders the per-container drill-down from the server's `appDetail`; no client-side generation of container names or statuses
+
+**Given** the API response contains `last_healthy` as an ISO-8601 UTC string  
+**When** the "Since" column renders  
+**Then** elapsed time is computed from `Date.now()` minus the parsed server timestamp — not from a hardcoded mock time; the value live-ticks every second via `setInterval`
+
+**Given** the WebSocket delivers a `CAMERA_DEGRADED` or `CAMERA_RECOVERED` event for a train while System Health is open  
+**When** `FleetContext` processes the event  
+**Then** the affected train's `cctvStatus` badge updates without a full page refresh or re-fetch of the REST endpoint
+
+**Given** the `GET /api/v1/analytics/system-health` call fails  
+**When** the error is returned  
+**Then** the grid shows "System health data unavailable" with a retry button; the summary strip shows "—" for all counts; no crash
+
+**And** `lastHealthy` timestamps in the prototype (hardcoded `'09:43'`, `'10:51'`) are removed; the component uses server-sourced ISO-8601 strings exclusively  
+**And** `Math.random()` ticket ref generation in `SystemHealth.jsx` remains unchanged — server-generated ticket IDs are a Phase 2 concern (flag `MAINTENANCE_APP_ENABLED = false` unchanged)  
+**And** staleness detection (amber "reconnecting…" banner at >2 min without WS message) is implemented using the threshold from OQ2; default assumption is 120s until ÖBB operations confirms
+
+**Dependencies:** E3-S1 (backend `/api/v1/analytics/system-health` endpoint), E2-S1 (FleetContext with CAMERA_DEGRADED/RECOVERED event handling), E2-S7 (shared skeleton animation class)  
+**Files changed:** `src/components/health/SystemHealth.jsx`  
+**Backend required:** `GET /api/v1/analytics/system-health` (covered by E3-S1)
 
 ---
 
