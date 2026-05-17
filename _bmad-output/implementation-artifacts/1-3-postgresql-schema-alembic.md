@@ -3,7 +3,7 @@
 **Epic:** 1 — Foundation & Shared Infrastructure
 **Story:** 3
 **Story Key:** 1-3-postgresql-schema-alembic
-**Status:** review
+**Status:** done
 **Date Created:** 2026-05-17
 
 ---
@@ -90,9 +90,30 @@ _Empty_
 
 ---
 
+### Review Findings
+
+- [x] [Review][Decision] #5 — `severity` CHECK constraint added back: `ck_events_severity CHECK (severity IN ('critical','warning','info'))`
+- [x] [Review][Decision] #6 — `source` added to unique constraint: now `UNIQUE(journey_id, event_type, source, source_timestamp)`
+- [x] [Review][Patch] #1 — SQL injection via f-string in COMMENT ON COLUMN — fixed: using `sa.text()` with bound param
+- [x] [Review][Patch] #2 — `asyncio.get_event_loop()` deprecated — already resolved in actual file (uses `asyncio.new_event_loop()`)
+- [x] [Review][Patch] #3 — sync fixture / async engine mismatch — already resolved in actual file (uses `_run()` helper)
+- [x] [Review][Patch] #4 — `Config("alembic.ini")` CWD-relative — fixed: uses `_ALEMBIC_INI` absolute path
+- [x] [Review][Patch] #7 — AC6 pgcode not asserted — fixed: asserts pgcode/sqlstate == "23505"
+- [x] [Review][Patch] #9 — `DATABASE_URL` env var leaked — fixed: try/finally restores previous value
+- [x] [Review][Patch] #10 — Hardcoded `journey_id` — fixed: uses uuid suffix for uniqueness
+- [x] [Review][Patch] #11 — Plaintext DSN in alembic.ini — fixed: replaced with placeholder
+- [x] [Review][Defer] #12 — No index on `events.timestamp` / `event_type` — analytics range queries will full-scan [migrations/versions/0001_initial_schema.py] — deferred, pre-existing design gap
+- [x] [Review][Defer] #13 — No index on `journeys.vehicle_id`, `trip_number` — fleet lookups degrade linearly [migrations/versions/0001_initial_schema.py] — deferred, pre-existing design gap
+- [x] [Review][Defer] #14 — `asyncio.run` in env.py risks `RuntimeError` if called while event loop already running [migrations/env.py] — deferred, safe for current usage
+- [x] [Review][Defer] #15 — Missing `ingested_at` audit timestamp on events table — deferred, schema design decision
+- [x] [Review][Defer] #16 — `events` has no FK/index on `vehicle_id` (denormalised) — deferred, schema design decision
+
+---
+
 ## Change Log
 
 | Date | Change |
 |------|--------|
 | 2026-05-17 | Story created |
 | 2026-05-17 | Implementation complete — all ACs satisfied, status → review |
+| 2026-05-17 | Code review complete — 2 decision-needed, 8 patch, 5 deferred, 1 dismissed |

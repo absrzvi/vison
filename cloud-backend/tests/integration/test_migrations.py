@@ -9,9 +9,12 @@ import asyncio
 import os
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 from testcontainers.postgres import PostgresContainer
+
+_ALEMBIC_INI = str(Path(__file__).parents[2] / "alembic.ini")
 
 
 @pytest.fixture(scope="module")
@@ -23,12 +26,18 @@ def pg_url() -> str:  # type: ignore[return]
         from alembic import command
         from alembic.config import Config
 
+        prev = os.environ.get("DATABASE_URL")
         os.environ["DATABASE_URL"] = url
-        cfg = Config("alembic.ini")
-        cfg.set_main_option("sqlalchemy.url", url)
-        command.upgrade(cfg, "head")
-
-        yield url
+        try:
+            cfg = Config(_ALEMBIC_INI)
+            cfg.set_main_option("sqlalchemy.url", url)
+            command.upgrade(cfg, "head")
+            yield url
+        finally:
+            if prev is None:
+                os.environ.pop("DATABASE_URL", None)
+            else:
+                os.environ["DATABASE_URL"] = prev
 
 
 def _run(coro):  # type: ignore[no-untyped-def]
@@ -136,7 +145,7 @@ def test_duplicate_source_timestamp_raises_unique_violation(pg_url: str) -> None
     from sqlalchemy.exc import IntegrityError
     from sqlalchemy.ext.asyncio import create_async_engine
 
-    journey_id = "V001_RJ-0001_20260517"
+    journey_id = f"V001_RJ-0001_{uuid.uuid4().hex[:8]}"
 
     async def _check() -> None:
         engine = create_async_engine(pg_url)
@@ -173,9 +182,11 @@ def test_duplicate_source_timestamp_raises_unique_violation(pg_url: str) -> None
         async with engine.begin() as conn:
             await conn.execute(insert_sql, {"event_id": str(uuid.uuid4()), **base_params})
 
-        with pytest.raises(IntegrityError):
+        with pytest.raises(IntegrityError) as exc_info:
             async with engine.begin() as conn:
                 await conn.execute(insert_sql, {"event_id": str(uuid.uuid4()), **base_params})
+        cause = exc_info.value.orig
+        assert getattr(cause, "pgcode", None) == "23505" or getattr(cause, "sqlstate", None) == "23505"
 
         await engine.dispose()
 
@@ -227,6 +238,6 @@ def test_upgrade_head_idempotent(pg_url: str) -> None:
     from alembic import command
     from alembic.config import Config
 
-    cfg = Config("alembic.ini")
+    cfg = Config(_ALEMBIC_INI)
     cfg.set_main_option("sqlalchemy.url", pg_url)
     command.upgrade(cfg, "head")  # must not raise

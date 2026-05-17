@@ -34,9 +34,9 @@ def upgrade() -> None:
         sa.Column("start_time", sa.TIMESTAMP(timezone=True), nullable=False),
         sa.Column("end_time", sa.TIMESTAMP(timezone=True), nullable=True),
     )
-    # Column-level comment for journey_id (also via COMMENT ON COLUMN for PG compatibility)
     op.execute(
-        f"COMMENT ON COLUMN journeys.journey_id IS '{_JOURNEY_ID_COMMENT}'"
+        sa.text("COMMENT ON COLUMN journeys.journey_id IS :c"),
+        {"c": _JOURNEY_ID_COMMENT},
     )
 
     op.create_table(
@@ -63,14 +63,22 @@ def upgrade() -> None:
         sa.Column("source_timestamp", sa.TIMESTAMP(timezone=True), nullable=False),
     )
     op.execute(
-        f"COMMENT ON COLUMN events.journey_id IS '{_JOURNEY_ID_COMMENT}'"
+        sa.text("COMMENT ON COLUMN events.journey_id IS :c"),
+        {"c": _JOURNEY_ID_COMMENT},
     )
 
     # Idempotency constraint: same event from same source at same time = duplicate
     op.create_unique_constraint(
         "uq_events_journey_type_source_ts",
         "events",
-        ["journey_id", "event_type", "source_timestamp"],
+        ["journey_id", "event_type", "source", "source_timestamp"],
+    )
+
+    op.execute(
+        sa.text(
+            "ALTER TABLE events ADD CONSTRAINT ck_events_severity "
+            "CHECK (severity IN ('critical', 'warning', 'info'))"
+        )
     )
 
     # Index on journey_id for fast event lookups per journey
@@ -80,5 +88,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("ix_events_journey_id", table_name="events")
     op.drop_constraint("uq_events_journey_type_source_ts", "events", type_="unique")
+    op.drop_constraint("ck_events_severity", "events", type_="check")
     op.drop_table("events")
     op.drop_table("journeys")
