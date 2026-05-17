@@ -53,7 +53,7 @@ security:detect-secrets:
   script:
     - pip install detect-secrets
     - detect-secrets scan --baseline .secrets.baseline
-  allow_failure: true
+  allow_failure: false
 
 # ── Test ──────────────────────────────────────────────────────────────────────
 
@@ -61,14 +61,14 @@ test:shared:
   stage: test
   script:
     - pip install -e "shared/[dev]"
-    - cd shared && python -m pytest tests/ -m "unit" --cov=oebb_shared --cov-report=term-missing
+    - cd shared && python -m pytest tests/ -m "unit" --cov=oebb_shared --cov-report=term-missing --cov-fail-under=80
 
 test:event-store:
   stage: test
   script:
     - pip install -e shared/
     - pip install -e "event-store/[dev]"
-    - cd event-store && python -m pytest tests/ -m "unit or contract or integration" --cov=event_store --cov-report=term-missing
+    - cd event-store && python -m pytest tests/ -m "unit or contract or integration" --cov=event_store --cov-report=term-missing --cov-fail-under=80
 
 test:cloud-backend:
   stage: test
@@ -84,7 +84,7 @@ test:cloud-backend:
   script:
     - pip install -e shared/
     - pip install -e "cloud-backend/[dev]"
-    - cd cloud-backend && python -m pytest tests/unit/ --cov=cloud_backend --cov-report=term-missing
+    - cd cloud-backend && python -m pytest tests/ --cov=cloud_backend --cov-report=term-missing --cov-fail-under=80
 
 # ── Build ──────────────────────────────────────────────────────────────────────
 

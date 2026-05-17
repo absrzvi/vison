@@ -5,8 +5,21 @@ from pydantic import BaseModel, Field
 
 
 class EventPage(BaseModel):
-    items: list[EventModel]
-    next_cursor: str | None = None  # event_id of last item, None if no more pages
+    """Cursor-paginated event list.
+
+    `next_cursor` is the `event_id` of the last returned item. When non-null,
+    pass it as `?after=<next_cursor>` to fetch the next page. A non-null cursor
+    on the last page (when result count equals the requested limit but no more
+    rows exist) will return an empty `data: []` — callers must check `data`
+    length, not just `next_cursor`, to detect end-of-stream.
+    """
+
+    items: list[EventModel] = Field(alias="data", default_factory=list)
+    count: int = 0
+    journey_id: str | None = None
+    next_cursor: str | None = None
+
+    model_config = {"populate_by_name": True}
 
 
 class JourneyMeta(BaseModel):

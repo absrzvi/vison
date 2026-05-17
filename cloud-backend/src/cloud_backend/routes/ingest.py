@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Security
@@ -44,36 +43,46 @@ async def ingest_events(
                 schema_version=ev.schema_version,
                 event_id=ev.event_id,
             )
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "error": "UNSUPPORTED_SCHEMA_VERSION",
-                    "detail": f"schema_version {ev.schema_version} not supported",
-                    "recoverable": False,
-                },
-            )
+            continue
 
-        # source_timestamp defaults to envelope timestamp when not separately provided
-        source_ts = datetime.now(UTC)
+        # Ensure journey row exists before inserting the event (FK constraint).
+        # Uses ON CONFLICT DO NOTHING — journey metadata is upserted separately
+        # by the vlan-pollers when a trip starts; this guard prevents FK violations
+        # when events arrive before the journey creation path runs.
+        await db.execute(
+            text("""
+                INSERT INTO journeys (journey_id, vehicle_id, trip_number, start_time)
+                VALUES (:journey_id, :vehicle_id, :trip_number, :start_time)
+                ON CONFLICT (journey_id) DO NOTHING
+            """),
+            {
+                "journey_id": ev.journey_id,
+                "vehicle_id": ev.vehicle_id,
+                "trip_number": ev.journey_id.split("_")[1] if "_" in ev.journey_id else ev.journey_id,
+                "start_time": ev.timestamp,
+            },
+        )
 
         result: CursorResult[tuple[()]] = await db.execute(  # type: ignore[assignment]
             text("""
                 INSERT INTO events
-                    (event_id, journey_id, event_type, severity, source,
-                     timestamp, source_timestamp, payload)
+                    (event_id, journey_id, vehicle_id, event_type, severity, source,
+                     schema_version, timestamp, source_timestamp, payload)
                 VALUES
-                    (:event_id, :journey_id, :event_type, :severity, :source,
-                     :timestamp, :source_timestamp, :payload)
+                    (:event_id, :journey_id, :vehicle_id, :event_type, :severity, :source,
+                     :schema_version, :timestamp, :source_timestamp, :payload)
                 ON CONFLICT ON CONSTRAINT uq_events_journey_type_source_ts DO NOTHING
             """),
             {
                 "event_id": ev.event_id,
                 "journey_id": ev.journey_id,
+                "vehicle_id": ev.vehicle_id,
                 "event_type": ev.event_type,
                 "severity": ev.severity,
                 "source": ev.source,
-                "timestamp": source_ts,
-                "source_timestamp": source_ts,
+                "schema_version": ev.schema_version,
+                "timestamp": ev.timestamp,
+                "source_timestamp": ev.timestamp,
                 "payload": json.dumps(ev.payload),
             },
         )

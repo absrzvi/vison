@@ -17,13 +17,23 @@ async def websocket_stub(websocket: WebSocket) -> None:
     await websocket.accept()
     try:
         raw = await websocket.receive_text()
-        data = json.loads(raw)
-        sub = SubscriptionRequest(
-            event_types=data.get("event_types", []),
-            min_severity=data.get("min_severity", "info"),
-            coach_ids=data.get("coach_ids"),
-            reconnect_replay_depth=data.get("reconnect_replay_depth", 50),
-        )
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            log.warning("ws_invalid_json", error=str(exc))
+            await websocket.close(code=1003)
+            return
+        try:
+            sub = SubscriptionRequest(
+                event_types=data.get("event_types", []),
+                min_severity=data.get("min_severity", "info"),
+                coach_ids=data.get("coach_ids"),
+                reconnect_replay_depth=data.get("reconnect_replay_depth", 50),
+            )
+        except (TypeError, ValueError) as exc:
+            log.warning("ws_invalid_subscription", error=str(exc))
+            await websocket.close(code=1003)
+            return
         log.info("ws_subscribed", event_types=sub.event_types, min_severity=sub.min_severity)
         await websocket.send_text(
             json.dumps({"status": "subscribed", "filter": data})
@@ -33,5 +43,3 @@ async def websocket_stub(websocket: WebSocket) -> None:
             await websocket.receive_text()
     except WebSocketDisconnect:
         log.info("ws_disconnected")
-    except Exception:
-        pass

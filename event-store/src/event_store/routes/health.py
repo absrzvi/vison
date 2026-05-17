@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-import sqlite3
-from collections.abc import Generator
-
 import structlog
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-
-from ..database import get_connection
 
 log = structlog.get_logger()
 
@@ -19,14 +14,6 @@ _db_ready = False  # set to True once init_db succeeds in startup
 def set_db_ready(value: bool) -> None:
     global _db_ready
     _db_ready = value
-
-
-def _get_db() -> Generator[sqlite3.Connection, None, None]:
-    conn = get_connection()
-    try:
-        yield conn
-    finally:
-        conn.close()
 
 
 @router.get("/health/live")

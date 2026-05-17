@@ -81,7 +81,7 @@ def get_events_page(
 
     if journey_id is not None:
         row = conn.execute(
-            "SELECT 1 FROM events WHERE journey_id = ? LIMIT 1", (journey_id,)
+            "SELECT 1 FROM journeys WHERE journey_id = ? LIMIT 1", (journey_id,)
         ).fetchone()
         if row is None:
             raise JourneyNotFoundError(journey_id)
