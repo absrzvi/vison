@@ -124,7 +124,17 @@ class IntentPacket(BaseModel):
 - Incident packet: fired on state transition, ~1.5–2KB
 - Offline resilience: MQTT client queues packets in local memory during tunnel/no-signal periods; flushes on reconnect
 
-### 3.7 Key Engineering Risks
+### 3.7 Architecture Decision — Hybrid Hermes Pattern Deferred
+
+**Decision:** Option A (current structured pipeline) now. Hybrid Skills + MCP pattern deferred.
+
+**Rationale:** The hot path is identical between both options — same state machine trigger, same single LLM call, same Pydantic validation, same MQTT output. The hybrid adds abstraction at two seams (fault procedure storage + Redis/SNMP access) without changing latency or safety properties. Adding that abstraction before the landside Rail MCP Server pattern is proven in production would be premature on constrained hardware.
+
+**MCP boundary stub:** The Brain App container should stub the MCP interface boundary now — a thin, non-functional adapter layer marking where local Redis and SNMP tool wrappers would attach. No implementation behind it in v1.
+
+**Migration gate:** Once the landside Rail MCP Server ships and the MCP tool interface is proven stable, evaluate migrating onboard fault procedures to Markdown Skills and Redis/SNMP access to local MCP tool wrappers. Trigger: landside Rail MCP Server running in production for ≥30 days with zero interface breaking changes.
+
+### 3.8 Key Engineering Risks
 
 1. **HEF model integration** — Hailo SDK's OpenAI-compatible endpoint is unvalidated. First test: POST `/v1/chat/completions` with 512-token prompt, assert TTFT <1s and valid JSON schema. Everything else blocked on this passing.
 2. **Context assembly correctness** — every state machine path needs unit tests with fixture Redis state snapshots (not mocks — captured blobs from live Hailo-8 Vision App).
