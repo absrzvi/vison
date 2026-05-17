@@ -1,16 +1,18 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useFleetData } from '../../hooks/useFleetData';
 import { KpiStrip } from './KpiStrip';
 import { FleetList } from './FleetList';
 import { FleetMap } from './FleetMap';
+import { UnifiedFeed } from './UnifiedFeed';
 import { TrainDetail } from '../train-detail/TrainDetail';
 import { LUGGAGE_EVENTS, getLuggageKPIs } from '../../mock/luggage';
 import './LiveMonitoring.css';
 
 export function LiveMonitoring() {
-  const { fleet, kpis, escalations, lastUpdate, connected, acknowledge, resolve } = useFleetData();
+  const { fleet, kpis, escalations, lastUpdate, connected, acknowledge, resolve, feedTypeFilter, setFeedTypeFilter, feedStatusFilter, setFeedStatusFilter, clearFeedFilters } = useFleetData();
   const location = useLocation();
+  const navigate = useNavigate();
   const [selectedTrainId, setSelectedTrainId] = useState(location.state?.selectTrainId ?? null);
   const [fleetSort, setFleetSort] = useState('occupancy');
 
@@ -57,9 +59,17 @@ export function LiveMonitoring() {
   return (
     <div className="live-monitoring">
       <KpiStrip kpis={kpis} lastUpdate={lastUpdate} luggageAlerts={luggageKpis.totalActive} onTileClick={(type) => {
-        // Navigate to escalations tab filtered by type
-        if (type === 'escalations' || type === 'incidents' || type === 'capacity' || type === 'luggage') {
-          window.location.href = '/dashboard/escalations';
+        if (type === 'escalations') {
+          setFeedTypeFilter('all');
+          setFeedStatusFilter('unacknowledged');
+        } else if (type === 'incidents') {
+          setFeedTypeFilter('ai');
+          setFeedStatusFilter(null);
+        } else if (type === 'capacity') {
+          setFeedTypeFilter('occupancy');
+          setFeedStatusFilter(null);
+        } else if (type === 'luggage') {
+          navigate('/dashboard/luggage');
         }
       }} />
       {isStale && (
@@ -96,7 +106,17 @@ export function LiveMonitoring() {
                 onResolve={resolve}
               />
             )}
-
+            <UnifiedFeed
+              escalations={escalations}
+              activeFilter={feedTypeFilter}
+              onFilterChange={setFeedTypeFilter}
+              statusFilter={feedStatusFilter}
+              onStatusFilterChange={setFeedStatusFilter}
+              onClearFilters={clearFeedFilters}
+              onAcknowledge={acknowledge}
+              onResolve={resolve}
+              onTrainSelect={setSelectedTrainId}
+            />
           </div>
         </div>
       </div>

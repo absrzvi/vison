@@ -24,10 +24,14 @@ const SEV_FILTERS = [
   { key: 'green', label: 'Info' },
 ];
 
-export function UnifiedFeed({ escalations, activeFilter, onFilterChange, onAcknowledge, onResolve, onTrainSelect }) {
+export function UnifiedFeed({ escalations, activeFilter, onFilterChange, statusFilter: statusFilterProp, onStatusFilterChange, onClearFilters, onAcknowledge, onResolve, onTrainSelect }) {
   const [selectedEscId, setSelectedEscId] = useState(null);
-  const [statusFilter, setStatusFilter] = useState(null);
+  const [localStatusFilter, setLocalStatusFilter] = useState(null);
   const [sevFilter, setSevFilter] = useState(null);
+
+  // Use prop-controlled statusFilter if provided, otherwise local state
+  const statusFilter = statusFilterProp !== undefined ? statusFilterProp : localStatusFilter;
+  const setStatusFilter = onStatusFilterChange ?? setLocalStatusFilter;
 
   const filtered = escalations.filter(e => {
     if (activeFilter !== 'all' && e.type !== activeFilter) return false;
@@ -56,13 +60,16 @@ export function UnifiedFeed({ escalations, activeFilter, onFilterChange, onAckno
             </span>
           )}
           {(activeFilter !== 'all' || statusFilter || sevFilter) && (
-            <button className="unified-feed__clear-filters" onClick={() => { setStatusFilter(null); setSevFilter(null); onFilterChange('all'); }}>
+            <button className="unified-feed__clear-filters" onClick={() => {
+              if (onClearFilters) { onClearFilters(); } else { setStatusFilter(null); onFilterChange('all'); }
+              setSevFilter(null);
+            }}>
               clear filters
             </button>
           )}
         </span>
         <div className="unified-feed__filter-rows">
-          <div className="filter-pills">
+          <div className="filter-pills" data-testid="pid-feed-filter-bar">
             {TYPE_FILTERS.map(f => (
               <button
                 key={f.key}

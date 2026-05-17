@@ -34,6 +34,7 @@ function TriageStrip({ escalations }) {
 export function EscalationsDashboard() {
   const { escalations, connected, acknowledge, resolve } = useFleetData();
   const [activeFilter, setActiveFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(null);
 
   if (!connected) {
     return (
@@ -51,6 +52,8 @@ export function EscalationsDashboard() {
           escalations={escalations}
           activeFilter={activeFilter}
           onFilterChange={setActiveFilter}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
           onAcknowledge={acknowledge}
           onResolve={resolve}
           onTrainSelect={() => {}}

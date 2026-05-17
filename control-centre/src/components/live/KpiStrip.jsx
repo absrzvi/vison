@@ -12,12 +12,13 @@ export function KpiStrip({ kpis, lastUpdate, luggageAlerts, onTileClick }) {
 
   return (
     <div className="kpi-strip">
-      <div className="kpi-tile">
+      <div className="kpi-tile" data-testid="pid-kpi-tile-trains">
         <span className="kpi-tile__value">{kpis.activeTrains ?? '—'}</span>
         <span className="kpi-tile__label">active trains</span>
       </div>
       <button
         className={`kpi-tile kpi-tile--interactive ${kpis.openEscalations > 0 ? 'kpi-tile--alert' : ''}`}
+        data-testid="pid-kpi-tile-escalations"
         onClick={() => onTileClick?.('escalations')}
         title="Filter feed to escalations"
       >
@@ -38,6 +39,7 @@ export function KpiStrip({ kpis, lastUpdate, luggageAlerts, onTileClick }) {
       </button>
       <button
         className={`kpi-tile kpi-tile--interactive ${kpis.capacityAlerts > 0 ? 'kpi-tile--alert' : ''}`}
+        data-testid="pid-kpi-tile-capacity"
         onClick={() => onTileClick?.('capacity')}
         title="Filter feed to capacity alerts"
       >
@@ -48,6 +50,7 @@ export function KpiStrip({ kpis, lastUpdate, luggageAlerts, onTileClick }) {
       </button>
       <button
         className={`kpi-tile kpi-tile--interactive ${luggageAlerts > 0 ? 'kpi-tile--alert' : ''}`}
+        data-testid="pid-kpi-tile-luggage"
         onClick={() => onTileClick?.('luggage')}
         title="Filter feed to luggage alerts"
       >

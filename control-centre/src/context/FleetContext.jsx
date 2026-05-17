@@ -23,7 +23,14 @@ export function FleetProvider({ children }) {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [connected, setConnected] = useState(false);
   const [wsStatus, setWsStatus] = useState('disconnected');
+  const [feedTypeFilter, setFeedTypeFilter] = useState('all');
+  const [feedStatusFilter, setFeedStatusFilter] = useState(null);
   const wsRef = useRef(null);
+
+  const clearFeedFilters = useCallback(() => {
+    setFeedTypeFilter('all');
+    setFeedStatusFilter(null);
+  }, []);
 
   useEffect(() => {
     const onStatusChange = (status) => {
@@ -70,7 +77,7 @@ export function FleetProvider({ children }) {
   const resolve = useCallback((id, outcome) => wsRef.current?.resolve(id, outcome), []);
 
   return (
-    <FleetContext.Provider value={{ fleet, kpis, escalations, lastUpdate, connected, wsStatus, acknowledge, resolve }}>
+    <FleetContext.Provider value={{ fleet, kpis, escalations, lastUpdate, connected, wsStatus, acknowledge, resolve, feedTypeFilter, setFeedTypeFilter, feedStatusFilter, setFeedStatusFilter, clearFeedFilters }}>
       {children}
     </FleetContext.Provider>
   );
