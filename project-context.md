@@ -76,3 +76,35 @@ Both services are surfaced across 7 role-specific interfaces (4 onboard, 3 lands
 | C — UX Scenarios | `_bmad-output/design-artifacts/C-UX-Scenarios/` | Partial (user stories exist) |
 | D — UX Design | `_bmad-output/design-artifacts/D-UX-Design/` | Complete (refine with Saga/Freya) |
 | G — Product Development | `_bmad-output/design-artifacts/G-Product-Development/` | Not started |
+
+---
+
+## Coding Craft Principles (Karpathy Guidelines)
+
+All development agents follow these principles. They override default instincts toward completeness or speculation.
+
+### 1. Think Before Coding
+
+Before implementing: state assumptions explicitly. If uncertain, ask. If multiple interpretations exist, present them — don't pick silently. If something is unclear, stop and name what's confusing. Surface tradeoffs before writing code.
+
+### 2. Simplicity First
+
+Minimum code that solves the problem. Nothing speculative.
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios — trust internal code and framework guarantees; only validate at system boundaries.
+- If you write 200 lines and it could be 50, rewrite it.
+
+### 3. Surgical Changes
+
+Touch only what you must. Clean up only your own mess.
+- Don't improve adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it — don't delete it.
+- Every changed line must trace directly to the user's request.
+
+### 4. Goal-Driven Execution
+
+Transform tasks into verifiable goals. For multi-step tasks, state a brief plan with per-step verification criteria before touching code. Strong success criteria let you loop independently.
