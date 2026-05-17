@@ -2,8 +2,10 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback } f
 import { MockWebSocketClient } from '../mock/websocket';
 import { RealWebSocketClient } from '../ws/RealWebSocketClient';
 import { LUGGAGE_EVENTS, luggageEventsToEscalations } from '../mock/luggage';
+import { acknowledgeEscalation, resolveEscalation } from '../api/escalations';
 
 const LUGGAGE_ESCALATIONS = luggageEventsToEscalations(LUGGAGE_EVENTS);
+const OPERATOR_ID = import.meta.env.VITE_OPERATOR_ID ?? 'operator-unknown';
 
 const FleetContext = createContext(null);
 
@@ -25,6 +27,8 @@ export function FleetProvider({ children }) {
   const [wsStatus, setWsStatus] = useState('disconnected');
   const [feedTypeFilter, setFeedTypeFilter] = useState('all');
   const [feedStatusFilter, setFeedStatusFilter] = useState(null);
+  // Map<id, 'pending' | Error> — per-escalation action state
+  const [escalationActionState, setEscalationActionState] = useState({});
   const wsRef = useRef(null);
 
   const clearFeedFilters = useCallback(() => {
@@ -40,7 +44,6 @@ export function FleetProvider({ children }) {
 
     const onMessage = (msg) => {
       if (msg.type === 'FLEET_STATE') {
-        // FLEET_STATE is mock-only; real WS delivers individual events.
         setFleet(msg.payload.fleet);
         setKpis(msg.payload.kpis);
         setEscalations([...msg.payload.escalations, ...LUGGAGE_ESCALATIONS]);
@@ -50,6 +53,13 @@ export function FleetProvider({ children }) {
         setEscalations(prev =>
           prev.map(e => e.id === msg.payload.id ? { ...e, ...msg.payload } : e)
         );
+        // Clear any pending action state for this escalation (AC4 — WS tick clears stale state)
+        setEscalationActionState(prev => {
+          if (!(msg.payload.id in prev)) return prev;
+          const next = { ...prev };
+          delete next[msg.payload.id];
+          return next;
+        });
       }
       if (msg.type === 'ESCALATION_NEW') {
         setEscalations(prev => {
@@ -73,11 +83,48 @@ export function FleetProvider({ children }) {
     return () => client.disconnect();
   }, []);
 
-  const acknowledge = useCallback((id) => wsRef.current?.acknowledge(id), []);
-  const resolve = useCallback((id, outcome) => wsRef.current?.resolve(id, outcome), []);
+  const acknowledge = useCallback(async (id) => {
+    setEscalationActionState(prev => ({ ...prev, [id]: 'pending' }));
+    try {
+      await acknowledgeEscalation(id);
+      setEscalations(prev =>
+        prev.map(e => e.id === id ? { ...e, status: 'acknowledged' } : e)
+      );
+      setEscalationActionState(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    } catch (err) {
+      setEscalationActionState(prev => ({ ...prev, [id]: err }));
+    }
+  }, []);
+
+  const resolve = useCallback(async (id, outcome, actionTags) => {
+    setEscalationActionState(prev => ({ ...prev, [id]: 'pending' }));
+    try {
+      await resolveEscalation(id, outcome, actionTags, OPERATOR_ID);
+      setEscalations(prev =>
+        prev.map(e => e.id === id ? { ...e, status: 'resolved' } : e)
+      );
+      setEscalationActionState(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    } catch (err) {
+      setEscalationActionState(prev => ({ ...prev, [id]: err }));
+    }
+  }, []);
 
   return (
-    <FleetContext.Provider value={{ fleet, kpis, escalations, lastUpdate, connected, wsStatus, acknowledge, resolve, feedTypeFilter, setFeedTypeFilter, feedStatusFilter, setFeedStatusFilter, clearFeedFilters }}>
+    <FleetContext.Provider value={{
+      fleet, kpis, escalations, lastUpdate, connected, wsStatus,
+      acknowledge, resolve, escalationActionState,
+      feedTypeFilter, setFeedTypeFilter,
+      feedStatusFilter, setFeedStatusFilter,
+      clearFeedFilters,
+    }}>
       {children}
     </FleetContext.Provider>
   );

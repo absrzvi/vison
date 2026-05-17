@@ -4,7 +4,6 @@
  * Drop-in replacement for MockWebSocketClient. Same public API:
  *   new RealWebSocketClient(onMessage, onStatusChange)
  *   client.connect() / client.disconnect()
- *   client.acknowledge(id) / client.resolve(id, outcome)  [no-ops until E2-S5]
  *
  * ADR-9 subscription handshake: sends SubscriptionRequest JSON as the first
  * message after the WebSocket opens. Server replays last 50 matching events
@@ -74,15 +73,6 @@ export class RealWebSocketClient {
       this._ws = null;
     }
     this._onStatusChange('disconnected');
-  }
-
-  // No-op until E2-S5 wires REST acknowledge/resolve endpoints.
-  acknowledge(id) {
-    console.warn('[RealWebSocketClient] acknowledge() not yet wired to API — E2-S5', id);
-  }
-
-  resolve(id, outcome) {
-    console.warn('[RealWebSocketClient] resolve() not yet wired to API — E2-S5', id, outcome);
   }
 
   _open() {

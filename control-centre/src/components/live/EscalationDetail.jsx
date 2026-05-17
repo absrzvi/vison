@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { SOURCE_LABEL, SEV_CLASS } from '../../constants/escalation';
+import { useFleetData } from '../../context/FleetContext';
 import './EscalationDetail.css';
 
 const ACTION_TAGS = [
@@ -47,18 +48,31 @@ function computeElapsed(timestamp) {
 
 export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve }) {
   const navigate = useNavigate();
+  const { escalationActionState } = useFleetData();
   const [frameExpanded, setFrameExpanded] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [outcome, setOutcome] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  const actionState = escalation ? escalationActionState[escalation.id] : undefined;
+  const isPending = actionState === 'pending';
+  const actionError = actionState instanceof Error ? actionState : null;
 
   const canSubmit = outcome.trim().length > 0 && selectedTags.length > 0;
 
+  const handleAcknowledge = () => {
+    onAcknowledge(escalation.id);
+  };
+
   const handleResolve = () => {
+    setSubmitAttempted(true);
+    if (!canSubmit) return;
     onResolve(escalation.id, outcome.trim(), selectedTags);
     setResolving(false);
     setOutcome('');
     setSelectedTags([]);
+    setSubmitAttempted(false);
   };
 
   // Reset form state when the selected escalation changes.
@@ -69,6 +83,7 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
     setOutcome('');
     setSelectedTags([]);
     setFrameExpanded(false);
+    setSubmitAttempted(false);
   }
 
   useEffect(() => {
@@ -96,13 +111,13 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
         onClick={e => e.stopPropagation()}
         style={{ '--sev-accent': accentColor }}
       >
-        {/* Severity accent bar — 3px coloured top strip */}
+        {/* Severity accent bar */}
         <div className="esc-detail__accent-bar" />
 
         {/* Scrollable body */}
         <div className="esc-detail__body">
 
-          {/* Header: source badge + status pill + close */}
+          {/* Header */}
           <div className="esc-detail__header">
             <div className="esc-detail__header-left">
               <span className={`badge ${SEV_CLASS[escalation.severity]}`}>
@@ -145,7 +160,7 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
             )}
           </div>
 
-          {/* Description — left-border accent, larger text, critical tint */}
+          {/* Description */}
           <div className={`esc-detail__description-wrap${isCritical ? ' esc-detail__description-wrap--critical' : ''}`}>
             <p className={`esc-detail__description${isCritical ? ' esc-detail__description--critical' : ''}`}>
               {escalation.detail}
@@ -168,7 +183,6 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
                   alt={`Still frame from ${escalation.stillFrame.camera} at ${escalation.stillFrame.capturedAt}`}
                   className="esc-still-frame__img"
                 />
-                {/* Overlaid chips */}
                 <span className="esc-still-frame__chip esc-still-frame__chip--camera">
                   📷 {escalation.stillFrame.camera}
                 </span>
@@ -188,6 +202,13 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
             </div>
           )}
 
+          {/* Error toast (AC3) */}
+          {actionError && (
+            <div className="esc-detail__error-toast" role="alert">
+              Action failed — please try again
+            </div>
+          )}
+
           {/* Resolve form */}
           {resolving && (
             <div className="resolve-form">
@@ -200,6 +221,10 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
                 maxLength={200}
                 rows={3}
               />
+              {/* AC5 inline validation */}
+              {submitAttempted && outcome.trim().length === 0 && (
+                <p className="resolve-form__validation-msg">Outcome required</p>
+              )}
               <div className="resolve-form__char-count">{outcome.length} / 200</div>
 
               <label className="resolve-form__label">Action taken <span className="resolve-form__required">select at least one</span></label>
@@ -216,10 +241,14 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
               </div>
 
               <div className="resolve-form__actions">
-                <button className="btn btn--primary" onClick={handleResolve} disabled={!canSubmit}>
-                  Submit Resolution
+                <button
+                  className="btn btn--primary"
+                  onClick={handleResolve}
+                  disabled={isPending}
+                >
+                  {isPending ? 'Submitting…' : 'Submit Resolution'}
                 </button>
-                <button className="btn btn--ghost" onClick={() => { setResolving(false); setOutcome(''); setSelectedTags([]); }}>
+                <button className="btn btn--ghost" onClick={() => { setResolving(false); setOutcome(''); setSelectedTags([]); setSubmitAttempted(false); }}>
                   Cancel
                 </button>
               </div>
@@ -232,8 +261,12 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
         <div className="esc-detail__footer">
           <div className="esc-detail__footer-left">
             {escalation.status === 'unacknowledged' && !resolving && (
-              <button className="btn btn--primary" onClick={() => onAcknowledge(escalation.id)}>
-                Acknowledge
+              <button
+                className="btn btn--primary"
+                onClick={handleAcknowledge}
+                disabled={isPending}
+              >
+                {isPending ? 'Acknowledging…' : 'Acknowledge'}
               </button>
             )}
             {escalation.status === 'acknowledged' && !resolving && escalation.type !== 'roland' && (

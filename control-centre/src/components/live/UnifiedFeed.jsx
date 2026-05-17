@@ -196,7 +196,7 @@ export function UnifiedFeed({ escalations, activeFilter, onFilterChange, statusF
         escalation={selectedEsc}
         onClose={() => setSelectedEscId(null)}
         onAcknowledge={(id) => { onAcknowledge(id); }}
-        onResolve={(id, outcome, tags) => { onResolve(id, outcome); setSelectedEscId(null); }}
+        onResolve={(id, outcome, tags) => { onResolve(id, outcome, tags); setSelectedEscId(null); }}
       />
     )}
     </>

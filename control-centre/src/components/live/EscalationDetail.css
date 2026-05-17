@@ -418,3 +418,20 @@
 .btn--primary:disabled { opacity: 0.35; cursor: not-allowed; }
 .btn--ghost { background: transparent; color: var(--obb-text-on-dark-3); }
 .btn--ghost:hover { color: var(--obb-text-on-dark-1); }
+
+.esc-detail__error-toast {
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: rgba(204, 0, 35, 0.15);
+  border: 1px solid var(--obb-sev-critical);
+  border-radius: 6px;
+  color: var(--obb-sev-critical);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.resolve-form__validation-msg {
+  margin: 2px 0 6px;
+  font-size: 11px;
+  color: var(--obb-sev-critical);
+}
