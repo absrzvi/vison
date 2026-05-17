@@ -3,7 +3,7 @@
 **Epic:** 2 — Control Centre Dashboard — Live Operations  
 **Story:** 4  
 **Story Key:** 2-4-unified-feed-new-items-chip  
-**Status:** review  
+**Status:** done  
 **Date Created:** 2026-05-17  
 
 ---
@@ -85,6 +85,18 @@ The existing `filtered` array already applies all active filters — diffing aga
 **Surgical-Change Test:**
 - `UnifiedFeed.jsx` — AC1–AC6
 - `UnifiedFeed.css` — chip styles
+
+### Review Findings
+
+- [x] [Review][Patch] Filter change inflates `newCount` — fixed: separate useEffect reseeds `prevFilteredIdsRef` + resets `newCount` on filter change [UnifiedFeed.jsx]
+- [x] [Review][Patch] `newCount` not reset on filter change — fixed: same reseed effect [UnifiedFeed.jsx]
+- [x] [Review][Patch] `scrollTop === 0` strict equality fails on sub-pixel scroll — fixed: `<= 1` threshold [UnifiedFeed.jsx handleScroll]
+- [x] [Review][Patch] FLEET_STATE reconnect spurious "new" — fixed: reseed effect fires on filter change; reconnect with same filters reseeds cleanly [UnifiedFeed.jsx]
+- [x] [Review][Defer] Race: new item arrives during chip-tap smooth scroll — chip briefly re-appears mid-animation [UnifiedFeed.jsx] — deferred, low-frequency, pre-existing design constraint
+- [x] [Review][Defer] `isAtTopRef(true)` causes silent jump-scroll if component remounts mid-scroll [UnifiedFeed.jsx] — deferred, remount scenario not in current flow
+- [x] [Review][Defer] No upper bound on `newCount` — high-burst feeds show "↑ 247 new items" [UnifiedFeed.jsx] — deferred, cap at "99+" in future polish pass
+- [x] [Review][Defer] `filtered` not memoized — O(n) Set diff on every render [UnifiedFeed.jsx] — deferred, escalation count is small in PoC scope
+- [x] [Review][Defer] `role="button"` chip missing `aria-label` for screen readers [UnifiedFeed.jsx] — deferred, a11y pass
 
 ### Debug Log
 

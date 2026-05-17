@@ -49,11 +49,16 @@ export function UnifiedFeed({ escalations, activeFilter, onFilterChange, statusF
   const toggleStatus = (key) => setStatusFilter(statusFilter === key ? null : key);
   const toggleSev    = (key) => setSevFilter(prev => prev === key ? null : key);
 
-  // New-item detection: diff filtered ids vs previous render
+  // Reseed baseline silently on filter change — prevents widening a filter from counting pre-existing items as new
+  useEffect(() => {
+    prevFilteredIdsRef.current = new Set(filtered.map(e => e.id));
+    setNewCount(0);
+  }, [activeFilter, statusFilter, sevFilter]);
+
+  // New-item detection: diff filtered ids vs previous render (only fires on escalation changes)
   useEffect(() => {
     const currentIds = new Set(filtered.map(e => e.id));
     if (prevFilteredIdsRef.current === null) {
-      // first render — establish baseline, no chip
       prevFilteredIdsRef.current = currentIds;
       return;
     }
@@ -68,7 +73,7 @@ export function UnifiedFeed({ escalations, activeFilter, onFilterChange, statusF
   }, [filtered]);
 
   const handleScroll = (e) => {
-    const atTop = e.target.scrollTop === 0;
+    const atTop = e.target.scrollTop <= 1;
     isAtTopRef.current = atTop;
     if (atTop && newCount > 0) setNewCount(0);
   };
