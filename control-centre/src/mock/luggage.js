@@ -187,16 +187,39 @@ export const NEXT_STATION = {
 function toMinutes(ts) {
   if (!ts) return null;
   const [h, m] = ts.split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return null;
   return h * 60 + m;
 }
 
-// Compute elapsed minutes from a "HH:MM" timestamp relative to a reference time
+const ISO_RE = /^\d{4}-|T/;
+
+const HH_MM_RE = /^\d{2}:\d{2}$/;
+
+export function formatTimestamp(ts) {
+  if (!ts) return '--:--';
+  if (ISO_RE.test(ts)) {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return '--:--';
+    return d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+  }
+  if (HH_MM_RE.test(ts)) return ts;
+  return '--:--';
+}
+
 export function elapsedMin(timestamp, nowTs = null) {
-  const refStr = nowTs ?? '11:35'; // mock "now" anchored to scenario time
+  if (!timestamp) return null;
+  if (ISO_RE.test(timestamp)) {
+    const t = new Date(timestamp).getTime();
+    if (isNaN(t)) return null;
+    const now = nowTs ? new Date(nowTs).getTime() : Date.now();
+    return Math.max(0, Math.round((now - t) / 60000));
+  }
+  // Legacy HH:MM path — uses '11:35' mock anchor
+  const refStr = nowTs ?? '11:35';
   const ref = toMinutes(refStr);
-  const t = toMinutes(timestamp);
-  if (ref == null || t == null) return null;
-  return Math.max(0, ref - t);
+  const t2 = toMinutes(timestamp);
+  if (ref == null || t2 == null) return null;
+  return Math.max(0, ref - t2);
 }
 
 export function getLuggageKPIs(events) {

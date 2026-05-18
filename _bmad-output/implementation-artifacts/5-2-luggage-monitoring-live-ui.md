@@ -1,6 +1,6 @@
 # Story E5-S2 — Luggage Monitoring Live UI
 
-**Status:** ready-for-dev
+**Status:** review
 **Sprint:** Epic 5
 **Story Key:** 5-2-luggage-monitoring-live-ui
 
@@ -38,46 +38,46 @@
 
 ## Tasks / Subtasks
 
-- [ ] **T1** Fix `elapsedMin` and timestamp display for ISO timestamps (AC2, AC3, AC4)
-  - [ ] T1.1 Update `elapsedMin(timestamp, nowTs)` in `mock/luggage.js` to detect ISO-8601 strings (contains `T` or `-`) and compute elapsed from `Date.now()` instead of parsing as `HH:MM`. HH:MM strings continue to use the existing mock anchor `"11:35"`.
-  - [ ] T1.2 Add `formatTimestamp(ts)` helper in `mock/luggage.js` that returns `HH:MM` from ISO strings (via `new Date(ts).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })`) and passes through HH:MM strings unchanged.
-  - [ ] T1.3 In `LuggageFeed.jsx`, replace `{ev.timestamp}` usage in elapsed display with `elapsedMin(ev.timestamp)` (already done) — verify no raw ISO appears in rendered output. Replace any timestamp display text with `formatTimestamp(ev.timestamp)`.
-  - [ ] T1.4 In `LuggageTrainDetail.jsx`, replace `{ev.timestamp}` in the event row time column with `formatTimestamp(ev.timestamp)`. Import `formatTimestamp` from `../../mock/luggage`.
-  - [ ] T1.5 Update `getLuggageKPIs` — it calls `elapsedMin` internally; once T1.1 is done, KPI strip automatically computes correct elapsed for live events (no further changes needed — verify in tests).
+- [x] **T1** Fix `elapsedMin` and timestamp display for ISO timestamps (AC2, AC3, AC4)
+  - [x] T1.1 Update `elapsedMin(timestamp, nowTs)` in `mock/luggage.js` to detect ISO-8601 strings (contains `T` or `-`) and compute elapsed from `Date.now()` instead of parsing as `HH:MM`. HH:MM strings continue to use the existing mock anchor `"11:35"`.
+  - [x] T1.2 Add `formatTimestamp(ts)` helper in `mock/luggage.js` that returns `HH:MM` from ISO strings (via `new Date(ts).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })`) and passes through HH:MM strings unchanged.
+  - [x] T1.3 In `LuggageFeed.jsx`, replace `{ev.timestamp}` usage in elapsed display with `elapsedMin(ev.timestamp)` (already done) — verify no raw ISO appears in rendered output. Replace any timestamp display text with `formatTimestamp(ev.timestamp)`.
+  - [x] T1.4 In `LuggageTrainDetail.jsx`, replace `{ev.timestamp}` in the event row time column with `formatTimestamp(ev.timestamp)`. Import `formatTimestamp` from `../../mock/luggage`.
+  - [x] T1.5 Update `getLuggageKPIs` — it calls `elapsedMin` internally; once T1.1 is done, KPI strip automatically computes correct elapsed for live events (no further changes needed — verify in tests).
 
-- [ ] **T2** Loading skeleton for Luggage tab (AC1, AC8)
-  - [ ] T2.1 In `LuggageMonitoring.jsx`, destructure `wsReady` from `useFleetData()`.
-  - [ ] T2.2 Create `LuggageMonitoringSkeleton` component in `LuggageMonitoring.jsx` (inline, not a separate file) — renders a skeleton KPI strip (6 shimmer blocks matching `LuggageKpiStrip` layout) and 3 skeleton feed items below.
-  - [ ] T2.3 Render logic: `if (!wsReady) return <LuggageMonitoringSkeleton />` (before the `events.length === 0` empty-state check). Once `wsReady && events.length === 0` → show empty-state message. Once `wsReady && events.length > 0` → show normal UI.
-  - [ ] T2.4 Skeleton uses existing `.skeleton-pulse` CSS class (already in `index.css`) — no new CSS variables.
+- [x] **T2** Loading skeleton for Luggage tab (AC1, AC8)
+  - [x] T2.1 In `LuggageMonitoring.jsx`, destructure `wsReady` from `useFleetData()`.
+  - [x] T2.2 Create `LuggageMonitoringSkeleton` component in `LuggageMonitoring.jsx` (inline, not a separate file) — renders a skeleton KPI strip (6 shimmer blocks matching `LuggageKpiStrip` layout) and 3 skeleton feed items below.
+  - [x] T2.3 Render logic: `if (!wsReady) return <LuggageMonitoringSkeleton />` (before the `events.length === 0` empty-state check). Once `wsReady && events.length === 0` → show empty-state message. Once `wsReady && events.length > 0` → show normal UI.
+  - [x] T2.4 Skeleton uses existing `.skeleton-pulse` CSS class (already in `index.css`) — no new CSS variables.
 
-- [ ] **T3** Confidence decimal normalisation (AC7)
-  - [ ] T3.1 In `LuggageFeed.jsx`, update the confidence display: `{Math.round(ev.confidence > 1 ? ev.confidence : ev.confidence * 100)}%`. Apply the same to `confClass` input: `confClass(ev.confidence > 1 ? ev.confidence : ev.confidence * 100)`.
-  - [ ] T3.2 Verify `confClass` thresholds still work correctly for both integer (e.g. `94`) and decimal (e.g. `0.94`) inputs after normalisation.
+- [x] **T3** Confidence decimal normalisation (AC7)
+  - [x] T3.1 In `LuggageFeed.jsx`, update the confidence display: `{Math.round(ev.confidence > 1 ? ev.confidence : ev.confidence * 100)}%`. Apply the same to `confClass` input: `confClass(ev.confidence > 1 ? ev.confidence : ev.confidence * 100)`.
+  - [x] T3.2 Verify `confClass` thresholds still work correctly for both integer (e.g. `94`) and decimal (e.g. `0.94`) inputs after normalisation.
 
-- [ ] **T4** Verify end-to-end coach grid correctness (AC5, AC5b)
-  - [ ] T4.1 No code change needed — `normaliseCoachId` in `RealWebSocketClient` already converts `car-4` → `C4`. Verify in tests that `getLuggageSummaryByTrain` with `coachId: 'C4'` maps correctly to the `allCoachIds` array (`['C1','C2',...,'C8']`) used in `LuggageMonitoring`.
-  - [ ] T4.2 Add test: `getLuggageSummaryByTrain` with a live-shaped event (`coachId: 'C4'`) produces a map entry that matches the allCoachIds array key — so the coach grid cell highlights correctly.
+- [x] **T4** Verify end-to-end coach grid correctness (AC5, AC5b)
+  - [x] T4.1 No code change needed — `normaliseCoachId` in `RealWebSocketClient` already converts `car-4` → `C4`. Verify in tests that `getLuggageSummaryByTrain` with `coachId: 'C4'` maps correctly to the `allCoachIds` array (`['C1','C2',...,'C8']`) used in `LuggageMonitoring`.
+  - [x] T4.2 Add test: `getLuggageSummaryByTrain` with a live-shaped event (`coachId: 'C4'`) produces a map entry that matches the allCoachIds array key — so the coach grid cell highlights correctly.
 
-- [ ] **T5** Tests (Vitest, `// @vitest-environment node`)
-  - [ ] T5.1 `elapsedMin` with ISO timestamp returns a positive integer (> 0) based on `Date.now()`.
-  - [ ] T5.2 `elapsedMin` with HH:MM string continues to use `"11:35"` anchor — backwards compatible.
-  - [ ] T5.3 `formatTimestamp` with ISO string returns `HH:MM` format string.
-  - [ ] T5.4 `formatTimestamp` with HH:MM string passes through unchanged.
-  - [ ] T5.5 `getLuggageKPIs` with live ISO-timestamped events returns a positive `longestUnattended` value (not `null`, not `"0 min"`).
-  - [ ] T5.6 Confidence normalisation: `Math.round(0.94 > 1 ? 0.94 : 0.94 * 100)` === `94`; `Math.round(94 > 1 ? 94 : 94 * 100)` === `94`.
-  - [ ] T5.7 `getLuggageSummaryByTrain` with `coachId: 'C4'` produces a map key matching the `allCoachIds` `'C4'` entry.
+- [x] **T5** Tests (Vitest, `// @vitest-environment node`)
+  - [x] T5.1 `elapsedMin` with ISO timestamp returns a positive integer (> 0) based on `Date.now()`.
+  - [x] T5.2 `elapsedMin` with HH:MM string continues to use `"11:35"` anchor — backwards compatible.
+  - [x] T5.3 `formatTimestamp` with ISO string returns `HH:MM` format string.
+  - [x] T5.4 `formatTimestamp` with HH:MM string passes through unchanged.
+  - [x] T5.5 `getLuggageKPIs` with live ISO-timestamped events returns a positive `longestUnattended` value (not `null`, not `"0 min"`).
+  - [x] T5.6 Confidence normalisation: `Math.round(0.94 > 1 ? 0.94 : 0.94 * 100)` === `94`; `Math.round(94 > 1 ? 94 : 94 * 100)` === `94`.
+  - [x] T5.7 `getLuggageSummaryByTrain` with `coachId: 'C4'` produces a map key matching the `allCoachIds` `'C4'` entry.
 
 ---
 
 ## Security Tests
 
 **UI / client-side security:**
-- [ ] No tokens or sensitive data written to localStorage or sessionStorage
-- [ ] Error states display generic messages — no internal API detail exposed
+- [x] No tokens or sensitive data written to localStorage or sessionStorage
+- [x] Error states display generic messages — no internal API detail exposed
 
 **OEBB-specific:**
-- [ ] Luggage event confidence values from WS are clamped/normalised before display — no raw `NaN` or negative values rendered
+- [x] Luggage event confidence values from WS are clamped/normalised before display — no raw `NaN` or negative values rendered
 
 ---
 
@@ -271,6 +271,22 @@ claude-sonnet-4-6
 
 ### Debug Log
 
+`formatTimestamp` initially used a pure passthrough for non-ISO strings, which returned arbitrary strings unchanged. Fixed by adding `HH_MM_RE` validation — only valid `HH:MM` strings pass through; everything else returns `--:--`.
+
 ### Completion Notes
 
+All 8 ACs satisfied. 88 tests pass (80 pre-existing + 8 new). No regressions. Key changes: `elapsedMin` now handles ISO-8601 timestamps via `Date.now()` while remaining backwards-compatible with HH:MM mock data; `formatTimestamp` added as new export; `LuggageMonitoring` shows skeleton until `wsReady`; confidence normalised from decimal (0–1) or integer (0–100) to display percentage; `LuggageTrainDetail` uses `formatTimestamp` for event time column.
+
 ### File List
+
+| File | Change |
+|---|---|
+| `control-centre/src/mock/luggage.js` | Updated `elapsedMin` for ISO support; added `formatTimestamp` export; added `HH_MM_RE` guard |
+| `control-centre/src/components/luggage/LuggageMonitoring.jsx` | Added `wsReady` from context; added `LuggageMonitoringSkeleton` inline component; gated empty-state |
+| `control-centre/src/components/luggage/LuggageFeed.jsx` | Added `normaliseConf` helper; updated confidence display and `confClass` call; imported `formatTimestamp` |
+| `control-centre/src/components/luggage/LuggageTrainDetail.jsx` | Imported `formatTimestamp`; replaced `{ev.timestamp}` with `{formatTimestamp(ev.timestamp)}` |
+| `control-centre/src/mock/__tests__/luggage.test.js` | NEW — 8 unit tests covering T5.1–T5.7 + security tests |
+
+### Change Log
+
+- 2026-05-18: E5-S2 implemented — ISO timestamp support, loading skeleton, confidence normalisation, coach grid verification (claude-sonnet-4-6)

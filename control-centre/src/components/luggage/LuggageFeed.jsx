@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { LUGGAGE_STATES, NEXT_STATION, elapsedMin } from '../../mock/luggage';
+import { LUGGAGE_STATES, NEXT_STATION, elapsedMin, formatTimestamp } from '../../mock/luggage';
 import { EscalationDetail } from '../live/EscalationDetail';
 import './LuggageFeed.css';
 
 const RESOLVED_STATES = new Set(['cleared', 'owner_returned']);
 const SEV_BADGE = { red: 'badge--red', amber: 'badge--amber', green: 'badge--green' };
 
-// Confidence thresholds
+const normaliseConf = (c) => c == null ? null : (c <= 1 ? Math.round(c * 100) : Math.round(c));
+
 const confClass = (pct) => {
   if (pct == null) return '';
   if (pct >= 85) return 'luggage-item__confidence--high';
@@ -132,11 +133,14 @@ export function LuggageFeed({ events, onTrainSelect }) {
           )}
           <span className="luggage-item__title">{ev.title}</span>
           <div className="luggage-item__header-right">
-            {ev.confidence != null && (
-              <span className={`luggage-item__confidence ${confClass(ev.confidence)}`}>
-                {ev.confidence}%
-              </span>
-            )}
+            {ev.confidence != null && (() => {
+              const conf = normaliseConf(ev.confidence);
+              return (
+                <span className={`luggage-item__confidence ${confClass(conf)}`}>
+                  {conf}%
+                </span>
+              );
+            })()}
             {elapsed != null && (
               <span className={`luggage-item__elapsed${elapsed >= 25 ? ' luggage-item__elapsed--crit' : elapsed >= 15 ? ' luggage-item__elapsed--warn' : ''}`}>
                 {elapsed} min

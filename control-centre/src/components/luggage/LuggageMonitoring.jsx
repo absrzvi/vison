@@ -13,15 +13,39 @@ const TRAIN_COACHES = {
   'R5001C-012': 6, 'R5001C-003': 6,
 };
 
+function LuggageMonitoringSkeleton() {
+  return (
+    <div className="luggage-monitoring luggage-monitoring--loading">
+      <div className="luggage-kpi-strip luggage-kpi-strip--skeleton">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className="lkpi">
+            <div className="skeleton-pulse" style={{ width: 48, height: 28, borderRadius: 4 }} />
+            <div className="skeleton-pulse" style={{ width: 80, height: 11, borderRadius: 3, marginTop: 4 }} />
+          </div>
+        ))}
+      </div>
+      <div className="luggage-monitoring__body">
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i} className="skeleton-pulse" style={{ height: 64, margin: '6px 16px', borderRadius: 6 }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function LuggageMonitoring() {
   const [selectedTrainId, setSelectedTrainId] = useState(null);
-  const { luggageEvents: events } = useFleetData();
+  const { luggageEvents: events, wsReady } = useFleetData();
   const summary = useMemo(() => getLuggageSummaryByTrain(events), [events]);
   const kpis = useMemo(() => getLuggageKPIs(events), [events]);
 
   const handleTrainSelect = (id) => setSelectedTrainId(prev => prev === id ? null : id);
 
-  if (!events || events.length === 0) {
+  if (!wsReady) {
+    return <LuggageMonitoringSkeleton />;
+  }
+
+  if (events.length === 0) {
     return (
       <div className="luggage-monitoring luggage-monitoring--empty">
         <div className="luggage-monitoring__empty-msg">No luggage events received yet.</div>

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { LUGGAGE_STATES } from '../../mock/luggage';
+import { LUGGAGE_STATES, formatTimestamp } from '../../mock/luggage';
 import './LuggageTrainDetail.css';
 
 const STATE_PRIORITY = ['unattended', 'oversized', 'overcrowded', 'owner_returned', 'cleared'];
@@ -81,7 +81,7 @@ export function LuggageTrainDetail({ trainId, trainSummary, allCoachIds, onClose
                   <span className="luggage-train-detail__event-coach">{ev.coachId}</span>
                   <span className="luggage-train-detail__event-title">{ev.title}</span>
                 </div>
-                <span className="luggage-train-detail__event-time">{ev.timestamp}</span>
+                <span className="luggage-train-detail__event-time">{formatTimestamp(ev.timestamp)}</span>
               </div>
             );
           })
