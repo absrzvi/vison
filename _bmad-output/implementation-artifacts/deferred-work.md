@@ -3,6 +3,13 @@
 ## Deferred from: code review of 3-4-dwell-time-real-data (2026-05-19)
 
 - **Stale fetch / no AbortController** [DwellTime.jsx] — pre-existing in all analytics components (ExceptionWorkflow, OccupancyHeatmap, SystemHealth); not introduced here
+
+## Deferred from: code review of 3-5-ai-detection-quality-real-data (2026-05-19)
+
+- **Missing CSS classes** (`analytics-retry-btn`, `ai-detection__skeleton`, `ai-detection--error`) [AIDetection.jsx] — pre-existing pattern across E3-S2/S3/S4; all analytics components use unstyled class references
+- **Race condition on rapid dateRange change** (no AbortController) [AIDetection.jsx] — pre-existing across all analytics components; explicitly noted in story spec
+- **`fp_count`/`total_events` null coercion in aggregation** [AIDetection.jsx] — Pydantic backend validates int; low runtime risk
+- **`barPct` no upper clamp** (>100% overflow) [AIDetection.jsx] — pre-existing pattern in uptime bar from original mock component
 - **`breach_count` float from backend** [DwellTime.jsx] — backend Pydantic schema declares `int`; PoC acceptable; validate if backend changes
 - **`occupancy_pct = 0` as valid scatter point** [DwellTime.jsx] — null means no data per spec; 0 is valid occupancy; revisit if backend uses 0 as sentinel
 - **Trend line SVG coords unclamped** [DwellTime.jsx] — pre-existing math; only visible with steep slopes from sparse data; low risk for PoC

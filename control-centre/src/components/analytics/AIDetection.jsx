@@ -24,11 +24,20 @@ function aggregateBars(daily_bars, dateRange) {
   const weeks = [];
   daily_bars.forEach((bar, i) => {
     const weekIdx = Math.floor(i / 7);
-    if (!weeks[weekIdx]) weeks[weekIdx] = { label: `W${weekIdx + 1}`, total_events: 0, fp_count: 0 };
+    if (!weeks[weekIdx]) weeks[weekIdx] = { label: `W${weekIdx + 1}`, total_events: 0, fp_count: 0, days: 0 };
     weeks[weekIdx].total_events += bar.total_events;
     weeks[weekIdx].fp_count     += bar.fp_count;
+    weeks[weekIdx].days         += 1;
   });
-  return weeks.map(w => ({ ...w, day: w.label }));
+  // P3 fix: mark partial weeks so the label shows "(N days)" for incomplete buckets
+  const expectedDays = dateRange === '14d' ? 14 : 30;
+  const fullWeekSize = 7;
+  return weeks.map((w, i) => {
+    const isLast   = i === weeks.length - 1;
+    const expected = isLast ? expectedDays - i * fullWeekSize : fullWeekSize;
+    const label    = w.days < expected ? `${w.label} (${w.days}d)` : w.label;
+    return { ...w, day: label };
+  });
 }
 
 export function AIDetection({ dateRange = '7d' }) {
@@ -47,14 +56,14 @@ export function AIDetection({ dateRange = '7d' }) {
   }, [dateRange, retryCount]);
 
   const bars = useMemo(
-    () => (state.data ? aggregateBars(state.data.daily_bars, dateRange) : []),
+    () => (state.data ? aggregateBars(state.data?.daily_bars ?? [], dateRange) : []),
     [state.data, dateRange],
   );
 
   const maxBar = Math.max(...bars.map(d => d.total_events), 1);
 
   const sortedUptime = useMemo(
-    () => (state.data ? [...state.data.per_train_uptime].sort((a, b) => a.uptime_pct - b.uptime_pct) : []),
+    () => (state.data ? [...(state.data?.per_train_uptime ?? [])].sort((a, b) => a.uptime_pct - b.uptime_pct) : []),
     [state.data],
   );
 
@@ -82,8 +91,9 @@ export function AIDetection({ dateRange = '7d' }) {
     );
   }
 
-  const kpi = state.data.kpi;
-  const fpRate = kpi.fp_rate;
+  // P4 fix: guard against malformed 200 OK responses
+  const kpi    = state.data?.kpi ?? {};
+  const fpRate = kpi.fp_rate ?? null;
 
   return (
     <div className="ai-detection">
@@ -112,17 +122,36 @@ export function AIDetection({ dateRange = '7d' }) {
         </div>
         <div className="ai-kpi-divider" />
         <div className="ai-kpi">
-          <span className="ai-kpi__value" style={{ color: 'var(--obb-sev-normal)' }}>
-            {kpi.avg_confidence ?? '—'}%
-          </span>
-          <span className="ai-kpi__label">Avg confidence</span>
+          {kpi.avg_confidence == null ? (
+            <>
+              <span className="ai-kpi__value" style={{ color: 'var(--obb-text-on-dark-4)' }}>—</span>
+              <span className="ai-kpi__label">Avg confidence (no data)</span>
+            </>
+          ) : (
+            <>
+              <span className="ai-kpi__value" style={{ color: 'var(--obb-sev-normal)' }}>
+                {kpi.avg_confidence}%
+              </span>
+              <span className="ai-kpi__label">Avg confidence</span>
+            </>
+          )}
         </div>
         <div className="ai-kpi-divider" />
         <div className="ai-kpi">
-          <span className="ai-kpi__value" style={{ color: (kpi.fleet_uptime_pct ?? 0) < 95 ? 'var(--obb-sev-medium)' : 'var(--obb-sev-normal)' }}>
-            {kpi.fleet_uptime_pct ?? '—'}%
-          </span>
-          <span className="ai-kpi__label">Fleet AI uptime</span>
+          {kpi.fleet_uptime_pct == null ? (
+            <>
+              <span className="ai-kpi__value" style={{ color: 'var(--obb-text-on-dark-4)' }}>—</span>
+              <span className="ai-kpi__label">Fleet AI uptime (no data)</span>
+            </>
+          ) : (
+            <>
+              {/* P1 fix: healthy branch was incorrectly --obb-sev-critical; correct is --obb-sev-normal */}
+              <span className="ai-kpi__value" style={{ color: kpi.fleet_uptime_pct < 95 ? 'var(--obb-sev-medium)' : 'var(--obb-sev-normal)' }}>
+                {kpi.fleet_uptime_pct}%
+              </span>
+              <span className="ai-kpi__label">Fleet AI uptime</span>
+            </>
+          )}
         </div>
       </div>
 

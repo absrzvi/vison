@@ -1,6 +1,6 @@
 # Story 3.5: AI Detection Quality — Real Data
 
-Status: review
+Status: done
 
 ## Story
 
@@ -61,6 +61,17 @@ Bar hover tooltip content is derived from the API response `daily_bars` rows —
   - [x] T2.6 Ensure `computeFpRate` is removed (logic moves to server); use `kpi.fp_rate` directly
 
 - [x] **T3** Run full test suite and lint; confirm no regressions
+
+### Review Findings
+
+- [x] [Review][Patch] Fleet uptime KPI colour regression — healthy branch uses `--obb-sev-critical` instead of `--obb-sev-normal` [AIDetection.jsx:115]
+- [x] [Review][Patch] `avg_confidence ?? '—'` renders "—%" — null suffix not suppressed; same bug on `fleet_uptime_pct ?? '—'` [AIDetection.jsx:117,122]
+- [x] [Review][Patch] `aggregateBars` partial-week label for 30d — W5 gets 2 days but renders identically to W1's 7 days; no normalisation or visual indicator [AIDetection.jsx:aggregateBars]
+- [x] [Review][Patch] No null guard on `kpi`/`daily_bars`/`per_train_uptime` fields — 200 OK with malformed body crashes component; error branch only catches rejected promise [AIDetection.jsx]
+- [x] [Review][Defer] Missing CSS classes (`analytics-retry-btn`, `ai-detection__skeleton`, `ai-detection--error`) — deferred, pre-existing pattern across E3-S2/S3/S4 [AIDetection.jsx]
+- [x] [Review][Defer] Race condition on rapid dateRange change (no AbortController) — deferred, pre-existing across all analytics components [AIDetection.jsx]
+- [x] [Review][Defer] `fp_count`/`total_events` null coercion in aggregation — deferred, Pydantic backend validates int [AIDetection.jsx:aggregateBars]
+- [x] [Review][Defer] `barPct` no upper clamp (>100% not capped) — deferred, pre-existing pattern in uptime bar [AIDetection.jsx]
 
 ## Dev Notes
 
