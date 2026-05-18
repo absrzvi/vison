@@ -1,6 +1,6 @@
 # Story 4.1: vlan-pollers SNMP & Context State
 
-Status: review
+Status: done
 
 ## Story
 
@@ -419,3 +419,39 @@ claude-sonnet-4-6
 - `vlan-pollers/tests/integration/__init__.py`
 - `vlan-pollers/tests/fixtures/stadler.snmprec`
 - `docker-compose.dev.yml`
+
+### Review Findings
+
+**Decision-needed (resolved):**
+- [x] [Review][Decision] F2: `_prev_alarms` never evicts — resolved: Option 3 (defensive both: active=false + row-drop) [snmp_poller.py]
+- [x] [Review][Decision] F3: Alarm rows absent from SNMP table never emit ALARM_CLEARED — resolved with F2 [snmp_poller.py]
+
+**Patches (all applied):**
+- [x] [Review][Patch] F1: JourneyTracker keyed by trip_number only — fixed: key by (vehicle_id, trip_number) [journey_tracker.py]
+- [x] [Review][Patch] F4: `set_door_release` always writes True, door_id dropped — fixed: key by "car_id:door_id" [context_state.py]
+- [x] [Review][Patch] F5: TruthValue convention: `false(2)` → inverted — fixed: `int(x) == 1` [snmp_decoder.py]
+- [x] [Review][Patch] F6: `asyncio.get_event_loop()` deprecated — fixed: `asyncio.to_thread()` [snmp_poller.py]
+- [x] [Review][Patch] F7: Speed never written to ContextState — noted; `update_speed` wired in E4-S2 per deferred F23 [main.py]
+- [x] [Review][Patch] F8: Watchdog both branches same tick flap — fixed: `elif` for speed-clear branch [main.py]
+- [x] [Review][Patch] F9: Empty `arrival_str` never clears `station_approach` — fixed: explicit clear in else branch [main.py]
+- [x] [Review][Patch] F10: ValueError swallowed silently — fixed: `log.warning(pis_arrival_parse_failed)` [main.py]
+- [x] [Review][Patch] F11: `decode_trip_number` prefix match — fixed: exact scalar OID `IM0_TRIP_SCALAR_OID` [snmp_decoder.py]
+- [x] [Review][Patch] F12: GETBULK overshoot WARNING spam — fixed: downgraded to `log.debug` [snmp_decoder.py]
+- [x] [Review][Patch] F13: SNMPv1 default — fixed: `mpModel=1` for SNMPv2c [snmp_poller.py]
+- [x] [Review][Patch] F14: New `AsyncClient` per request — fixed: module-level `_http_client` in both modules [snmp_poller.py + context_state.py]
+- [x] [Review][Patch] F15: `@app.on_event("startup")` deprecated — fixed: lifespan context manager + shutdown handler [main.py]
+- [x] [Review][Patch] F16: `_prev_alarms` updated before emit — fixed: update only after successful emit [snmp_poller.py]
+
+**Deferred:**
+- [x] [Review][Defer] F17: `duration_s: 0.0` hardcoded — no real alarm duration tracked [snmp_poller.py] — deferred, pre-existing
+- [x] [Review][Defer] F18: AC1 no 30 s startup timer enforced before returning 503 [health.py] — deferred, pre-existing
+- [x] [Review][Defer] F19: AC8 station-approach "after stop" semantics not enforced; 2 s SLA fragile [main.py] — deferred, pre-existing
+- [x] [Review][Defer] F20: Module-level `_snmp_connected` defeats multi-worker deploys [health.py] — deferred, pre-existing
+- [x] [Review][Defer] F21: `_push_context_delta` non-atomic across fusion+inference — partial update risk [context_state.py] — deferred, pre-existing
+- [x] [Review][Defer] F23: `snmp_speed_oid` configured but never used in poller [snmp_poller.py] — deferred, pre-existing
+
+### Senior Developer Review (AI)
+
+**Review Date:** 2026-05-19
+**Outcome:** Changes Requested
+**Action Items:** 14 patch, 2 decision-needed, 6 deferred, 1 dismissed

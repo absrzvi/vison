@@ -9,7 +9,8 @@ log = structlog.get_logger()
 # Stadler IM MIB OID prefixes (numeric strings)
 # im0AlarmEntry table: .1.3.6.1.4.1.1234.1.2.1.*  (illustrative — configure via OID constants)
 IM0_ALARM_ENTRY_PREFIX = "1.3.6.1.4.1.1234.1.2.1"
-IM0_TRIP_PREFIX = "1.3.6.1.4.1.1234.1.1"
+IM0_TRIP_SCALAR_OID = "1.3.6.1.4.1.1234.1.1.1.0"  # exact scalar OID for im0triTripNumber
+IM0_TRIP_PREFIX = "1.3.6.1.4.1.1234.1.1"  # kept for backward compat with tests
 
 # Sub-OID column indices within im0AlarmEntry
 _COL_ALARM_ID = "1"
@@ -38,14 +39,15 @@ def decode_alarm_table(
     """Parse a flat list of (oid_string, value) varbinds from a GetBulk response.
 
     Groups by row index, builds one dict per alarm row.
-    Unknown OIDs are logged and skipped — no exception raised.
+    Unknown OIDs are logged at DEBUG and skipped — no exception raised.
     Returns list of raw row dicts; caller converts to AlarmEntry.
     """
     rows: dict[str, dict[str, Any]] = {}  # row_index → {col: value}
 
     for oid_str, value in varbinds:
         if not oid_str.startswith(IM0_ALARM_ENTRY_PREFIX):
-            log.warning("snmp_unknown_oid", oid=oid_str, recoverable=True)
+            # GETBULK walks past subtree boundary naturally — log at DEBUG not WARNING
+            log.debug("snmp_oid_outside_alarm_table", oid=oid_str)
             continue
 
         suffix = oid_str[len(IM0_ALARM_ENTRY_PREFIX):].lstrip(".")
@@ -73,8 +75,9 @@ def decode_alarm_table(
 def _build_alarm_row(row_idx: str, cols: dict[str, Any]) -> dict[str, Any]:
     raw_severity = int(cols.get(_COL_SEVERITY, 6))
     raw_active = cols.get(_COL_ACTIVE, 1)
-    # SNMP values arrive as strings from prettyPrint; "0" means false, anything else true.
-    active = int(raw_active) != 0 if isinstance(raw_active, str) else bool(raw_active)
+    # SNMP TruthValue (RFC 1903): true(1) = active, false(2) = inactive.
+    # prettyPrint returns strings; int(x) == 1 handles both str and int values correctly.
+    active = int(raw_active) == 1
     return {
         "alarm_id": str(cols.get(_COL_ALARM_ID, row_idx)),
         "description": str(cols.get(_COL_DESCRIPTION, "")),
@@ -84,8 +87,8 @@ def _build_alarm_row(row_idx: str, cols: dict[str, Any]) -> dict[str, Any]:
 
 
 def decode_trip_number(varbinds: list[tuple[str, Any]]) -> str | None:
-    """Extract im0triTripNumber string from varbinds. Returns None if not present."""
+    """Extract im0triTripNumber from the exact scalar OID. Returns None if not present."""
     for oid_str, value in varbinds:
-        if oid_str.startswith(IM0_TRIP_PREFIX):
-            return str(value)
+        if oid_str == IM0_TRIP_SCALAR_OID:
+            return str(value).strip()
     return None

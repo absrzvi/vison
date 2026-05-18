@@ -102,7 +102,7 @@ async def test_door_release_posts_to_rtsp() -> None:
     assert payload["event"] == "door_release"
     assert payload["car_id"] == "CAR-1"
     assert payload["door_id"] == "DOOR-A"
-    assert ctx.state.door_release["CAR-1"] is True
+    assert ctx.state.door_release["CAR-1:DOOR-A"] is True
 
 
 @pytest.mark.unit

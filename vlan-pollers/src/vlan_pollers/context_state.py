@@ -11,6 +11,9 @@ from .models import AlarmEntry, ContextState, PisState
 
 log = structlog.get_logger()
 
+# Shared client — reused across all context pushes to avoid per-request TCP setup
+_http_client = httpx.AsyncClient()
+
 
 class ContextStateManager:
     """In-memory ContextState with delta-push to downstream containers.
@@ -73,7 +76,8 @@ class ContextStateManager:
         )
 
     async def set_door_release(self, car_id: str, door_id: str) -> None:
-        self._state.door_release[car_id] = True
+        # Keyed by (car_id, door_id) so multiple doors per car are tracked independently
+        self._state.door_release[f"{car_id}:{door_id}"] = True
         await _post_with_retry(
             f"{self._rtsp_ingest_url}/context",
             {"event": "door_release", "car_id": car_id, "door_id": door_id},
@@ -108,6 +112,5 @@ def _state_to_dict(state: ContextState) -> dict[str, Any]:
 
 @DEFAULT_RETRY
 async def _post_with_retry(url: str, payload: dict[str, Any]) -> None:
-    async with httpx.AsyncClient() as client:
-        r = await client.post(url, json=payload, timeout=5.0)
-        r.raise_for_status()
+    r = await _http_client.post(url, json=payload, timeout=5.0)
+    r.raise_for_status()

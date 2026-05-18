@@ -6,7 +6,7 @@ import pytest
 
 from vlan_pollers.snmp_decoder import (
     IM0_ALARM_ENTRY_PREFIX,
-    IM0_TRIP_PREFIX,
+    IM0_TRIP_SCALAR_OID,
     decode_alarm_table,
     decode_trip_number,
 )
@@ -92,7 +92,7 @@ def test_mixed_known_and_unknown_oids() -> None:
 @pytest.mark.unit
 def test_decode_trip_number_found() -> None:
     varbinds: list[tuple[str, str]] = [
-        (f"{IM0_TRIP_PREFIX}.1.0", "T12345"),
+        (IM0_TRIP_SCALAR_OID, "T12345"),
     ]
     result = decode_trip_number(varbinds)
     assert result == "T12345"
@@ -105,6 +105,24 @@ def test_decode_trip_number_not_present() -> None:
     ]
     result = decode_trip_number(varbinds)
     assert result is None
+
+
+@pytest.mark.unit
+def test_decode_trip_number_prefix_sibling_not_matched() -> None:
+    """A sibling OID under the trip prefix subtree must NOT be matched (exact scalar only)."""
+    varbinds: list[tuple[str, str]] = [
+        ("1.3.6.1.4.1.1234.1.1.2.0", "SIBLING"),  # sibling, not the exact trip scalar
+    ]
+    result = decode_trip_number(varbinds)
+    assert result is None
+
+
+@pytest.mark.unit
+def test_decode_active_truthvalue_false2() -> None:
+    """SNMP TruthValue false(2) must decode to active=False, not True."""
+    varbinds = _alarm_varbinds("1", "ALM-TV", "TruthValue alarm", "1", "2")
+    rows = decode_alarm_table(varbinds)
+    assert rows[0]["active"] is False
 
 
 @pytest.mark.unit

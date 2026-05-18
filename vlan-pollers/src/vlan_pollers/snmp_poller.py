@@ -18,6 +18,9 @@ from .snmp_decoder import IM0_ALARM_ENTRY_PREFIX, decode_alarm_table, decode_tri
 
 log = structlog.get_logger()
 
+# Shared client — avoids per-request TCP setup for event-store posts
+_http_client = httpx.AsyncClient()
+
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
@@ -50,7 +53,7 @@ class SnmpPoller:
         self._event_store_url = event_store_url
         self._set_snmp_ready = set_snmp_ready_fn
         self._connected = False
-        # Track previous alarm states to detect transitions
+        # alarm_id → active state; used for transition detection and row-drop CLEARED emit
         self._prev_alarms: dict[str, bool] = {}
 
     async def run(self) -> None:  # pragma: no cover
@@ -58,9 +61,7 @@ class SnmpPoller:
         log.info("snmp_poller_starting", host=self._snmp_host, port=self._snmp_port)
         while True:
             try:
-                varbinds = await asyncio.get_event_loop().run_in_executor(
-                    None, self._getbulk_sync
-                )
+                varbinds = await asyncio.to_thread(self._getbulk_sync)
                 if not self._connected:
                     self._connected = True
                     self._set_snmp_ready(True)
@@ -74,9 +75,9 @@ class SnmpPoller:
             await asyncio.sleep(self._poll_interval_s)
 
     def _getbulk_sync(self) -> list[tuple[str, Any]]:  # pragma: no cover
-        """Synchronous GetBulk — run in executor. Covered by integration tests."""
+        """Synchronous GetBulk — run in thread via asyncio.to_thread."""
         try:
-            from pysnmp.hlapi import (
+            from pysnmp.hlapi import (  # type: ignore[import-untyped]
                 CommunityData,
                 ContextData,
                 ObjectIdentity,
@@ -92,7 +93,7 @@ class SnmpPoller:
         results: list[tuple[str, Any]] = []
         for error_indication, error_status, _, var_binds in bulkCmd(
             SnmpEngine(),
-            CommunityData(self._snmp_community),
+            CommunityData(self._snmp_community, mpModel=1),  # SNMPv2c — GETBULK requires v2c
             UdpTransportTarget((self._snmp_host, self._snmp_port), timeout=5, retries=2),
             ContextData(),
             0,
@@ -120,17 +121,52 @@ class SnmpPoller:
         self, varbinds: list[tuple[str, Any]], journey_id: str
     ) -> None:
         rows = decode_alarm_table(varbinds)
+        current_alarm_ids: set[str] = set()
+
         for row in rows:
             entry = AlarmEntry(**row)
+            current_alarm_ids.add(entry.alarm_id)
             was_active = self._prev_alarms.get(entry.alarm_id)
-            self._prev_alarms[entry.alarm_id] = entry.active
 
-            # Emit event only on state transition
+            # Emit event only on state transition; update prev_alarms AFTER successful emit
             if was_active is None or was_active != entry.active:
                 event_type = EventType.ALARM_ACTIVE if entry.active else EventType.ALARM_CLEARED
-                await self._emit_alarm_event(journey_id, event_type, entry)
+                try:
+                    await self._emit_alarm_event(journey_id, event_type, entry)
+                    self._prev_alarms[entry.alarm_id] = entry.active
+                except Exception as exc:
+                    # Emit failed — do not update prev_alarms so the transition is retried next poll
+                    log.warning(
+                        "alarm_emit_failed",
+                        alarm_id=entry.alarm_id,
+                        error=str(exc),
+                        recoverable=True,
+                    )
+            else:
+                self._prev_alarms[entry.alarm_id] = entry.active
 
             await self._ctx.update_alarm(entry)
+
+        # Defensive: alarms that were active and have vanished from the table → CLEARED
+        # Handles agents that drop rows on clear rather than setting active=false (F3).
+        for alarm_id, was_active in list(self._prev_alarms.items()):
+            if alarm_id not in current_alarm_ids and was_active:
+                ghost_entry = AlarmEntry(
+                    alarm_id=alarm_id,
+                    description="",
+                    severity="info",
+                    active=False,
+                )
+                try:
+                    await self._emit_alarm_event(journey_id, EventType.ALARM_CLEARED, ghost_entry)
+                    del self._prev_alarms[alarm_id]
+                except Exception as exc:
+                    log.warning(
+                        "alarm_ghost_clear_failed",
+                        alarm_id=alarm_id,
+                        error=str(exc),
+                        recoverable=True,
+                    )
 
     async def _emit_alarm_event(
         self, journey_id: str, event_type: EventType, entry: AlarmEntry
@@ -176,9 +212,8 @@ class SnmpPoller:
 
 @DEFAULT_RETRY
 async def _post_event_with_retry(url: str, payload: dict[str, Any]) -> None:
-    async with httpx.AsyncClient() as client:
-        r = await client.post(f"{url}/api/v1/events", json=payload, timeout=5.0)
-        # 409 = duplicate — treat as idempotent success
-        if r.status_code == 409:
-            return
-        r.raise_for_status()
+    r = await _http_client.post(f"{url}/api/v1/events", json=payload, timeout=5.0)
+    # 409 = duplicate — treat as idempotent success
+    if r.status_code == 409:
+        return
+    r.raise_for_status()

@@ -223,6 +223,15 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - **`confidence` `%` suffix assumes 0-100 scale — backend contract not yet locked** [TrainDetail.jsx] — revisit when API contract is finalised
 - **WS ALERT_RAISED payload prepended as-is — may lack canonical shape fields** [FleetContext.jsx] — WS event contract not yet specced; add transformation/validation when backend defines the shape
 
+## Deferred from: code review of 4-1-vlan-pollers-snmp-context-state (2026-05-19)
+
+- **F17: `duration_s: 0.0` hardcoded for ALARM_CLEARED** [snmp_poller.py] — track alarm activation timestamp in `_prev_alarms` to compute real duration; deferred as PoC doesn't require accurate duration
+- **F18: AC1 — no 30 s startup timer** [health.py] — spec says "within 30 s"; current impl just returns 503 until SNMP connects; acceptable for PoC single-process deployment
+- **F19: AC8 — station-approach "after stop" semantics not enforced; 2 s SLA fragile** [main.py] — watchdog sleeps 2 s; "after stop" (speed reached ~0) not tracked; add `has_stopped` flag and tighten poll interval in hardening story
+- **F20: Module-level `_snmp_connected` global defeats multi-worker deploys** [health.py] — PoC single-worker; migrate to `app.state` before multi-worker production deploy
+- **F21: `_push_context_delta` non-atomic across fusion+inference** [context_state.py] — sequential posts may leave consumers divergent on retry failure; add sequence number + per-service error capture in hardening story
+- **F23: `snmp_speed_oid` configured but never used** [snmp_poller.py / config.py] — speed varbind polling deferred until Stadler MIB OID for speed is confirmed; wire `update_speed` in E4-S2 when APC/SNMP speed OID is known
+
 ## Deferred from: code review of 3-7-system-health-maintenance-ticket-api (2026-05-19)
 
 - **ESC during `--loading` clears UI but doesn't abort in-flight POST** [SystemHealth.jsx] — AC4 covers pre-send confirmation only; wire AbortController from ESC to fetch in a hardening story

@@ -52,7 +52,7 @@ async def test_emit_alarm_active_event_posts_to_event_store() -> None:
         ("1.3.6.1.4.1.1234.1.2.1.2.1", "Door obstruction"),
         ("1.3.6.1.4.1.1234.1.2.1.3.1", "1"),
         ("1.3.6.1.4.1.1234.1.2.1.4.1", "1"),
-        ("1.3.6.1.4.1.1234.1.1.1.0", "T1"),
+        ("1.3.6.1.4.1.1234.1.1.1.0", "T1"),  # exact scalar OID
     ]
     await poller._process(varbinds)
 
@@ -82,7 +82,7 @@ async def test_emit_alarm_cleared_on_state_transition() -> None:
         ("1.3.6.1.4.1.1234.1.2.1.2.1", "Door clear"),
         ("1.3.6.1.4.1.1234.1.2.1.3.1", "3"),
         ("1.3.6.1.4.1.1234.1.2.1.4.1", "0"),
-        ("1.3.6.1.4.1.1234.1.1.1.0", "T1"),
+        ("1.3.6.1.4.1.1234.1.1.1.0", "T1"),  # exact scalar OID
     ]
     await poller._process(varbinds)
 
@@ -109,7 +109,7 @@ async def test_no_event_emitted_when_alarm_state_unchanged() -> None:
         ("1.3.6.1.4.1.1234.1.2.1.2.1", "Door obstruction"),
         ("1.3.6.1.4.1.1234.1.2.1.3.1", "1"),
         ("1.3.6.1.4.1.1234.1.2.1.4.1", "1"),   # still active
-        ("1.3.6.1.4.1.1234.1.1.1.0", "T1"),
+        ("1.3.6.1.4.1.1234.1.1.1.0", "T1"),  # exact scalar OID
     ]
     await poller._process(varbinds)
 
@@ -140,6 +140,62 @@ async def test_door_release_signal_posts_to_rtsp() -> None:
     assert body["event"] == "door_release"
     assert body["car_id"] == "CAR-2"
     assert body["door_id"] == "DOOR-B"
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_alarm_row_drop_emits_cleared() -> None:
+    """Active alarm absent from SNMP table (row-drop) → ALARM_CLEARED emitted (F2/F3)."""
+    es_route = respx.post(f"{EVENT_STORE}/api/v1/events").mock(return_value=httpx.Response(201))
+    respx.post(f"{FUSION}/context").mock(return_value=httpx.Response(200))
+    respx.post(f"{INFERENCE}/context").mock(return_value=httpx.Response(200))
+
+    poller = _make_poller()
+    poller._tracker.get_journey_id("OBB-1", "T1")
+    poller._prev_alarms["ALM-GONE"] = True  # was active, now missing from table
+
+    # Varbinds contain a different alarm only — ALM-GONE has vanished
+    varbinds = [
+        ("1.3.6.1.4.1.1234.1.2.1.1.1", "ALM-OTHER"),
+        ("1.3.6.1.4.1.1234.1.2.1.2.1", "Other alarm"),
+        ("1.3.6.1.4.1.1234.1.2.1.3.1", "3"),
+        ("1.3.6.1.4.1.1234.1.2.1.4.1", "1"),
+        ("1.3.6.1.4.1.1234.1.1.1.0", "T1"),  # exact scalar OID
+    ]
+    await poller._process(varbinds)
+
+    import json
+    events = [json.loads(c.request.content) for c in es_route.calls]
+    cleared_events = [e for e in events if e["event_type"] == "ALARM_CLEARED"]
+    assert any(e["payload"]["alarm_id"] == "ALM-GONE" for e in cleared_events), (
+        "Must emit ALARM_CLEARED for alarm that vanished from SNMP table"
+    )
+    # ALM-GONE must be evicted from prev_alarms after successful clear
+    assert "ALM-GONE" not in poller._prev_alarms
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_failed_emit_keeps_transition_for_retry() -> None:
+    """If event-store POST fails, _prev_alarms is not updated — transition retried next poll."""
+    respx.post(f"{EVENT_STORE}/api/v1/events").mock(return_value=httpx.Response(500))
+    respx.post(f"{FUSION}/context").mock(return_value=httpx.Response(200))
+    respx.post(f"{INFERENCE}/context").mock(return_value=httpx.Response(200))
+
+    poller = _make_poller()
+    poller._tracker.get_journey_id("OBB-1", "T1")
+    # No prior state — first encounter, active=True, emit expected to fail
+    varbinds = [
+        ("1.3.6.1.4.1.1234.1.2.1.1.1", "ALM-FAIL"),
+        ("1.3.6.1.4.1.1234.1.2.1.2.1", "Fail alarm"),
+        ("1.3.6.1.4.1.1234.1.2.1.3.1", "1"),
+        ("1.3.6.1.4.1.1234.1.2.1.4.1", "1"),
+        ("1.3.6.1.4.1.1234.1.1.1.0", "T1"),  # exact scalar OID
+    ]
+    await poller._process(varbinds)
+
+    # prev_alarms must NOT have been updated — so next poll retries the emit
+    assert "ALM-FAIL" not in poller._prev_alarms
 
 
 @pytest.mark.unit
