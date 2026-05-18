@@ -7,3 +7,4 @@ export const UNATTENDED_THRESHOLD_OPTIONS = [1, 2, 5, 10, 15];
 export const LS_KEY_ALERT_THRESHOLD = 'oebb.cc.alertThresholdSeconds';
 export const LS_KEY_STALENESS_THRESHOLD = 'oebb.cc.stalenessThresholdSeconds';
 export const LS_KEY_UNATTENDED_THRESHOLD = 'oebb.cc.unattendedThresholdMinutes';
+export const WS_STALENESS_THRESHOLD_MS = 120_000;

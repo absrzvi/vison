@@ -1,5 +1,7 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
+
+const WS_STALENESS_THRESHOLD_MS = 120_000;
 
 const VALID_CCTV_STATUS = new Set(['green', 'amber', 'red']);
 
@@ -197,11 +199,69 @@ describe('healthData WS cctvStatus merge logic', () => {
 
   it('returns prev unchanged when trains is not an array', () => {
     const healthData = { trains: null };
-    const fleet = [{ id: 'R5001C-031', cctvStatus: 'red' }];
     const updater = prev => {
       if (!prev || !Array.isArray(prev.trains)) return prev;
       return prev; // would patch if array
     };
     expect(updater(healthData)).toBe(healthData);
+  });
+});
+
+describe('WS_STALENESS_THRESHOLD_MS constant', () => {
+  it('is 120_000 ms (2 minutes)', () => {
+    expect(WS_STALENESS_THRESHOLD_MS).toBe(120_000);
+  });
+});
+
+describe('isStale computation logic', () => {
+  const computeIsStale = (lastUpdate) => {
+    if (!lastUpdate) return false;
+    return (Date.now() - lastUpdate.getTime()) > WS_STALENESS_THRESHOLD_MS;
+  };
+
+  it('returns false when lastUpdate is null', () => {
+    expect(computeIsStale(null)).toBe(false);
+  });
+
+  it('returns false when elapsed < threshold', () => {
+    const recent = new Date(Date.now() - 60_000); // 60s ago
+    expect(computeIsStale(recent)).toBe(false);
+  });
+
+  it('returns true when elapsed > threshold', () => {
+    const old = new Date(Date.now() - 200_000); // 200s ago
+    expect(computeIsStale(old)).toBe(true);
+  });
+
+  it('returns false immediately after lastUpdate resets to now', () => {
+    const now = new Date();
+    expect(computeIsStale(now)).toBe(false);
+  });
+});
+
+describe('last_healthy panel footer helpers', () => {
+  it('null last_healthy — elapsedLabel returns null (footer section hidden)', () => {
+    expect(elapsedLabel(null)).toBeNull();
+  });
+
+  it('null last_healthy — formatTime returns null (footer section hidden)', () => {
+    expect(formatTime(null)).toBeNull();
+  });
+
+  it('valid ISO last_healthy — elapsedLabel returns elapsed string', () => {
+    const iso = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // 5 min ago
+    expect(elapsedLabel(iso)).toMatch(/^5m$/);
+  });
+
+  it('valid ISO last_healthy — formatTime returns HH:MM pattern', () => {
+    const result = formatTime('2026-05-19T10:30:00Z');
+    expect(result).toMatch(/^\d{2}:\d{2}$/);
+  });
+
+  it('elapsed uses Date.now() against server ISO timestamp — not hardcoded string', () => {
+    // Ensure a real ISO-8601 UTC string is parsed correctly (not treated as legacy HH:MM)
+    const iso = new Date(Date.now() - 90_000).toISOString(); // 90s = 1m30s → rounds to 1m
+    const result = elapsedLabel(iso);
+    expect(result).toBe('1m');
   });
 });

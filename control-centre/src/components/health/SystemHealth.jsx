@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useFleetData } from '../../hooks/useFleetData';
+import { useFleetData } from '../../context/FleetContext';
+import { WS_STALENESS_THRESHOLD_MS } from '../../constants/preferences';
 import { getSystemHealth } from '../../api/health';
 import './SystemHealth.css';
 
@@ -83,7 +84,7 @@ function SystemHealthSkeleton() {
 }
 
 export function SystemHealth() {
-  const { fleet, lastUpdate, stalenessThresholdSeconds } = useFleetData();
+  const { fleet, lastUpdate } = useFleetData();
   const [healthData, setHealthData] = useState(null);
   const [healthLoading, setHealthLoading] = useState(true);
   const [healthError, setHealthError] = useState(null);
@@ -181,9 +182,9 @@ export function SystemHealth() {
 
   const isStale = useMemo(() => {
     if (!lastUpdate) return false;
-    return (Date.now() - lastUpdate.getTime()) > stalenessThresholdSeconds * 1000;
+    return (Date.now() - lastUpdate.getTime()) > WS_STALENESS_THRESHOLD_MS;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastUpdate, stalenessThresholdSeconds, tick]);
+  }, [lastUpdate, tick]);
 
   if (healthLoading) return <SystemHealthSkeleton />;
 
@@ -297,6 +298,11 @@ export function SystemHealth() {
 
   return (
     <div className="system-health">
+      {isStale && (
+        <div className="sh-staleness-banner" data-testid="sh-staleness-banner">
+          ⚠ Data may be stale — reconnecting…
+        </div>
+      )}
       {/* Summary strip */}
       <div className="sh-summary-strip">
         <div className="sh-summary-tile">

@@ -5,6 +5,17 @@
   overflow: hidden;
 }
 
+/* ── Staleness banner ──────────────────────────────────────── */
+
+.sh-staleness-banner {
+  background: var(--obb-sev-medium);
+  color: var(--obb-text-inverse, #fff);
+  padding: 6px 12px;
+  font-size: var(--font-size-sm, 12px);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
 /* ── Summary strip ─────────────────────────────────────────── */
 
 .sh-summary-strip {
