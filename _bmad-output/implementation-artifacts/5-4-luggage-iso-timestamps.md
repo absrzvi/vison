@@ -1,6 +1,6 @@
 # Story E5-S4 — Luggage ISO Timestamp Migration
 
-**Status:** review
+**Status:** done
 **Sprint:** Epic 5
 **Story Key:** 5-4-luggage-iso-timestamps
 
@@ -497,3 +497,12 @@ All 5 tasks complete. `LUGGAGE_EVENTS` timestamps migrated to 7 hardcoded ISO-86
 - `control-centre/src/mock/luggage.js`
 - `control-centre/src/mock/luggage.test.js`
 - `control-centre/src/mock/__tests__/luggage.test.js`
+
+### Review Findings
+
+- [x] [Review][Patch] `clearedLastHour` smoke test assertion is a time-bomb [`luggage.test.js` getLuggageKPIs describe]
+- [x] [Review][Patch] `formatTimestamp` missing `timeZone: 'Europe/Vienna'` in `toLocaleTimeString` options [`luggage.js:193`]
+- [x] [Review][Patch] `stillFrame.capturedAt` fields still contain legacy HH:MM strings after ISO migration [`luggage.js:30,41,54,66,78`]
+- [x] [Review][Defer] `getLuggageKPIs` silently drops unattended events when `elapsedMin` returns null [`luggage.js:213`] — deferred, pre-existing
+- [x] [Review][Defer] `elapsedMin` grows unbounded with fixed anchor dates in dev [`luggage.js:196-203`] — deferred, pre-existing (noted in file header comment as expected dev behaviour)
+- [x] [Review][Defer] Duplicate `formatTimestamp` describe blocks across two test files — deferred, intentional cross-version regression coverage

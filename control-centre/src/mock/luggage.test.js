@@ -71,10 +71,17 @@ describe('getLuggageKPIs with LUGGAGE_EVENTS', () => {
     expect(typeof kpis.clearedLastHour).toBe('number');
   });
 
-  it('correctly counts active vs cleared events', () => {
-    const kpis = getLuggageKPIs(LUGGAGE_EVENTS);
-    // lug-006 (owner_returned) and lug-007 (cleared) are not active
-    expect(kpis.totalActive).toBe(5);
+  it('correctly counts active vs cleared events using relative fixtures', () => {
+    const now = new Date().toISOString();
+    const recentEvents = [
+      { id: 'r1', trainId: 'T1', coachId: 'C1', state: 'unattended',      timestamp: now, confidence: 90 },
+      { id: 'r2', trainId: 'T1', coachId: 'C1', state: 'overcrowded',     timestamp: now, confidence: 90 },
+      { id: 'r3', trainId: 'T1', coachId: 'C1', state: 'oversized',       timestamp: now, confidence: 90 },
+      { id: 'r4', trainId: 'T1', coachId: 'C1', state: 'owner_returned',  timestamp: now, confidence: 90 },
+      { id: 'r5', trainId: 'T1', coachId: 'C1', state: 'cleared',         timestamp: now, confidence: 90 },
+    ];
+    const kpis = getLuggageKPIs(recentEvents);
+    expect(kpis.totalActive).toBe(3);
     expect(kpis.clearedLastHour).toBe(2);
   });
 

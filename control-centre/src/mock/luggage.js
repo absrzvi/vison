@@ -27,7 +27,7 @@ export const LUGGAGE_EVENTS = [
     timestamp: '2026-05-19T08:48:00.000Z',
     stillFrame: {
       url: 'https://placehold.co/480x270/1E2430/9BA3AF?text=C4+luggage+rack+%E2%80%94+11%3A23%3A04',
-      capturedAt: '11:23:04',
+      capturedAt: '2026-05-19T08:48:04.000Z',
       camera: 'C4-rack-overhead',
       confidence: 94,
     },
@@ -44,7 +44,7 @@ export const LUGGAGE_EVENTS = [
     timestamp: '2026-05-19T08:34:00.000Z',
     stillFrame: {
       url: 'https://placehold.co/480x270/1E2430/9BA3AF?text=C2+rack+overhead+%E2%80%94+11%3A09%3A22',
-      capturedAt: '11:09:22',
+      capturedAt: '2026-05-19T08:34:22.000Z',
       camera: 'C2-rack-overhead',
       confidence: 88,
     },
@@ -61,7 +61,7 @@ export const LUGGAGE_EVENTS = [
     timestamp: '2026-05-19T08:17:00.000Z',
     stillFrame: {
       url: 'https://placehold.co/480x270/1E2430/9BA3AF?text=C5+vestibule+%E2%80%94+10%3A52%3A47',
-      capturedAt: '10:52:47',
+      capturedAt: '2026-05-19T08:17:47.000Z',
       camera: 'C5-vestibule',
       confidence: 91,
     },
@@ -78,7 +78,7 @@ export const LUGGAGE_EVENTS = [
     timestamp: '2026-05-19T08:56:00.000Z',
     stillFrame: {
       url: 'https://placehold.co/480x270/1E2430/9BA3AF?text=C3+vestibule+%E2%80%94+11%3A31%3A18',
-      capturedAt: '11:31:18',
+      capturedAt: '2026-05-19T08:56:18.000Z',
       camera: 'C3-vestibule',
       confidence: 97,
     },
@@ -95,7 +95,7 @@ export const LUGGAGE_EVENTS = [
     timestamp: '2026-05-19T08:37:00.000Z',
     stillFrame: {
       url: 'https://placehold.co/480x270/1E2430/9BA3AF?text=C1+rack+overhead+%E2%80%94+11%3A12%3A03',
-      capturedAt: '11:12:03',
+      capturedAt: '2026-05-19T08:37:03.000Z',
       camera: 'C1-rack-overhead',
       confidence: 85,
     },
@@ -190,7 +190,7 @@ export function formatTimestamp(ts) {
   if (!ts) return '--:--';
   const d = new Date(ts);
   if (isNaN(d.getTime())) return '--:--';
-  return d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Vienna' });
 }
 
 export function elapsedMin(timestamp, nowTs = null) {

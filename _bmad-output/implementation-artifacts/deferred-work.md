@@ -1,5 +1,20 @@
 # Deferred Work
 
+## Deferred from: code review of 5-4-luggage-iso-timestamps (2026-05-19)
+
+- **`getLuggageKPIs` silently drops unattended events when `elapsedMin` returns null** [`luggage.js:213`] — pre-existing null-elapsed contract; add explicit null guard in `getLuggageKPIs` if timestamp quality degrades in production
+- **`elapsedMin` grows unbounded with fixed anchor dates in dev** [`luggage.js:196-203`] — expected dev behaviour, noted in file header comment; not a defect
+- **Duplicate `formatTimestamp` describe blocks across two test files** — intentional cross-version regression coverage (E5-S2 vs E5-S4 contract); removing could mask regressions
+
+## Deferred from: code review of 5-3-luggage-kpi-live-monitoring (2026-05-18)
+
+- **Staleness banner uses global `lastUpdate` not luggage-specific last event** — spec Dev Notes explicitly accept this as a reasonable proxy for this story; add dedicated `luggageLastUpdate` timestamp in a future hardening story [LuggageMonitoring.jsx]
+- **localStorage accepts arbitrary integers outside allowed options** — pre-existing pattern across all thresholds; add allow-list validation in a hardening pass [FleetContext.jsx:54]
+- **`clearedLastHour` has no time filter** — pre-existing naming/logic mismatch in luggage.js; fix in a polish pass when mock data semantics are tightened [luggage.js]
+- **`prevValue` capture relies on synchronous setState callback** — pre-existing across all three threshold update callbacks; refactor to ref-based capture if React concurrent rendering causes issues [FleetContext.jsx]
+- **Server GET can overwrite optimistic PATCH on slow network** — pre-existing race across all preferences; needs AbortController + sequence counter when preferences API is hardened [FleetContext.jsx]
+- **`elapsedMin` silently returns null for malformed timestamps, dropping events from alert count** — pre-existing elapsedMin contract; add explicit null guard in getLuggageKPIs if timestamp quality degrades in production [luggage.js]
+
 ## Deferred from: code review of 5-2-luggage-monitoring-live-ui (2026-05-18)
 
 - **F7 — IIFE in JSX for confidence rendering** [`LuggageFeed.jsx:136`] — style issue, not a correctness bug; refactor to variable in a polish pass

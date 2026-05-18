@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-19
+last_updated: 2026-05-19  # E5-S2/S3/S4 all done
 project: oebb-agent
 # code-review 2026-05-17: story 2-2 → in-progress (1 patch finding: AC1 scroll-to-top)
 # code-review 2026-05-17: story 2-3 → done (5 patches applied)
@@ -46,6 +46,9 @@ project: oebb-agent
 # create-story 2026-05-19: story 5-2 → ready-for-dev (luggage monitoring live UI)
 # create-story 2026-05-19: story 5-3 → ready-for-dev (luggage KPI live monitoring)
 # create-story 2026-05-19: story 5-4 → ready-for-dev (luggage ISO timestamp migration)
+# dev+review 2026-05-19: story 5-2 → done (luggage monitoring live UI, 11 patches applied)
+# dev+review 2026-05-19: story 5-3 → done (luggage KPI live monitoring, 7 patches applied)
+# dev+review 2026-05-19: story 5-4 → done (luggage ISO timestamp migration, 3 patches applied)
 project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
@@ -103,7 +106,7 @@ development_status:
   # ── Epic 5: Luggage Monitoring — Live Data ──
   epic-5: in-progress
   5-1-luggage-ws-live-feed: done
-  5-2-luggage-monitoring-live-ui: ready-for-dev
-  5-3-luggage-kpi-live-monitoring: ready-for-dev
-  5-4-luggage-iso-timestamps: ready-for-dev
+  5-2-luggage-monitoring-live-ui: done
+  5-3-luggage-kpi-live-monitoring: done
+  5-4-luggage-iso-timestamps: done
   epic-5-retrospective: optional
