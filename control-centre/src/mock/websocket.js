@@ -280,6 +280,8 @@ export class MockWebSocketClient {
   disconnect() {
     this.connected = false;
     if (this.interval) clearInterval(this.interval);
+    clearTimeout(this._lugTimeout1);
+    clearTimeout(this._lugTimeout2);
     this.onStatusChange('disconnected');
   }
 
@@ -295,17 +297,20 @@ export class MockWebSocketClient {
       },
     });
 
-    // Emit mock luggage events so the Luggage tab is testable in dev mode
-    setTimeout(() => {
+    // Emit mock luggage events so the Luggage tab is testable in dev mode.
+    // IDs use crypto.randomUUID() so reconnect re-emits fresh events (no silent dedup no-op).
+    const lugId1 = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `mock-lug-${Date.now()}-1`;
+    const lugId2 = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `mock-lug-${Date.now()}-2`;
+    this._lugTimeout1 = setTimeout(() => {
       if (this.connected) {
         this.onMessage({
           type: 'LUGGAGE_EVENT',
           payload: {
-            id: 'mock-lug-001',
+            id: lugId1,
             trainId: 'R5001C-031',
-            coachId: 'car-4',
+            coachId: 'C4',
             state: 'unattended',
-            title: 'Unattended bag — car-4 seating-mid',
+            title: 'Unattended bag — C4 seating-mid',
             detail: 'No owner detected for 3 min. Track: bag-0042.',
             confidence: 0.94,
             timestamp: new Date().toISOString(),
@@ -315,17 +320,17 @@ export class MockWebSocketClient {
       }
     }, 500);
 
-    setTimeout(() => {
+    this._lugTimeout2 = setTimeout(() => {
       if (this.connected) {
         this.onMessage({
           type: 'LUGGAGE_EVENT',
           payload: {
-            id: 'mock-lug-002',
+            id: lugId2,
             trainId: 'R5001C-003',
-            coachId: 'car-2',
+            coachId: 'C2',
             state: 'overcrowded',
-            title: 'Luggage area full — car-2',
-            detail: 'Rack car-2-rack-upper-left at 95% capacity. 7 items detected.',
+            title: 'Luggage area full — C2',
+            detail: 'Rack C2-rack-upper-left at 95% capacity. 7 items detected.',
             confidence: 0.88,
             timestamp: new Date().toISOString(),
             stillFrame: null,

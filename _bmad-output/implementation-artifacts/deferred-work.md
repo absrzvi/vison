@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 5-1-luggage-ws-live-feed (2026-05-19)
+
+- **`elapsedMin` anchored to mock `"11:35"`** — all live timestamps show "0 min"; deferred to E5-S4 (ISO timestamp story) [control-centre/src/mock/luggage.js]
+- **Unbounded `luggageEvents` array growth** — no cap on accumulation over long sessions; add sliding window in hardening pass [control-centre/src/context/FleetContext.jsx]
+- **`getLuggageKPIs.longestUnattended` always "0 min" for live events** — HH:MM anchor means duration calc is broken until E5-S4 refactors timestamp display
+
 ## Deferred from: code review of 2-9-system-health-data-feed (2026-05-19)
 
 - **API key shipped in client bundle (`VITE_API_KEY` / `X-API-Key` in health.js)** — pre-existing from E2-S1; covered by ADR-6/7 Keycloak OAuth2/OIDC path at fleet rollout

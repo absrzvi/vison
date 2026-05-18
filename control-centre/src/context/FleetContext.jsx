@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { MockWebSocketClient } from '../mock/websocket';
 import { RealWebSocketClient } from '../ws/RealWebSocketClient';
-import { luggageEventsToEscalations } from '../mock/luggage';
+import { luggageEventsToEscalations, applyLuggageEvent } from '../mock/luggage';
 import { acknowledgeEscalation, resolveEscalation, getTrainAlerts } from '../api/escalations';
 import { getPreferences, patchPreferences } from '../api/preferences';
 import {
@@ -71,12 +71,18 @@ export function FleetProvider({ children }) {
     luggageEventsRef.current = luggageEvents;
   }, [luggageEvents]);
 
-  // When luggageEvents changes, re-derive luggage escalations in the unified feed
+  // When luggageEvents changes, re-derive luggage escalations in the unified feed.
+  // Preserve acknowledged/resolved status from existing escalations — don't wipe user actions.
   useEffect(() => {
-    setEscalations(prev => [
-      ...prev.filter(e => e.type !== 'luggage'),
-      ...luggageEventsToEscalations(luggageEvents),
-    ]);
+    setEscalations(prev => {
+      const existingLuggage = prev.filter(e => e.type === 'luggage');
+      const statusById = Object.fromEntries(existingLuggage.map(e => [e.id, e.status]));
+      const fresh = luggageEventsToEscalations(luggageEvents).map(e => ({
+        ...e,
+        status: statusById[e.id] ?? e.status,
+      }));
+      return [...prev.filter(e => e.type !== 'luggage'), ...fresh];
+    });
   }, [luggageEvents]);
 
   useEffect(() => {
@@ -94,11 +100,11 @@ export function FleetProvider({ children }) {
         setWsReady(true);
       }
       if (msg.type === 'LUGGAGE_EVENT') {
-        const { id } = msg.payload ?? {};
-        if (id) {
+        if (msg.payload?.id) {
           setLuggageEvents(prev => {
-            if (prev.some(e => e.id === id)) return prev;
-            return [msg.payload, ...prev];
+            const next = applyLuggageEvent(prev, msg.payload);
+            luggageEventsRef.current = next;
+            return next;
           });
           setLastUpdate(new Date());
         }

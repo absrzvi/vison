@@ -28,6 +28,13 @@ const SUBSCRIPTION_REQUEST = {
 
 const SEVERITY_MAP = { info: 'green', warning: 'amber', critical: 'red' };
 
+// Normalise backend car_id (e.g. "car-4") to OEBB coach label (e.g. "C4")
+function normaliseCoachId(carId) {
+  if (!carId) return null;
+  const m = carId.match(/^car-(\d+)$/i);
+  return m ? `C${m[1]}` : carId;
+}
+
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_MAX_MS = 30000;
 const JITTER_FACTOR = 0.2;
@@ -197,12 +204,13 @@ export class RealWebSocketClient {
     }
 
     if (event_type === 'LUGGAGE_RACK_SATURATION') {
+      if (event_id != null && this._trackSeenId(event_id)) return;
       this._onMessage({
         type: 'LUGGAGE_EVENT',
         payload: {
           id: event_id,
           trainId: vehicle_id,
-          coachId: safePayload.car_id ?? null,
+          coachId: normaliseCoachId(safePayload.car_id),
           state: 'overcrowded',
           title: 'Luggage area full — ' + (safePayload.car_id ?? 'unknown coach'),
           detail: 'Rack ' + (safePayload.rack_id ?? '') + ' at ' + Math.round((safePayload.fill_pct ?? 0) * 100) + '% capacity. ' + (safePayload.item_count ?? '?') + ' items detected.',
@@ -215,12 +223,13 @@ export class RealWebSocketClient {
     }
 
     if (event_type === 'UNATTENDED_BAG') {
+      if (event_id != null && this._trackSeenId(event_id)) return;
       this._onMessage({
         type: 'LUGGAGE_EVENT',
         payload: {
           id: event_id,
           trainId: vehicle_id,
-          coachId: safePayload.car_id ?? null,
+          coachId: normaliseCoachId(safePayload.car_id),
           state: 'unattended',
           title: 'Unattended bag — ' + (safePayload.car_id ?? 'unknown coach') + (safePayload.zone ? ' ' + safePayload.zone : ''),
           detail: 'No owner detected for ' + Math.round((safePayload.dwell_s ?? 0) / 60) + ' min. Track: ' + (safePayload.track_id ?? '?') + '.',

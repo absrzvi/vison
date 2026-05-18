@@ -1,6 +1,6 @@
 # Story E5-S1 — Luggage Monitoring Live WebSocket Feed
 
-**Status:** review
+**Status:** done
 **Sprint:** Epic 5
 **Story Key:** 5-1-luggage-ws-live-feed
 
@@ -294,3 +294,23 @@ Tests run with `// @vitest-environment node` (jsdom not installed). Component re
 
 ### Change Log
 - E5-S1 implementation: replace static LUGGAGE_EVENTS with live WS-fed luggageEvents (2026-05-19)
+- Code review patches applied: AC7 dedup at WS layer, coachId normalisation, escalation status preservation, ref sync fix, mock UUID IDs, timeout cleanup, null coachId guard, test helper extracted to production code (2026-05-19)
+
+---
+
+## Review Findings
+
+### Patch Items
+- [x] [Review][Patch] AC7: `_trackSeenId` not called for luggage events in RealWebSocketClient — dedup only at context layer, WS layer silently accepts dupes [control-centre/src/ws/RealWebSocketClient.js]
+- [x] [Review][Patch] `coachId` mismatch: live events emit `car-4`, `LuggageTrainDetail` grid expects `C4` format — per-coach view broken for live data [control-centre/src/ws/RealWebSocketClient.js + LuggageTrainDetail.jsx]
+- [x] [Review][Patch] Luggage escalation effect wipes acknowledged status on each new event — `prev.filter(e => e.type !== 'luggage')` discards any user acknowledge action [control-centre/src/context/FleetContext.jsx:75-80]
+- [x] [Review][Patch] `luggageEventsRef` may lag one render cycle under React 18 batching — FLEET_STATE handler could read stale ref [control-centre/src/context/FleetContext.jsx]
+- [x] [Review][Patch] Mock IDs hardcoded (`mock-lug-001`, `mock-lug-002`) — reconnect causes silent no-op dedup, mock events never reappear [control-centre/src/mock/websocket.js]
+- [x] [Review][Patch] `setTimeout` handles in MockWebSocketClient not cleared on disconnect — timers fire after disconnect causing state updates on unmounted context [control-centre/src/mock/websocket.js]
+- [x] [Review][Patch] `coachId: null` not guarded in LuggageFeed consumers — null coachId could cause display string issues [control-centre/src/components/luggage/LuggageFeed.jsx]
+- [x] [Review][Patch] Test helpers reimplemented locally rather than importing production code — divergence risk [control-centre/src/context/__tests__/FleetContextLuggage.test.js]
+
+### Deferred Items
+- [x] [Review][Defer] `elapsedMin` anchored to mock `"11:35"` — all live timestamps show "0 min"; deferred to E5-S4 (ISO timestamp story) [control-centre/src/mock/luggage.js] — deferred, pre-existing
+- [x] [Review][Defer] Unbounded `luggageEvents` array growth — no cap on accumulation over long sessions [control-centre/src/context/FleetContext.jsx] — deferred, pre-existing
+- [x] [Review][Defer] `getLuggageKPIs.longestUnattended` always returns "0 min" for live events due to HH:MM anchor — deferred to E5-S4 [control-centre/src/mock/luggage.js] — deferred, pre-existing

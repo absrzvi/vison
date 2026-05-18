@@ -162,6 +162,15 @@ export function luggageEventsToEscalations(events) {
     }));
 }
 
+// Prepend a new luggage event with id-based dedup — mirrors FleetContext LUGGAGE_EVENT handler.
+// Exported so tests import the same logic rather than re-implementing it.
+export function applyLuggageEvent(prev, incoming) {
+  const { id } = incoming ?? {};
+  if (!id) return prev;
+  if (prev.some(e => e.id === id)) return prev;
+  return [incoming, ...prev];
+}
+
 // Next station per train — mock data for operator decision context
 export const NEXT_STATION = {
   'R5001C-031': 'Salzburg Hbf',

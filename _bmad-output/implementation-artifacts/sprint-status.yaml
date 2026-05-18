@@ -42,6 +42,7 @@ project: oebb-agent
 # dev 2026-05-18: story 2-7 → review (loading skeletons + Playwright E2E setup)
 # dev 2026-05-18: story 2-8 → review (configurable alert threshold, preferences panel, backend router)
 # create-story 2026-05-19: story 2-9 → ready-for-dev (system health data feed)
+# code-review 2026-05-19: story 5-1 → done (8 patches applied)
 project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
@@ -98,7 +99,7 @@ development_status:
 
   # ── Epic 5: Luggage Monitoring — Live Data ──
   epic-5: in-progress
-  5-1-luggage-ws-live-feed: review
+  5-1-luggage-ws-live-feed: done
   5-2-luggage-monitoring-live-ui: backlog
   5-3-luggage-kpi-live-monitoring: backlog
   5-4-luggage-iso-timestamps: backlog

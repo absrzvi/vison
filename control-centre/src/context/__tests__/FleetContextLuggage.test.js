@@ -1,14 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { luggageEventsToEscalations } from '../../mock/luggage';
-
-// Pure helper: luggage event prepend with dedup — mirrors FleetContext LUGGAGE_EVENT handler
-function applyLuggageEvent(prev, incoming) {
-  const { id } = incoming ?? {};
-  if (!id) return prev;
-  if (prev.some(e => e.id === id)) return prev;
-  return [incoming, ...prev];
-}
+import { luggageEventsToEscalations, applyLuggageEvent } from '../../mock/luggage';
 
 describe('FleetContext LUGGAGE_EVENT — state logic', () => {
   it('prepends new event to empty array', () => {

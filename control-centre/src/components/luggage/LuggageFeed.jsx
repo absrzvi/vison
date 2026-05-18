@@ -148,7 +148,9 @@ export function LuggageFeed({ events, onTrainSelect }) {
         <div className="luggage-item__detail">{ev.detail}</div>
 
         <div className="luggage-item__meta">
-          <span className="luggage-item__coach-chip">{ev.coachId}</span>
+          {ev.coachId != null && (
+            <span className="luggage-item__coach-chip">{ev.coachId}</span>
+          )}
           {nextStation && isActive && (
             <span className="luggage-item__next-station">→ {nextStation}</span>
           )}
