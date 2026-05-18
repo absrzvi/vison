@@ -51,6 +51,7 @@ project: oebb-agent
 # dev+review 2026-05-19: story 5-4 → done (luggage ISO timestamp migration, 3 patches applied)
 # create-story 2026-05-19: story 3-1 → ready-for-dev (analytics REST endpoints, backend)
 # create-story 2026-05-19: story 3-5 → ready-for-dev (AI detection quality real data)
+# create-story 2026-05-19: story 4-2 → ready-for-dev (APC/PIS/reservation pollers)
 project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
@@ -93,7 +94,7 @@ development_status:
   # ── Epic 4: Onboard Edge Pipeline ──
   epic-4: in-progress
   4-1-vlan-pollers-snmp-context-state: done
-  4-2-vlan-pollers-apc-pis-reservation: backlog
+  4-2-vlan-pollers-apc-pis-reservation: ready-for-dev
   4-3-rtsp-ingest-camera-pipeline: backlog
   4-4-inference-detection-tracking-occupancy: backlog
   4-5-inference-safety-accessibility: backlog
