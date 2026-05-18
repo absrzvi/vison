@@ -7,6 +7,7 @@ import {
   exportCapacityReviewCsv,
   getOccupancyHeatmap,
   getDwellTime,
+  getDetectionQuality,
 } from '../analytics';
 
 const mockFetch = vi.fn();
@@ -188,6 +189,49 @@ describe('getOccupancyHeatmap', () => {
   it('propagates network errors', async () => {
     mockFetch.mockRejectedValueOnce(new TypeError('Network failure'));
     await expect(getOccupancyHeatmap()).rejects.toThrow('Network failure');
+  });
+});
+
+// ── getDetectionQuality ───────────────────────────────────────────────────────
+
+describe('getDetectionQuality', () => {
+  const detectionPayload = {
+    kpi: { total_events: 142, fp_rate: 3.5, avg_confidence: 91.2, fleet_uptime_pct: 93.1 },
+    daily_bars: [
+      { date: '2026-05-12', total_events: 18, fp_count: 1 },
+      { date: '2026-05-13', total_events: 22, fp_count: 0 },
+    ],
+    per_train_uptime: [
+      { train_id: '4024-001', uptime_pct: 88.5 },
+      { train_id: '4024-002', uptime_pct: 72.0 },
+    ],
+  };
+
+  it('GETs /api/v1/analytics/detection-quality?range=7d by default', async () => {
+    mockFetch.mockResolvedValueOnce(okJson(detectionPayload));
+    const result = await getDetectionQuality();
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toMatch(/\/api\/v1\/analytics\/detection-quality\?range=7d$/);
+    expect(opts.method).toBe('GET');
+    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(result).toEqual(detectionPayload);
+  });
+
+  it('encodes custom range parameter', async () => {
+    mockFetch.mockResolvedValueOnce(okJson(detectionPayload));
+    await getDetectionQuality('30d');
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toMatch(/range=30d/);
+  });
+
+  it('throws with .status on non-2xx', async () => {
+    mockFetch.mockResolvedValueOnce(errResponse(500));
+    await expect(getDetectionQuality()).rejects.toMatchObject({ status: 500 });
+  });
+
+  it('propagates network errors', async () => {
+    mockFetch.mockRejectedValueOnce(new TypeError('Network failure'));
+    await expect(getDetectionQuality()).rejects.toThrow('Network failure');
   });
 });
 
