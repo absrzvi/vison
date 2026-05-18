@@ -1,8 +1,22 @@
 # Deferred Work
 
+## Deferred from: create-story of 3-2-capacity-exceptions-real-data (2026-05-19)
+
+- **Full calendar date picker with `from/to` API params** [ExceptionWorkflow.jsx, analytics routes] — Epic AC specifies a full calendar picker; deferred because E3-S1 backend only accepts `range=7d|14d|30d`; 3-option toggle satisfies PoC needs; implement as additive backend change when capacity planners need arbitrary windows
+- **`trendDirection` / `trendWeeks` not returned by server** [ExceptionWorkflow.jsx `TrendBadge`] — mock-only fields; trend badge will be hidden for server data; re-introduce when inference pipeline adds historical trend computation to `CAPACITY_EXCEPTION` payload
+
 ## Deferred from: code review of 5-4-luggage-iso-timestamps (2026-05-19)
 
 - **`getLuggageKPIs` silently drops unattended events when `elapsedMin` returns null** [`luggage.js:213`] — pre-existing null-elapsed contract; add explicit null guard in `getLuggageKPIs` if timestamp quality degrades in production
+
+## Deferred from: code review of 3-1-analytics-rest-endpoints (2026-05-19)
+
+- **`status`/`severity` fields accept arbitrary strings** [`api/analytics.py`] — add `Literal`/`Enum` validation when data contract with frontend is stable
+- **No pagination/LIMIT on `/exceptions` or `/dwell-time`** [`routes/analytics.py`] — DoS risk at large data volumes; add `limit`/`offset` query params at fleet rollout
+- **No CORS / rate limiting on analytics router** [`routes/analytics.py`] — PoC scope; add middleware at fleet rollout
+- **`route_name or "unknown"` sentinel collides with legitimate "unknown" route names** [`routes/analytics.py:get_occupancy_heatmap`] — use `None` or a UUID sentinel when route name cardinality is known
+- **`get_db` override in tests missing explicit rollback on exception** [`tests/integration/test_analytics_endpoints.py`] — SQLAlchemy handles on context exit; revisit if partial-write test states become flaky
+- **AC1 /exceptions grouping by route** [`routes/analytics.py:get_exceptions`] — current flat list deferred to E3-S2; frontend story will clarify exact wire shape; may require adding `list[RouteGroup]` response model
 - **`elapsedMin` grows unbounded with fixed anchor dates in dev** [`luggage.js:196-203`] — expected dev behaviour, noted in file header comment; not a defect
 - **Duplicate `formatTimestamp` describe blocks across two test files** — intentional cross-version regression coverage (E5-S2 vs E5-S4 contract); removing could mask regressions
 
