@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { getDwellData, DWELL_SCATTER } from '../../mock/analytics';
+import { useState, useEffect, useMemo } from 'react';
+import { getDwellTime } from '../../api/analytics';
 import './DwellTime.css';
 
 // P2 fix: suppress trailing "0s" on round minutes
@@ -43,13 +43,6 @@ const DWELL_MIN = 40, DWELL_RANGE = 130;
 function toPlotX(crowding) { return ((crowding - CROWD_MIN) / CROWD_RANGE) * 100; }
 function toPlotY(dwell)    { return ((dwell - DWELL_MIN) / DWELL_RANGE) * 100; }
 
-const { slope, intercept, r2 } = linearRegression(DWELL_SCATTER);
-const trendX1 = CROWD_MIN, trendY1 = slope * CROWD_MIN + intercept;
-const trendX2 = CROWD_MIN + CROWD_RANGE, trendY2 = slope * (CROWD_MIN + CROWD_RANGE) + intercept;
-const dwellPer10 = Math.round(slope * 10);
-// P1 fix: derive strength label from R²
-const correlationLabel = r2 >= 0.7 ? 'Strong' : r2 >= 0.4 ? 'Moderate' : 'Weak';
-
 // P3 fix: station colour palette for scatter dots
 const STATION_COLORS = {
   'Graz Hbf':         '#4A9EFF',
@@ -64,17 +57,74 @@ const STATION_COLORS = {
 };
 const STATION_LIST = Object.keys(STATION_COLORS);
 
-const RANGE_DAYS = { '7d': 7, '14d': 14, '30d': 30 };
+const PERIOD_LABEL = { '7d': 'this week', '14d': 'last 14 days', '30d': 'last 30 days' };
+const RANGE_DAYS   = { '7d': 7, '14d': 14, '30d': 30 };
 
 const SCATTER_TOOLTIP_WIDTH = 280;
 
 export function DwellTime({ dateRange = '30d' }) {
-  const days = RANGE_DAYS[dateRange] ?? 30;
-  const dwellData = getDwellData(dateRange);
+  const [state, setState] = useState({ data: null, loading: true, error: false });
+  const [retryCount, setRetryCount] = useState(0);
   const [scatterTooltip, setScatterTooltip] = useState(null);
   const [schedTooltip, setSchedTooltip] = useState(null);
 
-  // P3 fix: guard against empty data
+  useEffect(() => {
+    setState({ data: null, loading: true, error: false }); // eslint-disable-line react-hooks/set-state-in-effect
+    setScatterTooltip(null);
+    setSchedTooltip(null);
+    getDwellTime(dateRange)
+      .then(data => setState({ data, loading: false, error: false }))
+      .catch(() => setState({ data: null, loading: false, error: true }));
+  }, [dateRange, retryCount]);
+
+  // Scatter points from API — filter null occupancy_pct
+  const scatterPoints = useMemo(
+    () =>
+      Array.isArray(state.data)
+        ? state.data
+            .filter(d => d.occupancy_pct != null)
+            .map(d => ({ crowding: d.occupancy_pct, dwell: d.actual_sec, station: d.station }))
+        : [],
+    [state.data],
+  );
+
+  // Regression constants — computed from live scatter data
+  const regression = useMemo(() => {
+    if (scatterPoints.length < 2) return null;
+    const { slope, intercept, r2 } = linearRegression(scatterPoints);
+    const trendX1 = CROWD_MIN;
+    const trendY1 = slope * CROWD_MIN + intercept;
+    const trendX2 = CROWD_MIN + CROWD_RANGE;
+    const trendY2 = slope * (CROWD_MIN + CROWD_RANGE) + intercept;
+    const dwellPer10 = Math.round(slope * 10);
+    const correlationLabel = r2 >= 0.7 ? 'Strong' : r2 >= 0.4 ? 'Moderate' : 'Weak';
+    return { slope, intercept, r2, trendX1, trendY1, trendX2, trendY2, dwellPer10, correlationLabel };
+  }, [scatterPoints]);
+
+  if (state.loading) {
+    return (
+      <div className="dwell-time">
+        <div className="dwell-time__skeleton" data-testid="dwell-time-skeleton" />
+      </div>
+    );
+  }
+
+  if (state.error) {
+    return (
+      <div className="dwell-time">
+        <div className="dwell-error">
+          Dwell data unavailable — retry
+          <button className="dwell-error__retry" onClick={() => setRetryCount(c => c + 1)}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const dwellData = Array.isArray(state.data) ? state.data : [];
+  const days = RANGE_DAYS[dateRange] ?? 30;
+
   if (!dwellData.length) {
     return (
       <div className="dwell-time">
@@ -83,7 +133,7 @@ export function DwellTime({ dateRange = '30d' }) {
     );
   }
 
-  const maxActual = Math.max(...dwellData.map(d => d.actual));
+  const maxActual = Math.max(...dwellData.map(d => d.actual_sec));
 
   const handleScatterEnter = (e, pt) => {
     const rawX = e.clientX + 12;
@@ -107,10 +157,10 @@ export function DwellTime({ dateRange = '30d' }) {
         </span>
       </div>
       <div className="dwell-bars">
-        {[...dwellData].sort((a, b) => b.actual - a.actual).map(d => {
-          const color = delayColor(d.actual, d.scheduled);
-          const excess = d.actual - d.scheduled;
-          const scheduledLeft = `${(d.scheduled / maxActual) * 100}%`;
+        {dwellData.map(d => {
+          const color = delayColor(d.actual_sec, d.scheduled_sec);
+          const excess = d.actual_sec - d.scheduled_sec;
+          const scheduledLeft = `${(d.scheduled_sec / maxActual) * 100}%`;
           const isUnder = excess < 0;
           return (
             <div key={d.station} className="dwell-bar-row">
@@ -118,7 +168,7 @@ export function DwellTime({ dateRange = '30d' }) {
               <div className="dwell-bar-row__chart">
                 <div
                   className="dwell-bar-row__actual"
-                  style={{ width: `${(d.actual / maxActual) * 100}%`, background: color }}
+                  style={{ width: `${(d.actual_sec / maxActual) * 100}%`, background: color }}
                 />
                 {/* P2 fix: scheduled tick with wider hover zone via wrapper + custom tooltip */}
                 <div
@@ -127,7 +177,7 @@ export function DwellTime({ dateRange = '30d' }) {
                   onMouseEnter={e => setSchedTooltip({
                     x: e.clientX + 10,
                     y: e.clientY - 8,
-                    label: `Scheduled: ${fmtSec(d.scheduled)}`,
+                    label: `Scheduled: ${fmtSec(d.scheduled_sec)}`,
                   })}
                   onMouseLeave={() => setSchedTooltip(null)}
                 >
@@ -136,8 +186,8 @@ export function DwellTime({ dateRange = '30d' }) {
               </div>
               {/* P1 fix: values in grid-row 2 — below the bar, not on top of it */}
               <div className="dwell-bar-row__values">
-                <span style={{ color }} className="dwell-bar-row__actual-val">{fmtSec(d.actual)}</span>
-                <span className="dwell-bar-row__sched-val">sched {fmtSec(d.scheduled)}</span>
+                <span style={{ color }} className="dwell-bar-row__actual-val">{fmtSec(d.actual_sec)}</span>
+                <span className="dwell-bar-row__sched-val">sched {fmtSec(d.scheduled_sec)}</span>
                 {/* P2 fix: show negative delta in green when under schedule */}
                 {excess > 0 && (
                   <span className="dwell-bar-row__excess" style={{ color }}>+{fmtSec(excess)}</span>
@@ -146,12 +196,9 @@ export function DwellTime({ dateRange = '30d' }) {
                   <span className="dwell-bar-row__under">−{fmtSec(Math.abs(excess))} within schedule</span>
                 )}
               </div>
-              {d.topCause && (
-                <div className="dwell-bar-row__cause">{d.topCause}</div>
-              )}
-              {d.breaches > 0 && (
+              {d.breach_count > 0 && (
                 <div className="dwell-bar-row__breaches" style={{ color }}>
-                  {d.breaches} breach{d.breaches > 1 ? 'es' : ''} {d.breachPeriodLabel ?? 'this period'}
+                  {d.breach_count} breach{d.breach_count > 1 ? 'es' : ''} {PERIOD_LABEL[dateRange] ?? 'this period'}
                 </div>
               )}
             </div>
@@ -195,15 +242,17 @@ export function DwellTime({ dateRange = '30d' }) {
                 style={{ bottom: `${toPlotY(v)}%` }}
               />
             ))}
-            <svg className="dwell-scatter__trend-line" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <line
-                x1={`${toPlotX(trendX1)}%`} y1={`${100 - toPlotY(trendY1)}%`}
-                x2={`${toPlotX(trendX2)}%`} y2={`${100 - toPlotY(trendY2)}%`}
-                stroke="rgba(100,160,255,0.35)" strokeWidth="1.5" strokeDasharray="4 3"
-              />
-            </svg>
+            {regression && (
+              <svg className="dwell-scatter__trend-line" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <line
+                  x1={`${toPlotX(regression.trendX1)}%`} y1={`${100 - toPlotY(regression.trendY1)}%`}
+                  x2={`${toPlotX(regression.trendX2)}%`} y2={`${100 - toPlotY(regression.trendY2)}%`}
+                  stroke="rgba(100,160,255,0.35)" strokeWidth="1.5" strokeDasharray="4 3"
+                />
+              </svg>
+            )}
             {/* P3 fix: dots coloured by station */}
-            {DWELL_SCATTER.map((pt, i) => (
+            {scatterPoints.map((pt, i) => (
               <div
                 key={i}
                 className="dwell-scatter__dot"
@@ -234,9 +283,11 @@ export function DwellTime({ dateRange = '30d' }) {
         <div className="dwell-scatter__x-label">Platform crowding (%)</div>
 
         {/* P1 fix: correlation strength derived from R² */}
-        <div className="dwell-scatter__insight">
-          {correlationLabel} positive correlation (R²={r2.toFixed(2)}) — each 10% increase in platform crowding adds approximately <strong>{dwellPer10}s</strong> of dwell time.
-        </div>
+        {regression && (
+          <div className="dwell-scatter__insight">
+            {regression.correlationLabel} positive correlation (R²={regression.r2.toFixed(2)}) — each 10% increase in platform crowding adds approximately <strong>{regression.dwellPer10}s</strong> of dwell time.
+          </div>
+        )}
 
         {/* P3 fix: station colour legend */}
         <div className="dwell-scatter__station-legend">

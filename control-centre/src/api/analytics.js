@@ -47,6 +47,10 @@ export function getOccupancyHeatmap(range = '7d') {
   return _get(`/api/v1/analytics/occupancy-heatmap?range=${encodeURIComponent(range)}`);
 }
 
+export function getDwellTime(range = '7d') {
+  return _get(`/api/v1/analytics/dwell-time?range=${encodeURIComponent(range)}`);
+}
+
 export function getCapacityExceptions(range = '7d') {
   return _get(`/api/v1/analytics/exceptions?range=${encodeURIComponent(range)}`);
 }

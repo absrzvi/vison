@@ -6,6 +6,7 @@ import {
   reopenException,
   exportCapacityReviewCsv,
   getOccupancyHeatmap,
+  getDwellTime,
 } from '../analytics';
 
 const mockFetch = vi.fn();
@@ -187,5 +188,41 @@ describe('getOccupancyHeatmap', () => {
   it('propagates network errors', async () => {
     mockFetch.mockRejectedValueOnce(new TypeError('Network failure'));
     await expect(getOccupancyHeatmap()).rejects.toThrow('Network failure');
+  });
+});
+
+// ── getDwellTime ──────────────────────────────────────────────────────────────
+
+describe('getDwellTime', () => {
+  const dwellPayload = [
+    { station: 'Wien Hbf', scheduled_sec: 120, actual_sec: 128, breach_count: 3, occupancy_pct: 65.2 },
+    { station: 'Salzburg Hbf', scheduled_sec: 90, actual_sec: 142, breach_count: 12, occupancy_pct: 80.1 },
+  ];
+
+  it('GETs /api/v1/analytics/dwell-time?range=7d by default', async () => {
+    mockFetch.mockResolvedValueOnce(okJson(dwellPayload));
+    const result = await getDwellTime();
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toMatch(/\/api\/v1\/analytics\/dwell-time\?range=7d$/);
+    expect(opts.method).toBe('GET');
+    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(result).toEqual(dwellPayload);
+  });
+
+  it('encodes custom range parameter', async () => {
+    mockFetch.mockResolvedValueOnce(okJson(dwellPayload));
+    await getDwellTime('30d');
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toMatch(/range=30d/);
+  });
+
+  it('throws with .status on non-2xx', async () => {
+    mockFetch.mockResolvedValueOnce(errResponse(500));
+    await expect(getDwellTime()).rejects.toMatchObject({ status: 500 });
+  });
+
+  it('propagates network errors', async () => {
+    mockFetch.mockRejectedValueOnce(new TypeError('Network failure'));
+    await expect(getDwellTime()).rejects.toThrow('Network failure');
   });
 });
