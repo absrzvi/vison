@@ -44,6 +44,8 @@ project: oebb-agent
 # create-story 2026-05-19: story 2-9 → ready-for-dev (system health data feed)
 # code-review 2026-05-19: story 5-1 → done (8 patches applied)
 # create-story 2026-05-19: story 5-2 → ready-for-dev (luggage monitoring live UI)
+# create-story 2026-05-19: story 5-3 → ready-for-dev (luggage KPI live monitoring)
+# create-story 2026-05-19: story 5-4 → ready-for-dev (luggage ISO timestamp migration)
 project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
@@ -102,6 +104,6 @@ development_status:
   epic-5: in-progress
   5-1-luggage-ws-live-feed: done
   5-2-luggage-monitoring-live-ui: ready-for-dev
-  5-3-luggage-kpi-live-monitoring: backlog
-  5-4-luggage-iso-timestamps: backlog
+  5-3-luggage-kpi-live-monitoring: ready-for-dev
+  5-4-luggage-iso-timestamps: ready-for-dev
   epic-5-retrospective: optional
