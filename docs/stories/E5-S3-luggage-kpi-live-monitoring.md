@@ -1,6 +1,6 @@
 # Story E5-S3 — Luggage KPI Live Monitoring
 
-**Status:** review
+**Status:** done
 **Sprint:** Epic 5
 **Story Key:** 5-3-luggage-kpi-live-monitoring
 
@@ -346,3 +346,19 @@ All 8 tasks complete. Added `unattendedThresholdMinutes` as a new preference mir
 - `control-centre/src/components/luggage/LuggageMonitoring.jsx`
 - `control-centre/src/components/luggage/LuggageMonitoring.css`
 - `control-centre/src/components/shell/OperatorPreferences.jsx`
+
+### Review Findings
+
+- [x] [Review][Patch] Banner text uses "last update" but spec AC7 requires "last event" [LuggageMonitoring.jsx:65]
+- [x] [Review][Patch] localStorage not written optimistically on selection — violates AC1 [FleetContext.jsx:237-248]
+- [x] [Review][Patch] PATCH failure does not revert localStorage — violates AC3 [FleetContext.jsx:244-247]
+- [x] [Review][Patch] `Number.isFinite(serverUnattended)` accepts 0 and negatives — should guard `> 0` [FleetContext.jsx:208]
+- [x] [Review][Patch] `isLuggageStale` computed inline with `Date.now()` — no interval timer, banner never appears in true silence [LuggageMonitoring.jsx:41]
+- [x] [Review][Patch] `updateUnattendedThreshold` accepts 0, negative, NaN — no validation against `UNATTENDED_THRESHOLD_OPTIONS` [FleetContext.jsx:237]
+- [x] [Review][Patch] `Math.round(stalenessThresholdSeconds / 60)` renders "0 minutes" for sub-60s thresholds [LuggageMonitoring.jsx:65]
+- [x] [Review][Defer] Staleness banner uses global `lastUpdate` not luggage-specific — pre-existing; spec Dev Notes explicitly accept this as acceptable proxy for this story [LuggageMonitoring.jsx:41]
+- [x] [Review][Defer] localStorage accepts arbitrary integers outside allowed options — pre-existing pattern across all thresholds [FleetContext.jsx:54]
+- [x] [Review][Defer] `clearedLastHour` has no time filter — pre-existing naming/logic mismatch [luggage.js]
+- [x] [Review][Defer] `prevValue` capture relies on synchronous setState callback — pre-existing pattern across all three threshold update callbacks [FleetContext.jsx]
+- [x] [Review][Defer] Server GET can overwrite optimistic PATCH if response is slow — pre-existing across all preferences [FleetContext.jsx]
+- [x] [Review][Defer] `elapsedMin` silently returns null for malformed timestamps, dropping events — pre-existing elapsedMin contract [luggage.js]

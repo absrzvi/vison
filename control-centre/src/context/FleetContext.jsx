@@ -8,6 +8,7 @@ import {
   DEFAULT_ALERT_THRESHOLD_SECONDS,
   DEFAULT_STALENESS_THRESHOLD_SECONDS,
   DEFAULT_UNATTENDED_THRESHOLD_MINUTES,
+  UNATTENDED_THRESHOLD_OPTIONS,
   LS_KEY_ALERT_THRESHOLD,
   LS_KEY_STALENESS_THRESHOLD,
   LS_KEY_UNATTENDED_THRESHOLD,
@@ -205,7 +206,7 @@ export function FleetProvider({ children }) {
         return prev;
       });
       const serverUnattended = prefs.unattended_threshold_min;
-      if (Number.isFinite(serverUnattended)) {
+      if (Number.isFinite(serverUnattended) && serverUnattended > 0) {
         setUnattendedThresholdMinutes(prev => {
           if (prev !== serverUnattended) {
             localStorage.setItem(LS_KEY_UNATTENDED_THRESHOLD, String(serverUnattended));
@@ -235,14 +236,16 @@ export function FleetProvider({ children }) {
   }, []);
 
   const updateUnattendedThreshold = useCallback(async (value) => {
+    if (!UNATTENDED_THRESHOLD_OPTIONS.includes(value)) return new Error(`Invalid threshold: ${value}`);
     let prevValue;
     setUnattendedThresholdMinutes(prev => { prevValue = prev; return value; });
+    localStorage.setItem(LS_KEY_UNATTENDED_THRESHOLD, String(value));
     try {
       await patchPreferences({ unattended_threshold_min: value });
-      localStorage.setItem(LS_KEY_UNATTENDED_THRESHOLD, String(value));
       return null;
     } catch (err) {
       setUnattendedThresholdMinutes(prevValue);
+      localStorage.setItem(LS_KEY_UNATTENDED_THRESHOLD, String(prevValue));
       return err;
     }
   }, []);

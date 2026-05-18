@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { getLuggageSummaryByTrain, getLuggageKPIs } from '../../mock/luggage';
 import { useFleetData } from '../../context/FleetContext';
 import { LuggageKpiStrip } from './LuggageKpiStrip';
@@ -38,7 +38,16 @@ export function LuggageMonitoring() {
   const { luggageEvents: events, wsReady, lastUpdate, stalenessThresholdSeconds, unattendedThresholdMinutes } = useFleetData();
   const summary = useMemo(() => getLuggageSummaryByTrain(events), [events]);
   const kpis = useMemo(() => getLuggageKPIs(events, unattendedThresholdMinutes), [events, unattendedThresholdMinutes]);
-  const isLuggageStale = lastUpdate != null && (Date.now() - lastUpdate.getTime()) > stalenessThresholdSeconds * 1000;
+  const [now, setNow] = useState(() => Date.now());
+
+  // Tick every 10 s so the staleness banner appears without requiring a WS event.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 10_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const stalenessMs = (stalenessThresholdSeconds ?? 120) * 1000;
+  const isLuggageStale = lastUpdate != null && (now - lastUpdate.getTime()) > stalenessMs;
 
   const handleTrainSelect = (id) => setSelectedTrainId(prev => prev === id ? null : id);
 
@@ -62,7 +71,7 @@ export function LuggageMonitoring() {
     <div className="luggage-monitoring">
       {isLuggageStale && (
         <div className="luggage-monitoring__stale-banner">
-          Luggage data may be stale — last update over {Math.round(stalenessThresholdSeconds / 60)} minutes ago.
+          Luggage data may be stale — last event over {Math.max(1, Math.round(stalenessMs / 60000))} minutes ago.
         </div>
       )}
       <LuggageKpiStrip kpis={kpis} />
