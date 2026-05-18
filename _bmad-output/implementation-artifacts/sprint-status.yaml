@@ -95,3 +95,11 @@ development_status:
   4-9-closed-ledger-reconciliation: backlog
   4-10-coach-comfort-index: backlog
   epic-4-retrospective: optional
+
+  # ── Epic 5: Luggage Monitoring — Live Data ──
+  epic-5: in-progress
+  5-1-luggage-ws-live-feed: ready-for-dev
+  5-2-luggage-monitoring-live-ui: backlog
+  5-3-luggage-kpi-live-monitoring: backlog
+  5-4-luggage-iso-timestamps: backlog
+  epic-5-retrospective: optional
