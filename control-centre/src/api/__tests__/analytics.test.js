@@ -5,6 +5,7 @@ import {
   dismissException,
   reopenException,
   exportCapacityReviewCsv,
+  getOccupancyHeatmap,
 } from '../analytics';
 
 const mockFetch = vi.fn();
@@ -149,5 +150,42 @@ describe('exportCapacityReviewCsv', () => {
   it('throws with .status on non-2xx', async () => {
     mockFetch.mockResolvedValueOnce(errResponse(401));
     await expect(exportCapacityReviewCsv()).rejects.toMatchObject({ status: 401 });
+  });
+});
+
+// ── getOccupancyHeatmap ───────────────────────────────────────────────────────
+
+describe('getOccupancyHeatmap', () => {
+  const heatmapPayload = {
+    routes: ['Vienna-Salzburg', 'Vienna-Linz'],
+    hours: ['05:00', '06:00', '07:00'],
+    cells: [[72.3, null, 45.1], [88.0, 65.2, null]],
+  };
+
+  it('GETs /api/v1/analytics/occupancy-heatmap?range=7d by default', async () => {
+    mockFetch.mockResolvedValueOnce(okJson(heatmapPayload));
+    const result = await getOccupancyHeatmap();
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toMatch(/\/api\/v1\/analytics\/occupancy-heatmap\?range=7d$/);
+    expect(opts.method).toBe('GET');
+    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(result).toEqual(heatmapPayload);
+  });
+
+  it('encodes custom range parameter', async () => {
+    mockFetch.mockResolvedValueOnce(okJson(heatmapPayload));
+    await getOccupancyHeatmap('30d');
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toMatch(/range=30d/);
+  });
+
+  it('throws with .status on non-2xx', async () => {
+    mockFetch.mockResolvedValueOnce(errResponse(500));
+    await expect(getOccupancyHeatmap()).rejects.toMatchObject({ status: 500 });
+  });
+
+  it('propagates network errors', async () => {
+    mockFetch.mockRejectedValueOnce(new TypeError('Network failure'));
+    await expect(getOccupancyHeatmap()).rejects.toThrow('Network failure');
   });
 });
