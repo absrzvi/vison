@@ -1,0 +1,109 @@
+.pref-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 200;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+}
+
+.pref-panel {
+  margin: 52px 0 0 0; /* sit below the 52px header */
+  width: 320px;
+  background: var(--obb-surface-2);
+  border-left: 1px solid var(--obb-border-dark);
+  border-bottom: 1px solid var(--obb-border-dark);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  outline: none;
+}
+
+.pref-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pref-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--obb-text-on-dark-1);
+  margin: 0;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pref-close {
+  background: none;
+  border: none;
+  color: var(--obb-text-on-dark-3);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.pref-close:hover { color: var(--obb-text-on-dark-1); }
+
+.pref-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pref-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pref-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--obb-text-on-dark-2);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.seg-group {
+  display: flex;
+  gap: 2px;
+  background: var(--obb-surface-0);
+  border: 1px solid var(--obb-border-dark);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.seg-btn {
+  flex: 1;
+  padding: 5px 0;
+  font-size: 12px;
+  font-weight: 600;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--obb-text-on-dark-3);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.seg-btn:hover { background: var(--obb-surface-3); color: var(--obb-text-on-dark-1); }
+.seg-btn--active {
+  background: var(--obb-surface-4);
+  color: var(--obb-text-on-dark-1);
+}
+.seg-btn:focus-visible {
+  outline: 2px solid var(--obb-red);
+  outline-offset: 1px;
+}
+
+.pref-toast {
+  padding: 10px 14px;
+  background: rgba(255, 59, 59, 0.15);
+  border: 1px solid rgba(255, 59, 59, 0.35);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--obb-sev-critical);
+  font-weight: 500;
+}

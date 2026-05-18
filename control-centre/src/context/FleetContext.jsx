@@ -3,6 +3,13 @@ import { MockWebSocketClient } from '../mock/websocket';
 import { RealWebSocketClient } from '../ws/RealWebSocketClient';
 import { LUGGAGE_EVENTS, luggageEventsToEscalations } from '../mock/luggage';
 import { acknowledgeEscalation, resolveEscalation, getTrainAlerts } from '../api/escalations';
+import { getPreferences, patchPreferences } from '../api/preferences';
+import {
+  DEFAULT_ALERT_THRESHOLD_SECONDS,
+  DEFAULT_STALENESS_THRESHOLD_SECONDS,
+  LS_KEY_ALERT_THRESHOLD,
+  LS_KEY_STALENESS_THRESHOLD,
+} from '../constants/preferences';
 
 const LUGGAGE_ESCALATIONS = luggageEventsToEscalations(LUGGAGE_EVENTS);
 const OPERATOR_ID = import.meta.env.VITE_OPERATOR_ID ?? 'operator-unknown';
@@ -32,6 +39,17 @@ export function FleetProvider({ children }) {
   const [wsReady, setWsReady] = useState(false);
   const [feedTypeFilter, setFeedTypeFilter] = useState('all');
   const [feedStatusFilter, setFeedStatusFilter] = useState(null);
+
+  // ── Alert threshold (AC2/AC3/AC5) ───────────────────────────────────────
+  // Initialise from localStorage for instant value; background GET reconciles.
+  const [alertThresholdSeconds, setAlertThresholdSeconds] = useState(() => {
+    const stored = localStorage.getItem(LS_KEY_ALERT_THRESHOLD);
+    return stored ? parseInt(stored, 10) : DEFAULT_ALERT_THRESHOLD_SECONDS;
+  });
+  const [stalenessThresholdSeconds, setStalenessThresholdSeconds] = useState(() => {
+    const stored = localStorage.getItem(LS_KEY_STALENESS_THRESHOLD);
+    return stored ? parseInt(stored, 10) : DEFAULT_STALENESS_THRESHOLD_SECONDS;
+  });
   // Map<id, 'pending' | Error> — per-escalation action state
   const [escalationActionState, setEscalationActionState] = useState({});
   // { [trainId]: alert[] } — fetched from REST, updated by WS events
@@ -119,6 +137,58 @@ export function FleetProvider({ children }) {
     return () => client.disconnect();
   }, []);
 
+  // Background GET /api/v1/operators/me/preferences — server value wins (AC3)
+  useEffect(() => {
+    getPreferences().then(prefs => {
+      const serverThreshold = prefs.threshold_sec;
+      const serverStaleness = prefs.staleness_threshold_sec;
+      setAlertThresholdSeconds(prev => {
+        if (prev !== serverThreshold) {
+          localStorage.setItem(LS_KEY_ALERT_THRESHOLD, String(serverThreshold));
+          return serverThreshold;
+        }
+        return prev;
+      });
+      setStalenessThresholdSeconds(prev => {
+        if (prev !== serverStaleness) {
+          localStorage.setItem(LS_KEY_STALENESS_THRESHOLD, String(serverStaleness));
+          return serverStaleness;
+        }
+        return prev;
+      });
+    }).catch(() => {
+      // Network error — localStorage value stands; no-op
+    });
+  }, []);
+
+  // updateAlertThreshold — PATCH + update state/localStorage; returns Error on failure (AC4)
+  const updateAlertThreshold = useCallback(async (value) => {
+    const prev = alertThresholdSeconds;
+    setAlertThresholdSeconds(value);
+    try {
+      await patchPreferences({ threshold_sec: value });
+      localStorage.setItem(LS_KEY_ALERT_THRESHOLD, String(value));
+      return null;
+    } catch (err) {
+      setAlertThresholdSeconds(prev);
+      return err;
+    }
+  }, [alertThresholdSeconds]);
+
+  // updateStalenessThreshold — same pattern
+  const updateStalenessThreshold = useCallback(async (value) => {
+    const prev = stalenessThresholdSeconds;
+    setStalenessThresholdSeconds(value);
+    try {
+      await patchPreferences({ staleness_threshold_sec: value });
+      localStorage.setItem(LS_KEY_STALENESS_THRESHOLD, String(value));
+      return null;
+    } catch (err) {
+      setStalenessThresholdSeconds(prev);
+      return err;
+    }
+  }, [stalenessThresholdSeconds]);
+
   // generation counter per trainId — incremented on each fetch so a stale response
   // that resolves after a newer one is silently discarded.
   const fetchGenRef = useRef({});
@@ -197,6 +267,8 @@ export function FleetProvider({ children }) {
       feedTypeFilter, setFeedTypeFilter,
       feedStatusFilter, setFeedStatusFilter,
       clearFeedFilters,
+      alertThresholdSeconds, stalenessThresholdSeconds,
+      updateAlertThreshold, updateStalenessThreshold,
     }}>
       {children}
     </FleetContext.Provider>

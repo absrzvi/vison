@@ -9,6 +9,7 @@ from .routes.alerts_sse import router as alerts_router
 from .routes.fleet import router as fleet_router
 from .routes.health import router as health_router
 from .routes.ingest import router as ingest_router
+from .routes.preferences import router as preferences_router
 
 structlog.configure(
     processors=[
@@ -28,6 +29,7 @@ app.include_router(health_router)
 app.include_router(ingest_router)
 app.include_router(fleet_router)
 app.include_router(alerts_router)
+app.include_router(preferences_router)
 
 
 @app.on_event("startup")

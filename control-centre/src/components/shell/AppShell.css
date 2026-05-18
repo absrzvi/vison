@@ -58,6 +58,19 @@
 }
 .app-header__alert-hook:hover { background: rgba(255, 59, 59, 0.25); }
 
+.app-header__settings {
+  background: none;
+  border: none;
+  color: var(--obb-text-on-dark-3);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.app-header__settings:hover { color: var(--obb-text-on-dark-1); }
+.app-header__settings:focus-visible { outline: 2px solid var(--obb-red); outline-offset: 2px; }
+
 @keyframes pulse-hook {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.6; }
