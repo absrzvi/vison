@@ -1,6 +1,6 @@
 # Story E5-S4 — Luggage ISO Timestamp Migration
 
-**Status:** ready-for-dev
+**Status:** review
 **Sprint:** Epic 5
 **Story Key:** 5-4-luggage-iso-timestamps
 
@@ -49,29 +49,29 @@ Given a developer reads `luggage.js`, when they look at `LUGGAGE_EVENTS`, then a
 
 ## Tasks / Subtasks
 
-- [ ] **T1** — Migrate `LUGGAGE_EVENTS` timestamps to ISO-8601 strings (AC1, AC7)
-  - [ ] T1.1 Define `SCENARIO_START` constant: `const SCENARIO_START = new Date('2026-05-19T09:00:00Z').getTime()`
-  - [ ] T1.2 Replace each `timestamp: 'HH:MM'` with a hardcoded ISO string computed as `new Date(SCENARIO_START - N * 60000).toISOString()` where N matches the original HH:MM offset from 09:00 scenario start (see Dev Notes for per-event mapping)
-  - [ ] T1.3 Add scenario time comment block above `LUGGAGE_EVENTS` (see Dev Notes for exact text)
+- [x] **T1** — Migrate `LUGGAGE_EVENTS` timestamps to ISO-8601 strings (AC1, AC7)
+  - [x] T1.1 Define `SCENARIO_START` constant: `const SCENARIO_START = new Date('2026-05-19T09:00:00Z').getTime()`
+  - [x] T1.2 Replace each `timestamp: 'HH:MM'` with a hardcoded ISO string computed as `new Date(SCENARIO_START - N * 60000).toISOString()` where N matches the original HH:MM offset from 09:00 scenario start (see Dev Notes for per-event mapping)
+  - [x] T1.3 Add scenario time comment block above `LUGGAGE_EVENTS` (see Dev Notes for exact text)
 
-- [ ] **T2** — Simplify `elapsedMin` to ISO-only (AC2)
-  - [ ] T2.1 Remove the `toMinutes` internal helper function entirely
-  - [ ] T2.2 Replace the two-branch `elapsedMin` implementation with the ISO-only version (see Dev Notes for exact code)
-  - [ ] T2.3 Verify no other file in `control-centre/src/` imports or calls `toMinutes` (it is unexported, so callers can only be within `luggage.js`)
+- [x] **T2** — Simplify `elapsedMin` to ISO-only (AC2)
+  - [x] T2.1 Remove the `toMinutes` internal helper function entirely
+  - [x] T2.2 Replace the two-branch `elapsedMin` implementation with the ISO-only version (see Dev Notes for exact code)
+  - [x] T2.3 Verify no other file in `control-centre/src/` imports or calls `toMinutes` (it is unexported, so callers can only be within `luggage.js`)
 
-- [ ] **T3** — Simplify `formatTimestamp` to ISO-only (AC3)
-  - [ ] T3.1 Replace the two-branch `formatTimestamp` with the ISO-only version (see Dev Notes for exact code)
+- [x] **T3** — Simplify `formatTimestamp` to ISO-only (AC3)
+  - [x] T3.1 Replace the two-branch `formatTimestamp` with the ISO-only version (see Dev Notes for exact code)
 
-- [ ] **T4** — Verify `getLuggageKPIs` and other consumers (AC4, AC5)
-  - [ ] T4.1 Manually trace `getLuggageKPIs(LUGGAGE_EVENTS)` with the new ISO timestamps and confirm `elapsedMin` returns positive integers for active events
-  - [ ] T4.2 Confirm `luggageEventsToEscalations` and `getLuggageSummaryByTrain` are unaffected (they do not call `elapsedMin` or `formatTimestamp`)
+- [x] **T4** — Verify `getLuggageKPIs` and other consumers (AC4, AC5)
+  - [x] T4.1 Manually trace `getLuggageKPIs(LUGGAGE_EVENTS)` with the new ISO timestamps and confirm `elapsedMin` returns positive integers for active events
+  - [x] T4.2 Confirm `luggageEventsToEscalations` and `getLuggageSummaryByTrain` are unaffected (they do not call `elapsedMin` or `formatTimestamp`)
 
-- [ ] **T5** — Write / update Vitest tests (AC6)
-  - [ ] T5.1 Create `control-centre/src/mock/luggage.test.js` with `// @vitest-environment node` header
-  - [ ] T5.2 Write tests for `elapsedMin` using explicit ISO `nowTs` (see Dev Notes for test cases)
-  - [ ] T5.3 Write tests for `formatTimestamp` with valid ISO, null, and invalid inputs
-  - [ ] T5.4 Write a smoke test for `getLuggageKPIs(LUGGAGE_EVENTS)` asserting shape and no thrown errors
-  - [ ] T5.5 Run `npm run test` (or `npx vitest run`) from `control-centre/` and confirm all tests pass
+- [x] **T5** — Write / update Vitest tests (AC6)
+  - [x] T5.1 Create `control-centre/src/mock/luggage.test.js` with `// @vitest-environment node` header
+  - [x] T5.2 Write tests for `elapsedMin` using explicit ISO `nowTs` (see Dev Notes for test cases)
+  - [x] T5.3 Write tests for `formatTimestamp` with valid ISO, null, and invalid inputs
+  - [x] T5.4 Write a smoke test for `getLuggageKPIs(LUGGAGE_EVENTS)` asserting shape and no thrown errors
+  - [x] T5.5 Run `npm run test` (or `npx vitest run`) from `control-centre/` and confirm all tests pass
 
 ---
 
@@ -488,9 +488,12 @@ E5-S3 adds a configurable unattended threshold and a staleness banner. Both depe
 claude-sonnet-4-6
 
 ### Debug Log
+_empty_
 
 ### Completion Notes
+All 5 tasks complete. `LUGGAGE_EVENTS` timestamps migrated to 7 hardcoded ISO-8601 strings offset from `2026-05-19T09:00:00Z` scenario anchor. `toMinutes`, `ISO_RE`, `HH_MM_RE` constants and the HH:MM branches of `elapsedMin` and `formatTimestamp` removed. Both functions are now ISO-only with a single code path. Added `isNaN(now)` guard in `elapsedMin` for invalid `nowTs`. `getLuggageKPIs`, `luggageEventsToEscalations`, `getLuggageSummaryByTrain` unaffected. `luggage.test.js` in `src/mock/` updated with E5-S4 `elapsedMin`, `formatTimestamp`, and `LUGGAGE_EVENTS` smoke tests. Pre-existing E5-S2 HH:MM compat tests in `src/mock/__tests__/luggage.test.js` updated to match the new ISO-only contract. 113 tests pass.
 
 ### File List
 - `control-centre/src/mock/luggage.js`
-- `control-centre/src/mock/luggage.test.js` (new)
+- `control-centre/src/mock/luggage.test.js`
+- `control-centre/src/mock/__tests__/luggage.test.js`

@@ -11,6 +11,9 @@ export const LUGGAGE_STATES = {
   cleared:      { label: 'Cleared',      color: '#4B8B6F', severity: 'green' },
 };
 
+// Scenario anchor: 2026-05-19T09:00:00Z (= 11:00 CEST).
+// Timestamps are fixed ISO strings offset from this anchor.
+// elapsedMin() uses Date.now() so elapsed values grow as real time passes — expected in dev.
 export const LUGGAGE_EVENTS = [
   {
     id: 'lug-001',
@@ -21,7 +24,7 @@ export const LUGGAGE_EVENTS = [
     detail: 'Black rucksack, upper rack, row 12. No owner detected within 3m for 9 min.',
     duration: '9 min',
     confidence: 94,
-    timestamp: '11:23',
+    timestamp: '2026-05-19T08:48:00.000Z',
     stillFrame: {
       url: 'https://placehold.co/480x270/1E2430/9BA3AF?text=C4+luggage+rack+%E2%80%94+11%3A23%3A04',
       capturedAt: '11:23:04',
@@ -38,7 +41,7 @@ export const LUGGAGE_EVENTS = [
     detail: 'Overhead rack at capacity. 3 passengers unable to store bags. Aisle partially blocked.',
     duration: '14 min',
     confidence: 88,
-    timestamp: '11:09',
+    timestamp: '2026-05-19T08:34:00.000Z',
     stillFrame: {
       url: 'https://placehold.co/480x270/1E2430/9BA3AF?text=C2+rack+overhead+%E2%80%94+11%3A09%3A22',
       capturedAt: '11:09:22',
@@ -55,7 +58,7 @@ export const LUGGAGE_EVENTS = [
     detail: 'Vestibule luggage zone at capacity. Large suitcases blocking door clearance.',
     duration: '21 min',
     confidence: 91,
-    timestamp: '10:52',
+    timestamp: '2026-05-19T08:17:00.000Z',
     stillFrame: {
       url: 'https://placehold.co/480x270/1E2430/9BA3AF?text=C5+vestibule+%E2%80%94+10%3A52%3A47',
       capturedAt: '10:52:47',
@@ -72,7 +75,7 @@ export const LUGGAGE_EVENTS = [
     detail: 'Large bicycle partially blocking vestibule. Not secured to rack.',
     duration: '6 min',
     confidence: 97,
-    timestamp: '11:31',
+    timestamp: '2026-05-19T08:56:00.000Z',
     stillFrame: {
       url: 'https://placehold.co/480x270/1E2430/9BA3AF?text=C3+vestibule+%E2%80%94+11%3A31%3A18',
       capturedAt: '11:31:18',
@@ -89,7 +92,7 @@ export const LUGGAGE_EVENTS = [
     detail: 'High boarding at Bruck an der Mur. Rack capacity exceeded, bags on floor.',
     duration: '5 min',
     confidence: 85,
-    timestamp: '11:12',
+    timestamp: '2026-05-19T08:37:00.000Z',
     stillFrame: {
       url: 'https://placehold.co/480x270/1E2430/9BA3AF?text=C1+rack+overhead+%E2%80%94+11%3A12%3A03',
       capturedAt: '11:12:03',
@@ -106,7 +109,7 @@ export const LUGGAGE_EVENTS = [
     detail: 'Owner returned to previously unattended item. Item confirmed attended.',
     duration: null,
     confidence: 90,
-    timestamp: '11:18',
+    timestamp: '2026-05-19T08:43:00.000Z',
     stillFrame: null,
   },
   {
@@ -118,7 +121,7 @@ export const LUGGAGE_EVENTS = [
     detail: 'Conductor confirmed item removed from aisle. Area clear.',
     duration: null,
     confidence: null,
-    timestamp: '10:44',
+    timestamp: '2026-05-19T08:09:00.000Z',
     stillFrame: null,
   },
 ];
@@ -183,44 +186,20 @@ export const NEXT_STATION = {
   'R5001C-003': 'Wiener Neustadt',
 };
 
-// Parse "HH:MM" timestamp into minutes since midnight for elapsed calculation
-function toMinutes(ts) {
-  if (!ts) return null;
-  const [h, m] = ts.split(':').map(Number);
-  if (isNaN(h) || isNaN(m)) return null;
-  return h * 60 + m;
-}
-
-const ISO_RE = /^\d{4}-\d{2}-\d{2}T/;
-
-const HH_MM_RE = /^\d{2}:\d{2}$/;
-
 export function formatTimestamp(ts) {
   if (!ts) return '--:--';
-  if (ISO_RE.test(ts)) {
-    const d = new Date(ts);
-    if (isNaN(d.getTime())) return '--:--';
-    return d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
-  }
-  if (HH_MM_RE.test(ts)) return ts;
-  return '--:--';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return '--:--';
+  return d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
 }
 
 export function elapsedMin(timestamp, nowTs = null) {
   if (!timestamp) return null;
-  if (ISO_RE.test(timestamp)) {
-    const t = new Date(timestamp).getTime();
-    if (isNaN(t)) return null;
-    const nowMs = nowTs && ISO_RE.test(nowTs) ? new Date(nowTs).getTime() : Date.now();
-    if (isNaN(nowMs)) return null;
-    return Math.max(0, Math.round((nowMs - t) / 60000));
-  }
-  // Legacy HH:MM path — uses '11:35' mock anchor
-  const refStr = nowTs ?? '11:35';
-  const ref = toMinutes(refStr);
-  const t2 = toMinutes(timestamp);
-  if (ref == null || t2 == null) return null;
-  return Math.max(0, ref - t2);
+  const t = new Date(timestamp).getTime();
+  if (isNaN(t)) return null;
+  const now = nowTs ? new Date(nowTs).getTime() : Date.now();
+  if (isNaN(now)) return null;
+  return Math.max(0, Math.round((now - t) / 60000));
 }
 
 export function normaliseConf(c) {

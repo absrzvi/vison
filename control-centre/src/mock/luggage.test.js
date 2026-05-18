@@ -1,6 +1,91 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { getLuggageKPIs } from './luggage.js';
+import {
+  elapsedMin,
+  formatTimestamp,
+  getLuggageKPIs,
+  LUGGAGE_EVENTS,
+} from './luggage.js';
+
+// ── E5-S4: elapsedMin ISO-only ───────────────────────────────────────────────
+
+const NOW = '2026-05-19T09:35:00.000Z'; // 35 min after scenario anchor
+
+describe('elapsedMin', () => {
+  it('returns correct minutes for ISO timestamp with explicit nowTs', () => {
+    // 09:35 - 08:48 = 47 min
+    expect(elapsedMin('2026-05-19T08:48:00.000Z', NOW)).toBe(47);
+  });
+
+  it('returns 0 when timestamp equals nowTs', () => {
+    expect(elapsedMin(NOW, NOW)).toBe(0);
+  });
+
+  it('returns 0 when timestamp is in the future relative to nowTs', () => {
+    expect(elapsedMin('2026-05-19T10:00:00.000Z', NOW)).toBe(0);
+  });
+
+  it('returns null for null timestamp', () => {
+    expect(elapsedMin(null, NOW)).toBeNull();
+  });
+
+  it('returns null for undefined timestamp', () => {
+    expect(elapsedMin(undefined, NOW)).toBeNull();
+  });
+
+  it('returns null for an unparseable string', () => {
+    expect(elapsedMin('not-a-date', NOW)).toBeNull();
+  });
+});
+
+// ── E5-S4: formatTimestamp ISO-only ─────────────────────────────────────────
+
+describe('formatTimestamp', () => {
+  it('returns a time string for a valid ISO input', () => {
+    const result = formatTimestamp('2026-05-19T08:48:00.000Z');
+    expect(result).toMatch(/^\d{2}:\d{2}$/);
+  });
+
+  it('returns --:-- for null', () => {
+    expect(formatTimestamp(null)).toBe('--:--');
+  });
+
+  it('returns --:-- for undefined', () => {
+    expect(formatTimestamp(undefined)).toBe('--:--');
+  });
+
+  it('returns --:-- for an unparseable string', () => {
+    expect(formatTimestamp('garbage')).toBe('--:--');
+  });
+});
+
+// ── E5-S4: getLuggageKPIs smoke test with LUGGAGE_EVENTS ────────────────────
+
+describe('getLuggageKPIs with LUGGAGE_EVENTS', () => {
+  it('returns a valid shape without throwing', () => {
+    const kpis = getLuggageKPIs(LUGGAGE_EVENTS);
+    expect(typeof kpis.totalActive).toBe('number');
+    expect(typeof kpis.unattended).toBe('number');
+    expect(typeof kpis.overcrowded).toBe('number');
+    expect(typeof kpis.oversized).toBe('number');
+    expect(typeof kpis.clearedLastHour).toBe('number');
+  });
+
+  it('correctly counts active vs cleared events', () => {
+    const kpis = getLuggageKPIs(LUGGAGE_EVENTS);
+    // lug-006 (owner_returned) and lug-007 (cleared) are not active
+    expect(kpis.totalActive).toBe(5);
+    expect(kpis.clearedLastHour).toBe(2);
+  });
+
+  it('returns non-null longestUnattended when unattended events exist', () => {
+    const kpis = getLuggageKPIs(LUGGAGE_EVENTS);
+    expect(kpis.longestUnattended).not.toBeNull();
+    expect(kpis.longestUnattended).toMatch(/\d+ min/);
+  });
+});
+
+// ── E5-S3: getLuggageKPIs threshold tests ───────────────────────────────────
 
 function minutesAgo(n) {
   return new Date(Date.now() - n * 60 * 1000).toISOString();
@@ -15,7 +100,7 @@ const makeEvent = (state, minsAgo) => ({
   confidence: 90,
 });
 
-describe('getLuggageKPIs', () => {
+describe('getLuggageKPIs threshold', () => {
   describe('unattendedAlerts threshold', () => {
     it('events below threshold produce unattendedAlerts === 0', () => {
       const events = [makeEvent('unattended', 2)]; // 2 min ago, threshold 5

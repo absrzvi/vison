@@ -48,23 +48,24 @@ describe('elapsedMin — ISO timestamp', () => {
     expect(elapsedMin('not-a-date')).toBe(null);
   });
 
-  it('ignores HH:MM nowTs when timestamp is ISO — falls back to Date.now()', () => {
+  it('returns null when nowTs is an unparseable string', () => {
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const result = elapsedMin(fiveMinAgo, '11:35');
-    expect(result).toBeGreaterThanOrEqual(4);
-    expect(Number.isNaN(result)).toBe(false);
+    // Non-ISO nowTs produces NaN → elapsedMin returns null (ISO-only after E5-S4)
+    expect(elapsedMin(fiveMinAgo, 'not-a-date')).toBeNull();
   });
 });
 
-// ── T5.2 — elapsedMin with HH:MM (backwards compat) ────────────────────────
+// ── T5.2 — elapsedMin edge cases (ISO-only after E5-S4) ─────────────────────
 
-describe('elapsedMin — HH:MM legacy', () => {
-  it('uses 11:35 anchor for HH:MM timestamp', () => {
-    expect(elapsedMin('11:23')).toBe(12);
+describe('elapsedMin — edge cases', () => {
+  it('returns null for HH:MM timestamp (unparseable by Date)', () => {
+    // HH:MM is no longer a supported format after E5-S4 migration
+    expect(elapsedMin('11:23')).toBeNull();
   });
 
-  it('accepts explicit HH:MM nowTs', () => {
-    expect(elapsedMin('10:00', '11:00')).toBe(60);
+  it('returns null when nowTs is an HH:MM string (unparseable ISO)', () => {
+    const ts = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    expect(elapsedMin(ts, '11:00')).toBeNull();
   });
 
   it('returns null for null input', () => {
@@ -80,8 +81,8 @@ describe('formatTimestamp', () => {
     expect(result).toMatch(/^\d{2}:\d{2}$/);
   });
 
-  it('passes through HH:MM string unchanged', () => {
-    expect(formatTimestamp('11:23')).toBe('11:23');
+  it('returns --:-- for HH:MM string (no longer a supported passthrough after E5-S4)', () => {
+    expect(formatTimestamp('11:23')).toBe('--:--');
   });
 
   it('returns --:-- for null input', () => {
