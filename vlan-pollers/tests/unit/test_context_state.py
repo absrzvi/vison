@@ -168,3 +168,102 @@ async def test_pis_update_suppresses_on_no_change() -> None:
 
     await ctx.update_pis(pis)  # same values — suppress
     assert call_count == 1
+
+
+@pytest.mark.unit
+async def test_update_occupancy_pushes_on_change() -> None:
+    call_count = 0
+
+    async def fake_push() -> None:
+        nonlocal call_count
+        call_count += 1
+
+    from oebb_shared.adapters.apc.adapter import OccupancyReading
+
+    ctx = _make_ctx()
+    ctx._push_context_delta = fake_push  # type: ignore[method-assign]
+
+    readings = {
+        "car-1": OccupancyReading(car_id="car-1", count=42, timestamp="2026-05-19T10:00:00Z")
+    }
+    await ctx.update_occupancy(readings)
+    assert call_count == 1
+
+
+@pytest.mark.unit
+async def test_update_occupancy_suppresses_on_no_change() -> None:
+    call_count = 0
+
+    async def fake_push() -> None:
+        nonlocal call_count
+        call_count += 1
+
+    from oebb_shared.adapters.apc.adapter import OccupancyReading
+
+    ctx = _make_ctx()
+    ctx._push_context_delta = fake_push  # type: ignore[method-assign]
+
+    readings = {
+        "car-1": OccupancyReading(car_id="car-1", count=42, timestamp="2026-05-19T10:00:00Z")
+    }
+    await ctx.update_occupancy(readings)
+    assert call_count == 1
+
+    await ctx.update_occupancy(readings)  # identical — suppress
+    assert call_count == 1
+
+
+@pytest.mark.unit
+async def test_update_reservations_pushes_on_change() -> None:
+    call_count = 0
+
+    async def fake_push() -> None:
+        nonlocal call_count
+        call_count += 1
+
+    ctx = _make_ctx()
+    ctx._push_context_delta = fake_push  # type: ignore[method-assign]
+
+    await ctx.update_reservations({"car-1": 42, "car-2": 180})
+    assert call_count == 1
+
+
+@pytest.mark.unit
+async def test_update_reservations_suppresses_on_no_change() -> None:
+    call_count = 0
+
+    async def fake_push() -> None:
+        nonlocal call_count
+        call_count += 1
+
+    ctx = _make_ctx()
+    ctx._push_context_delta = fake_push  # type: ignore[method-assign]
+
+    data = {"car-1": 42, "car-2": 180}
+    await ctx.update_reservations(data)
+    assert call_count == 1
+
+    await ctx.update_reservations(data)  # same — suppress
+    assert call_count == 1
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_state_to_dict_includes_occupancy_and_reservations() -> None:
+    """AC2/4: _state_to_dict serializes occupancy and reservations fields."""
+    from vlan_pollers.context_state import _state_to_dict
+    from vlan_pollers.models import ContextState
+    from oebb_shared.adapters.apc.adapter import OccupancyReading
+
+    state = ContextState()
+    state.occupancy = {
+        "car-1": OccupancyReading(car_id="car-1", count=10, timestamp="2026-05-19T10:00:00Z")
+    }
+    state.reservations = {"car-1": 99}
+
+    d = _state_to_dict(state)
+    assert "occupancy" in d
+    assert "car-1" in d["occupancy"]
+    assert d["occupancy"]["car-1"]["count"] == 10
+    assert "reservations" in d
+    assert d["reservations"]["car-1"] == 99

@@ -22,6 +22,17 @@ services:
     ports:
       - "1161:161/udp"
 
+  mock-vlans:
+    image: python:3.11-slim-bookworm
+    volumes:
+      - ./vlan-pollers/tests/mocks:/app
+    working_dir: /app
+    command: >
+      sh -c "pip install fastapi uvicorn -q &&
+             uvicorn mock_vlans:app --host 0.0.0.0 --port 8010"
+    ports:
+      - "8010:8010"
+
   vlan-pollers:
     build: ./vlan-pollers
     volumes:
@@ -36,7 +47,11 @@ services:
       FUSION_URL: http://fusion:8003
       INFERENCE_URL: http://inference:8004
       RTSP_INGEST_URL: http://rtsp-ingest:8005
+      APC_URL: http://mock-vlans:8010/apc
+      PIS_URL: http://mock-vlans:8010/pis
+      RESERVATION_URL: http://mock-vlans:8010/reservation
     depends_on:
       - event-store
       - snmp-stub
+      - mock-vlans
     restart: on-failure

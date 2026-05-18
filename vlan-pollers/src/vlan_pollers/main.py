@@ -9,13 +9,19 @@ from datetime import UTC, datetime
 import structlog
 import uvicorn
 from fastapi import FastAPI
+from oebb_shared.adapters.apc.mock import MockAPCAdapter
 
+from .apc_poller import APCPoller
 from .config import settings
 from .context_state import ContextStateManager
 from .context_state import _http_client as _ctx_client
 from .health import router as health_router
 from .health import set_snmp_ready
 from .journey_tracker import JourneyTracker
+from .pis_poller import PISPoller
+from .pis_poller import _http_client as _pis_client
+from .reservation_poller import ReservationPoller
+from .reservation_poller import _http_client as _res_client
 from .snmp_poller import SnmpPoller
 from .snmp_poller import _http_client as _poller_client
 
@@ -47,6 +53,24 @@ _poller = SnmpPoller(
     ctx=_ctx,
     event_store_url=settings.event_store_url,
     set_snmp_ready_fn=set_snmp_ready,
+)
+# MockAPCAdapter is the only import from mock — swap to a real adapter by changing this line
+_apc_poller = APCPoller(
+    adapter=MockAPCAdapter(),
+    ctx=_ctx,
+    car_ids=settings.car_ids,
+    poll_interval_s=settings.apc_poll_interval_s,
+)
+_pis_poller = PISPoller(
+    pis_url=settings.pis_url,
+    ctx=_ctx,
+    poll_interval_s=settings.pis_poll_interval_s,
+)
+_res_poller = ReservationPoller(
+    reservation_url=settings.reservation_url,
+    ctx=_ctx,
+    car_ids=settings.car_ids,
+    poll_interval_s=settings.reservation_poll_interval_s,
 )
 
 
@@ -91,6 +115,9 @@ _bg_tasks: list[asyncio.Task[None]] = []
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     _bg_tasks.append(asyncio.create_task(_poller.run()))
     _bg_tasks.append(asyncio.create_task(_station_approach_watchdog()))
+    _bg_tasks.append(asyncio.create_task(_apc_poller.run()))
+    _bg_tasks.append(asyncio.create_task(_pis_poller.run()))
+    _bg_tasks.append(asyncio.create_task(_res_poller.run()))
     log.info("vlan_pollers_started", vehicle_id=settings.vehicle_id)
     try:
         yield
@@ -100,6 +127,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await asyncio.gather(*_bg_tasks, return_exceptions=True)
         await _ctx_client.aclose()
         await _poller_client.aclose()
+        await _pis_client.aclose()
+        await _res_client.aclose()
         log.info("vlan_pollers_stopped")
 
 

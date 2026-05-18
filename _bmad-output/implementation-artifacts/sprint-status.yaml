@@ -94,7 +94,7 @@ development_status:
   # ── Epic 4: Onboard Edge Pipeline ──
   epic-4: in-progress
   4-1-vlan-pollers-snmp-context-state: done
-  4-2-vlan-pollers-apc-pis-reservation: ready-for-dev
+  4-2-vlan-pollers-apc-pis-reservation: review
   4-3-rtsp-ingest-camera-pipeline: backlog
   4-4-inference-detection-tracking-occupancy: backlog
   4-5-inference-safety-accessibility: backlog

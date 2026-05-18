@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 import structlog
+from oebb_shared.adapters.apc.adapter import OccupancyReading
 from oebb_shared.http.retry import DEFAULT_RETRY
 
 from .models import AlarmEntry, ContextState, PisState
@@ -92,6 +93,21 @@ class ContextStateManager:
         self._state.pis = pis
         await self._push_context_delta()
 
+
+    async def update_occupancy(self, readings: dict[str, OccupancyReading]) -> None:
+        current = {k: dataclasses.asdict(v) for k, v in self._state.occupancy.items()}
+        incoming = {k: dataclasses.asdict(v) for k, v in readings.items()}
+        if current == incoming:
+            return
+        self._state.occupancy = readings
+        await self._push_context_delta()
+
+    async def update_reservations(self, data: dict[str, int]) -> None:
+        if self._state.reservations == data:
+            return
+        self._state.reservations = data
+        await self._push_context_delta()
+
     async def _push_context_delta(self) -> None:
         payload = _state_to_dict(self._state)
         for url in (self._fusion_url, self._inference_url):
@@ -107,6 +123,8 @@ def _state_to_dict(state: ContextState) -> dict[str, Any]:
         "station_approach": state.station_approach,
         "alarms": [dataclasses.asdict(a) for a in state.alarms.values()],
         "pis": dataclasses.asdict(state.pis),
+        "occupancy": {k: dataclasses.asdict(v) for k, v in state.occupancy.items()},
+        "reservations": state.reservations,
     }
 
 

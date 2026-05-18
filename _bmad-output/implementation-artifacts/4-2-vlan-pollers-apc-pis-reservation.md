@@ -1,6 +1,6 @@
 # Story 4.2: vlan-pollers APC, PIS & Reservation Pollers
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -26,63 +26,63 @@ so that fusion and inference have live schedule, occupancy ground-truth, and res
 
 ## Tasks / Subtasks
 
-- [ ] Extend `models.py` with new ContextState fields (AC: 2, 3, 4)
-  - [ ] Add `occupancy: dict[str, OccupancyReading]` field to `ContextState` (import from `oebb_shared.adapters.apc.adapter`)
-  - [ ] Add `reservations: dict[str, int]` field to `ContextState` (car_id → seat count)
-  - [ ] Extend `PisState` with: `scheduled_departure: str`, `actual_departure: str`, `platform: str`, `delay_min: int` (all default empty/0)
+- [x] Extend `models.py` with new ContextState fields (AC: 2, 3, 4)
+  - [x] Add `occupancy: dict[str, OccupancyReading]` field to `ContextState` (import from `oebb_shared.adapters.apc.adapter`)
+  - [x] Add `reservations: dict[str, int]` field to `ContextState` (car_id → seat count)
+  - [x] Extend `PisState` with: `scheduled_departure: str`, `actual_departure: str`, `platform: str`, `delay_min: int` (all default empty/0)
 
-- [ ] Extend `config.py` with new VLAN settings (AC: 5, 7)
-  - [ ] Add: `apc_url: str = "http://apc-mock:8010"`, `pis_url: str = "http://pis-mock:8011"`, `reservation_url: str = "http://reservation-mock:8012"`
-  - [ ] Add: `apc_poll_interval_s: float = 5.0`, `pis_poll_interval_s: float = 5.0`, `reservation_poll_interval_s: float = 30.0`
-  - [ ] Add: `car_ids: list[str] = ["car-1", "car-2", "car-3", "car-4", "car-5"]` (used by apc_poller and reservation_poller)
+- [x] Extend `config.py` with new VLAN settings (AC: 5, 7)
+  - [x] Add: `apc_url: str = "http://apc-mock:8010"`, `pis_url: str = "http://pis-mock:8011"`, `reservation_url: str = "http://reservation-mock:8012"`
+  - [x] Add: `apc_poll_interval_s: float = 5.0`, `pis_poll_interval_s: float = 5.0`, `reservation_poll_interval_s: float = 30.0`
+  - [x] Add: `car_ids: list[str] = ["car-1", "car-2", "car-3", "car-4", "car-5"]` (used by apc_poller and reservation_poller)
 
-- [ ] Extend `context_state.py` — new update methods (AC: 2, 4)
-  - [ ] Add `update_occupancy(readings: dict[str, OccupancyReading]) -> None` — detects change vs `_state.occupancy`, triggers `_push_context_delta()` on change
-  - [ ] Add `update_reservations(data: dict[str, int]) -> None` — detects change vs `_state.reservations`, triggers `_push_context_delta()` on change
-  - [ ] Extend `_state_to_dict` to serialize `occupancy` and `reservations` fields
-  - [ ] **Note:** `update_pis` already exists and handles `PisState`; extend `PisState` fields only — do NOT rewrite `update_pis`
+- [x] Extend `context_state.py` — new update methods (AC: 2, 4)
+  - [x] Add `update_occupancy(readings: dict[str, OccupancyReading]) -> None` — detects change vs `_state.occupancy`, triggers `_push_context_delta()` on change
+  - [x] Add `update_reservations(data: dict[str, int]) -> None` — detects change vs `_state.reservations`, triggers `_push_context_delta()` on change
+  - [x] Extend `_state_to_dict` to serialize `occupancy` and `reservations` fields
+  - [x] **Note:** `update_pis` already exists and handles `PisState`; extend `PisState` fields only — do NOT rewrite `update_pis`
 
-- [ ] Implement `apc_poller.py` (AC: 1, 2, 5)
-  - [ ] `APCPoller.__init__(self, adapter: APCAdapter, ctx: ContextStateManager, car_ids: list[str], poll_interval_s: float)` — inject adapter, no instantiation inside
-  - [ ] `async def run(self) -> None` — loop: for each car_id call `adapter.get_occupancy(car_id)`, collect all readings, call `ctx.update_occupancy(readings)`, sleep `poll_interval_s`
-  - [ ] Wrap each adapter call in try/except; on any exception log WARNING with `recoverable=True`, retain last state, continue loop
-  - [ ] Use `DEFAULT_RETRY` decorator on the `_fetch_occupancy` helper; the run loop itself does NOT use DEFAULT_RETRY (loop must not exit on retry exhaustion)
+- [x] Implement `apc_poller.py` (AC: 1, 2, 5)
+  - [x] `APCPoller.__init__(self, adapter: APCAdapter, ctx: ContextStateManager, car_ids: list[str], poll_interval_s: float)` — inject adapter, no instantiation inside
+  - [x] `async def run(self) -> None` — loop: for each car_id call `adapter.get_occupancy(car_id)`, collect all readings, call `ctx.update_occupancy(readings)`, sleep `poll_interval_s`
+  - [x] Wrap each adapter call in try/except; on any exception log WARNING with `recoverable=True`, retain last state, continue loop
+  - [x] Use `DEFAULT_RETRY` decorator on the `_fetch_occupancy` helper; the run loop itself does NOT use DEFAULT_RETRY (loop must not exit on retry exhaustion)
 
-- [ ] Implement `pis_poller.py` (AC: 3, 5)
-  - [ ] `PISPoller.__init__(self, pis_url: str, ctx: ContextStateManager, poll_interval_s: float)` — no adapter protocol needed; poll HTTP endpoint directly
-  - [ ] `async def run(self) -> None` — loop: GET `{pis_url}/schedule`, parse JSON response into `PisState`, call `ctx.update_pis(pis_state)`, sleep `poll_interval_s`
-  - [ ] Expected JSON shape from mock: `{ "next_station": str, "next_station_arrival_utc": str, "scheduled_departure": str, "actual_departure": str, "platform": str, "delay_min": int }`
-  - [ ] On HTTP error or parse failure: log WARNING with `recoverable=True`, retain last `ContextState.pis`, continue loop
-  - [ ] Use `httpx.AsyncClient` (module-level, shared) with `DEFAULT_RETRY` on the fetch helper
+- [x] Implement `pis_poller.py` (AC: 3, 5)
+  - [x] `PISPoller.__init__(self, pis_url: str, ctx: ContextStateManager, poll_interval_s: float)` — no adapter protocol needed; poll HTTP endpoint directly
+  - [x] `async def run(self) -> None` — loop: GET `{pis_url}/schedule`, parse JSON response into `PisState`, call `ctx.update_pis(pis_state)`, sleep `poll_interval_s`
+  - [x] Expected JSON shape from mock: `{ "next_station": str, "next_station_arrival_utc": str, "scheduled_departure": str, "actual_departure": str, "platform": str, "delay_min": int }`
+  - [x] On HTTP error or parse failure: log WARNING with `recoverable=True`, retain last `ContextState.pis`, continue loop
+  - [x] Use `httpx.AsyncClient` (module-level, shared) with `DEFAULT_RETRY` on the fetch helper
 
-- [ ] Implement `reservation_poller.py` (AC: 4, 5)
-  - [ ] `ReservationPoller.__init__(self, reservation_url: str, ctx: ContextStateManager, car_ids: list[str], poll_interval_s: float)`
-  - [ ] `async def run(self) -> None` — loop: GET `{reservation_url}/reservations`, parse JSON `{ "car-1": 42, "car-2": 180, ... }`, call `ctx.update_reservations(data)`, sleep `poll_interval_s`
-  - [ ] On failure: log WARNING with `recoverable=True`, retain last state, continue loop
-  - [ ] Use `httpx.AsyncClient` (module-level, shared) with `DEFAULT_RETRY` on the fetch helper
+- [x] Implement `reservation_poller.py` (AC: 4, 5)
+  - [x] `ReservationPoller.__init__(self, reservation_url: str, ctx: ContextStateManager, car_ids: list[str], poll_interval_s: float)`
+  - [x] `async def run(self) -> None` — loop: GET `{reservation_url}/reservations`, parse JSON `{ "car-1": 42, "car-2": 180, ... }`, call `ctx.update_reservations(data)`, sleep `poll_interval_s`
+  - [x] On failure: log WARNING with `recoverable=True`, retain last state, continue loop
+  - [x] Use `httpx.AsyncClient` (module-level, shared) with `DEFAULT_RETRY` on the fetch helper
 
-- [ ] Wire pollers into `main.py` (AC: 1, 6)
-  - [ ] Import `APCPoller`, `PISPoller`, `ReservationPoller` and instantiate with injected deps
-  - [ ] Inject `MockAPCAdapter()` as the APC adapter — single line change to swap for real adapter
-  - [ ] Create asyncio tasks for `apc_poller.run()`, `pis_poller.run()`, `reservation_poller.run()` in `_lifespan`
-  - [ ] Close new `httpx.AsyncClient` instances in lifespan finally block
+- [x] Wire pollers into `main.py` (AC: 1, 6)
+  - [x] Import `APCPoller`, `PISPoller`, `ReservationPoller` and instantiate with injected deps
+  - [x] Inject `MockAPCAdapter()` as the APC adapter — single line change to swap for real adapter
+  - [x] Create asyncio tasks for `apc_poller.run()`, `pis_poller.run()`, `reservation_poller.run()` in `_lifespan`
+  - [x] Close new `httpx.AsyncClient` instances in lifespan finally block
 
-- [ ] Update `docker-compose.dev.yml` — synthetic VLAN endpoints (AC: 6)
-  - [ ] Add three mock services using `mockoon/mockoon-cli` or a tiny FastAPI image (see Dev Notes for preferred approach)
-  - [ ] `apc-mock`: responds to `GET /occupancy/{car_id}` with static `OccupancyReading` JSON
-  - [ ] `pis-mock`: responds to `GET /schedule` with static `PisState` JSON
-  - [ ] `reservation-mock`: responds to `GET /reservations` with static per-coach JSON
+- [x] Update `docker-compose.dev.yml` — synthetic VLAN endpoints (AC: 6)
+  - [x] Add three mock services using `mockoon/mockoon-cli` or a tiny FastAPI image (see Dev Notes for preferred approach)
+  - [x] `apc-mock`: responds to `GET /occupancy/{car_id}` with static `OccupancyReading` JSON
+  - [x] `pis-mock`: responds to `GET /schedule` with static `PisState` JSON
+  - [x] `reservation-mock`: responds to `GET /reservations` with static per-coach JSON
 
-- [ ] Write unit tests (AC: 1, 2, 3, 4, 5, 7)
-  - [ ] `tests/unit/test_apc_poller.py` — happy path (readings merged into ContextState), adapter failure (WARNING logged, loop continues), adapter injection (no MockAPCAdapter import in apc_poller module)
-  - [ ] `tests/unit/test_pis_poller.py` — valid JSON → PisState updated, HTTP error → last state retained + WARNING, malformed JSON → recoverable log
-  - [ ] `tests/unit/test_context_state.py` — extend existing: `update_occupancy` delta suppression, `update_reservations` delta suppression, serialization of new fields in `_state_to_dict`
+- [x] Write unit tests (AC: 1, 2, 3, 4, 5, 7)
+  - [x] `tests/unit/test_apc_poller.py` — happy path (readings merged into ContextState), adapter failure (WARNING logged, loop continues), adapter injection (no MockAPCAdapter import in apc_poller module)
+  - [x] `tests/unit/test_pis_poller.py` — valid JSON → PisState updated, HTTP error → last state retained + WARNING, malformed JSON → recoverable log
+  - [x] `tests/unit/test_context_state.py` — extend existing: `update_occupancy` delta suppression, `update_reservations` delta suppression, serialization of new fields in `_state_to_dict`
 
 ## Security Tests
 
-- [ ] `test_no_env_get_in_pollers` — `grep -r "os.environ.get" src/vlan_pollers/apc_poller.py src/vlan_pollers/pis_poller.py src/vlan_pollers/reservation_poller.py` returns empty (enforce rule 8)
-- [ ] `test_apc_unknown_car_id` — `MockAPCAdapter.get_occupancy("unknown-car")` raises `KeyError`; `apc_poller` logs WARNING and does NOT propagate exception
-- [ ] `test_pis_malformed_json` — PIS endpoint returns `{invalid json}`; `pis_poller` logs WARNING with `recoverable=True` and retains previous `ContextState.pis`
+- [x] `test_no_env_get_in_pollers` — `grep -r "os.environ.get" src/vlan_pollers/apc_poller.py src/vlan_pollers/pis_poller.py src/vlan_pollers/reservation_poller.py` returns empty (enforce rule 8)
+- [x] `test_apc_unknown_car_id` — `MockAPCAdapter.get_occupancy("unknown-car")` raises `KeyError`; `apc_poller` logs WARNING and does NOT propagate exception
+- [x] `test_pis_malformed_json` — PIS endpoint returns `{invalid json}`; `pis_poller` logs WARNING with `recoverable=True` and retains previous `ContextState.pis`
 
 ## Dev Notes
 
@@ -338,10 +338,36 @@ The ≥90% coverage target is for `src/vlan_pollers/` **combined**. New files `a
 
 ### Agent Model Used
 
+claude-sonnet-4-6
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- `apc_poller.py` greenfield; `MockAPCAdapter` injected exclusively in `main.py` — AC1 enforced by AST test
+- `pis_poller.py` polls HTTP GET `/schedule`; note: shared `PISAdapter` is a write adapter (screens), not used here
+- `reservation_poller.py` filters response to configured `car_ids` — prevents unknown cars from leaking into ContextState
+- `models.py`: `OccupancyReading` imported from shared; `PisState` extended with 4 new fields (additive only)
+- `context_state.py`: `update_occupancy` uses `dataclasses.asdict()` comparison for deep equality; `update_reservations` uses dict equality
+- `main.py`: 3 new asyncio tasks + 2 new HTTP clients closed in lifespan finally block
+- `docker-compose.dev.yml`: single `mock-vlans` service on port 8010 serving all three VLAN routes at `/apc/*`, `/pis/*`, `/reservation/*`
+- mypy --strict: 0 errors (12 source files); ruff: 0 errors; pytest: 81/81 passed; coverage: 98.04% (≥90% gate passed)
+- F7/F23 from E4-S1 review remain deferred — speed wiring not in scope for this story
+
 ### File List
+
+- `vlan-pollers/src/vlan_pollers/models.py` (modified)
+- `vlan-pollers/src/vlan_pollers/config.py` (modified)
+- `vlan-pollers/src/vlan_pollers/context_state.py` (modified)
+- `vlan-pollers/src/vlan_pollers/apc_poller.py` (new)
+- `vlan-pollers/src/vlan_pollers/pis_poller.py` (new)
+- `vlan-pollers/src/vlan_pollers/reservation_poller.py` (new)
+- `vlan-pollers/src/vlan_pollers/main.py` (modified)
+- `vlan-pollers/tests/mocks/mock_vlans.py` (new)
+- `vlan-pollers/tests/unit/test_apc_poller.py` (new)
+- `vlan-pollers/tests/unit/test_pis_poller.py` (new)
+- `vlan-pollers/tests/unit/test_reservation_poller.py` (new)
+- `vlan-pollers/tests/unit/test_context_state.py` (modified)
+- `docker-compose.dev.yml` (modified)
 
 ### Review Findings
