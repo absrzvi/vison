@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { LUGGAGE_EVENTS, getLuggageSummaryByTrain, getLuggageKPIs } from '../../mock/luggage';
+import { getLuggageSummaryByTrain, getLuggageKPIs } from '../../mock/luggage';
+import { useFleetData } from '../../context/FleetContext';
 import { LuggageKpiStrip } from './LuggageKpiStrip';
 import { LuggageFeed } from './LuggageFeed';
 import { LuggageTrainDetail } from './LuggageTrainDetail';
@@ -14,8 +15,7 @@ const TRAIN_COACHES = {
 
 export function LuggageMonitoring() {
   const [selectedTrainId, setSelectedTrainId] = useState(null);
-
-  const events = LUGGAGE_EVENTS;
+  const { luggageEvents: events } = useFleetData();
   const summary = useMemo(() => getLuggageSummaryByTrain(events), [events]);
   const kpis = useMemo(() => getLuggageKPIs(events), [events]);
 

@@ -18,6 +18,8 @@ const SUBSCRIPTION_REQUEST = {
     'JOURNEY_STARTED',
     'JOURNEY_ENDED',
     'OCCUPANCY_THRESHOLD_CROSSED',
+    'LUGGAGE_RACK_SATURATION',
+    'UNATTENDED_BAG',
   ],
   min_severity: 'info',
   coach_ids: null,
@@ -188,6 +190,42 @@ export class RealWebSocketClient {
           severity: frontendSeverity,
           status: 'unacknowledged',
           timestamp: formatTimestamp(timestamp),
+          stillFrame: null,
+        },
+      });
+      return;
+    }
+
+    if (event_type === 'LUGGAGE_RACK_SATURATION') {
+      this._onMessage({
+        type: 'LUGGAGE_EVENT',
+        payload: {
+          id: event_id,
+          trainId: vehicle_id,
+          coachId: safePayload.car_id ?? null,
+          state: 'overcrowded',
+          title: 'Luggage area full — ' + (safePayload.car_id ?? 'unknown coach'),
+          detail: 'Rack ' + (safePayload.rack_id ?? '') + ' at ' + Math.round((safePayload.fill_pct ?? 0) * 100) + '% capacity. ' + (safePayload.item_count ?? '?') + ' items detected.',
+          confidence: safePayload.confidence ?? null,
+          timestamp,
+          stillFrame: null,
+        },
+      });
+      return;
+    }
+
+    if (event_type === 'UNATTENDED_BAG') {
+      this._onMessage({
+        type: 'LUGGAGE_EVENT',
+        payload: {
+          id: event_id,
+          trainId: vehicle_id,
+          coachId: safePayload.car_id ?? null,
+          state: 'unattended',
+          title: 'Unattended bag — ' + (safePayload.car_id ?? 'unknown coach') + (safePayload.zone ? ' ' + safePayload.zone : ''),
+          detail: 'No owner detected for ' + Math.round((safePayload.dwell_s ?? 0) / 60) + ' min. Track: ' + (safePayload.track_id ?? '?') + '.',
+          confidence: safePayload.confidence ?? null,
+          timestamp,
           stillFrame: null,
         },
       });

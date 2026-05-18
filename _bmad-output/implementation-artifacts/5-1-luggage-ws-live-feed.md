@@ -1,6 +1,6 @@
 # Story E5-S1 — Luggage Monitoring Live WebSocket Feed
 
-**Status:** ready-for-dev
+**Status:** review
 **Sprint:** Epic 5
 **Story Key:** 5-1-luggage-ws-live-feed
 
@@ -37,35 +37,35 @@
 
 ## Tasks / Subtasks
 
-- [ ] **T1** Extend `RealWebSocketClient.js` — handle `LUGGAGE_RACK_SATURATION` + `UNATTENDED_BAG`
-  - [ ] T1.1 Add `'LUGGAGE_RACK_SATURATION'` and `'UNATTENDED_BAG'` to `SUBSCRIPTION_REQUEST.event_types`
-  - [ ] T1.2 In `_handleEnvelope`, add handler for `event_type === 'LUGGAGE_RACK_SATURATION'` → emits `LUGGAGE_EVENT` with `state: 'overcrowded'`
-  - [ ] T1.3 In `_handleEnvelope`, add handler for `event_type === 'UNATTENDED_BAG'` → emits `LUGGAGE_EVENT` with `state: 'unattended'`
-  - [ ] T1.4 Dedup via existing `_trackSeenId` — no new dedup logic needed
+- [x] **T1** Extend `RealWebSocketClient.js` — handle `LUGGAGE_RACK_SATURATION` + `UNATTENDED_BAG`
+  - [x] T1.1 Add `'LUGGAGE_RACK_SATURATION'` and `'UNATTENDED_BAG'` to `SUBSCRIPTION_REQUEST.event_types`
+  - [x] T1.2 In `_handleEnvelope`, add handler for `event_type === 'LUGGAGE_RACK_SATURATION'` → emits `LUGGAGE_EVENT` with `state: 'overcrowded'`
+  - [x] T1.3 In `_handleEnvelope`, add handler for `event_type === 'UNATTENDED_BAG'` → emits `LUGGAGE_EVENT` with `state: 'unattended'`
+  - [x] T1.4 Dedup via existing `_trackSeenId` — no new dedup logic needed
 
-- [ ] **T2** Extend `MockWebSocketClient` (websocket.js) — emit `LUGGAGE_EVENT` messages
-  - [ ] T2.1 Add 2 `LUGGAGE_EVENT` messages to the initial mock payload (one `unattended`, one `overcrowded`) — keep the mock self-contained, do NOT import from `mock/luggage.js`
-  - [ ] T2.2 These events must have `id`, `trainId`, `coachId`, `state`, `title`, `detail`, `confidence`, `timestamp` (ISO-8601), `stillFrame: null`
+- [x] **T2** Extend `MockWebSocketClient` (websocket.js) — emit `LUGGAGE_EVENT` messages
+  - [x] T2.1 Add 2 `LUGGAGE_EVENT` messages to the initial mock payload (one `unattended`, one `overcrowded`) — keep the mock self-contained, do NOT import from `mock/luggage.js`
+  - [x] T2.2 These events must have `id`, `trainId`, `coachId`, `state`, `title`, `detail`, `confidence`, `timestamp` (ISO-8601), `stillFrame: null`
 
-- [ ] **T3** Update `FleetContext.jsx` — replace static luggage with live state
-  - [ ] T3.1 Remove `import { LUGGAGE_EVENTS, luggageEventsToEscalations } from '../mock/luggage'` and the `LUGGAGE_ESCALATIONS` constant
-  - [ ] T3.2 Add `luggageEvents` state: `const [luggageEvents, setLuggageEvents] = useState([])`
-  - [ ] T3.3 In `onMessage`, add handler for `msg.type === 'LUGGAGE_EVENT'`: prepend to `luggageEvents` with dedup on `id`; call `setLastUpdate(new Date())`
-  - [ ] T3.4 Replace `[...msg.payload.escalations, ...LUGGAGE_ESCALATIONS]` in `FLEET_STATE` handler with `[...msg.payload.escalations, ...luggageEventsToEscalations(luggageEvents)]` — import `luggageEventsToEscalations` from `mock/luggage.js` (helper function only, not the static data)
-  - [ ] T3.5 Re-derive luggage escalations when `luggageEvents` changes: add a `useEffect` that calls `setEscalations(prev => [...prev.filter(e => e.type !== 'luggage'), ...luggageEventsToEscalations(luggageEvents)])` when `luggageEvents` changes
-  - [ ] T3.6 Expose `luggageEvents` in the context value object
+- [x] **T3** Update `FleetContext.jsx` — replace static luggage with live state
+  - [x] T3.1 Remove `import { LUGGAGE_EVENTS, luggageEventsToEscalations } from '../mock/luggage'` and the `LUGGAGE_ESCALATIONS` constant
+  - [x] T3.2 Add `luggageEvents` state: `const [luggageEvents, setLuggageEvents] = useState([])`
+  - [x] T3.3 In `onMessage`, add handler for `msg.type === 'LUGGAGE_EVENT'`: prepend to `luggageEvents` with dedup on `id`; call `setLastUpdate(new Date())`
+  - [x] T3.4 Replace `[...msg.payload.escalations, ...LUGGAGE_ESCALATIONS]` in `FLEET_STATE` handler with `[...msg.payload.escalations, ...luggageEventsToEscalations(luggageEventsRef.current)]` — import `luggageEventsToEscalations` from `mock/luggage.js` (helper function only, not the static data)
+  - [x] T3.5 Re-derive luggage escalations when `luggageEvents` changes: `useEffect` calling `setEscalations(prev => [...prev.filter(e => e.type !== 'luggage'), ...luggageEventsToEscalations(luggageEvents)])`
+  - [x] T3.6 Expose `luggageEvents` in the context value object
 
-- [ ] **T4** Update `LuggageMonitoring.jsx` — consume live context
-  - [ ] T4.1 Remove `import { LUGGAGE_EVENTS, ... } from '../../mock/luggage'`
-  - [ ] T4.2 Replace `const events = LUGGAGE_EVENTS` with `const { luggageEvents: events } = useFleetData()`
-  - [ ] T4.3 Verify empty-state renders when `events.length === 0` (existing guard is already correct)
+- [x] **T4** Update `LuggageMonitoring.jsx` — consume live context
+  - [x] T4.1 Remove `import { LUGGAGE_EVENTS, ... } from '../../mock/luggage'`
+  - [x] T4.2 Replace `const events = LUGGAGE_EVENTS` with `const { luggageEvents: events } = useFleetData()`
+  - [x] T4.3 Verify empty-state renders when `events.length === 0` (existing guard is already correct)
 
-- [ ] **T5** Tests (Vitest unit — `// @vitest-environment node`)
-  - [ ] T5.1 `RealWebSocketClient`: `LUGGAGE_RACK_SATURATION` envelope → emits `LUGGAGE_EVENT` with `state: 'overcrowded'`
-  - [ ] T5.2 `RealWebSocketClient`: `UNATTENDED_BAG` envelope → emits `LUGGAGE_EVENT` with `state: 'unattended'`
-  - [ ] T5.3 `RealWebSocketClient`: duplicate `event_id` for luggage event is dropped (dedup)
-  - [ ] T5.4 `FleetContext` logic: `LUGGAGE_EVENT` message prepends to array and deduplicates on `id`
-  - [ ] T5.5 `FleetContext` logic: `luggageEventsToEscalations` called on updated array produces correct escalation shape
+- [x] **T5** Tests (Vitest unit — `// @vitest-environment node`)
+  - [x] T5.1 `RealWebSocketClient`: `LUGGAGE_RACK_SATURATION` envelope → emits `LUGGAGE_EVENT` with `state: 'overcrowded'`
+  - [x] T5.2 `RealWebSocketClient`: `UNATTENDED_BAG` envelope → emits `LUGGAGE_EVENT` with `state: 'unattended'`
+  - [x] T5.3 `RealWebSocketClient`: duplicate `event_id` for luggage event is dropped (dedup)
+  - [x] T5.4 `FleetContext` logic: `LUGGAGE_EVENT` message prepends to array and deduplicates on `id`
+  - [x] T5.5 `FleetContext` logic: `luggageEventsToEscalations` called on updated array produces correct escalation shape
 
 ---
 
@@ -272,13 +272,25 @@ Tests run with `// @vitest-environment node` (jsdom not installed). Component re
 ## Dev Agent Record
 
 ### Debug Log
-_Empty — ready for dev_
+- Stale closure on `luggageEvents` in FLEET_STATE handler solved with `luggageEventsRef` pattern (same as fetchGenRef in E2-S9).
+- `LiveMonitoring.jsx` also imported `LUGGAGE_EVENTS` for `luggageKpis` — updated to consume `luggageEvents` from context and removed the TODO comment.
 
 ### Completion Notes
-_Empty — ready for dev_
+- Replaced static `LUGGAGE_EVENTS` import (7 hardcoded events) with live `luggageEvents` state in FleetContext fed by WS `LUGGAGE_EVENT` messages.
+- `RealWebSocketClient` now subscribes to `LUGGAGE_RACK_SATURATION` and `UNATTENDED_BAG` backend event types and maps them to `LUGGAGE_EVENT` frontend messages.
+- `MockWebSocketClient` emits 2 mock `LUGGAGE_EVENT` messages (500ms and 1200ms after FLEET_STATE) so the Luggage tab works offline.
+- Luggage escalations in unified feed re-derived via `useEffect` on `luggageEvents` change — live events appear in both the Luggage tab and the unified feed.
+- Luggage KPI tile in Live Monitoring now reflects live `luggageEvents` count.
+- 72 tests passing, 0 regressions.
 
 ### File List
-_To be filled by dev agent_
+- `control-centre/src/ws/RealWebSocketClient.js` — added LUGGAGE_RACK_SATURATION + UNATTENDED_BAG to subscription + handlers
+- `control-centre/src/mock/websocket.js` — added 2 LUGGAGE_EVENT dispatches in _emit
+- `control-centre/src/context/FleetContext.jsx` — replaced static luggage import with live luggageEvents state + ref + effects
+- `control-centre/src/components/luggage/LuggageMonitoring.jsx` — reads luggageEvents from context
+- `control-centre/src/components/live/LiveMonitoring.jsx` — luggageKpis wired to live luggageEvents
+- `control-centre/src/ws/__tests__/RealWebSocketClient.test.js` — new: 8 tests for luggage handler + dedup
+- `control-centre/src/context/__tests__/FleetContextLuggage.test.js` — new: 9 tests for state logic + escalation shape
 
 ### Change Log
-_To be filled by dev agent_
+- E5-S1 implementation: replace static LUGGAGE_EVENTS with live WS-fed luggageEvents (2026-05-19)

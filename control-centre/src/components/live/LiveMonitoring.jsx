@@ -6,11 +6,11 @@ import { FleetList, FleetListSkeleton } from './FleetList';
 import { FleetMap } from './FleetMap';
 import { UnifiedFeed, UnifiedFeedSkeleton } from './UnifiedFeed';
 import { TrainDetail } from '../train-detail/TrainDetail';
-import { LUGGAGE_EVENTS, getLuggageKPIs } from '../../mock/luggage';
+import { getLuggageKPIs } from '../../mock/luggage';
 import './LiveMonitoring.css';
 
 export function LiveMonitoring() {
-  const { fleet, kpis, escalations, lastUpdate, wsReady, acknowledge, resolve, feedTypeFilter, setFeedTypeFilter, feedStatusFilter, setFeedStatusFilter, clearFeedFilters } = useFleetData();
+  const { fleet, kpis, escalations, lastUpdate, wsReady, acknowledge, resolve, feedTypeFilter, setFeedTypeFilter, feedStatusFilter, setFeedStatusFilter, clearFeedFilters, luggageEvents } = useFleetData();
   const location = useLocation();
   const navigate = useNavigate();
   const [selectedTrainId, setSelectedTrainId] = useState(location.state?.selectTrainId ?? null);
@@ -42,8 +42,7 @@ export function LiveMonitoring() {
       setSelectedTrainId(sorted[0].id);
     }
   }, [fleet.length]);
-  // TODO: wire to live luggage WebSocket when backend delivers luggage events dynamically
-  const luggageKpis = useMemo(() => getLuggageKPIs(LUGGAGE_EVENTS), []);
+  const luggageKpis = useMemo(() => getLuggageKPIs(luggageEvents), [luggageEvents]);
 
   const selectedTrain = fleet.find(t => t.id === selectedTrainId) ?? null;
   const isStale = lastUpdate && (Date.now() - lastUpdate.getTime()) > 60000;

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { MockWebSocketClient } from '../mock/websocket';
 import { RealWebSocketClient } from '../ws/RealWebSocketClient';
-import { LUGGAGE_EVENTS, luggageEventsToEscalations } from '../mock/luggage';
+import { luggageEventsToEscalations } from '../mock/luggage';
 import { acknowledgeEscalation, resolveEscalation, getTrainAlerts } from '../api/escalations';
 import { getPreferences, patchPreferences } from '../api/preferences';
 import {
@@ -11,7 +11,6 @@ import {
   LS_KEY_STALENESS_THRESHOLD,
 } from '../constants/preferences';
 
-const LUGGAGE_ESCALATIONS = luggageEventsToEscalations(LUGGAGE_EVENTS);
 const OPERATOR_ID = import.meta.env.VITE_OPERATOR_ID ?? 'operator-unknown';
 
 // Statuses that represent a terminal WS truth — safe to clear pending action state.
@@ -56,12 +55,29 @@ export function FleetProvider({ children }) {
   const [trainAlerts, setTrainAlerts] = useState({});
   const [trainAlertsLoading, setTrainAlertsLoading] = useState({});
   const [trainAlertsError, setTrainAlertsError] = useState({});
+  // Live luggage events — populated by LUGGAGE_EVENT WS messages
+  const [luggageEvents, setLuggageEvents] = useState([]);
+  // Ref so the FLEET_STATE handler (stale closure) can read current luggage state
+  const luggageEventsRef = useRef([]);
   const wsRef = useRef(null);
 
   const clearFeedFilters = useCallback(() => {
     setFeedTypeFilter('all');
     setFeedStatusFilter(null);
   }, []);
+
+  // Keep ref in sync so FLEET_STATE handler (stale closure) reads current luggageEvents
+  useEffect(() => {
+    luggageEventsRef.current = luggageEvents;
+  }, [luggageEvents]);
+
+  // When luggageEvents changes, re-derive luggage escalations in the unified feed
+  useEffect(() => {
+    setEscalations(prev => [
+      ...prev.filter(e => e.type !== 'luggage'),
+      ...luggageEventsToEscalations(luggageEvents),
+    ]);
+  }, [luggageEvents]);
 
   useEffect(() => {
     const onStatusChange = (status) => {
@@ -73,9 +89,19 @@ export function FleetProvider({ children }) {
       if (msg.type === 'FLEET_STATE') {
         setFleet(msg.payload.fleet);
         setKpis(msg.payload.kpis);
-        setEscalations([...msg.payload.escalations, ...LUGGAGE_ESCALATIONS]);
+        setEscalations([...msg.payload.escalations, ...luggageEventsToEscalations(luggageEventsRef.current)]);
         setLastUpdate(new Date());
         setWsReady(true);
+      }
+      if (msg.type === 'LUGGAGE_EVENT') {
+        const { id } = msg.payload ?? {};
+        if (id) {
+          setLuggageEvents(prev => {
+            if (prev.some(e => e.id === id)) return prev;
+            return [msg.payload, ...prev];
+          });
+          setLastUpdate(new Date());
+        }
       }
       if (msg.type === 'ESCALATION_UPDATED') {
         setEscalations(prev =>
@@ -280,6 +306,7 @@ export function FleetProvider({ children }) {
       clearFeedFilters,
       alertThresholdSeconds, stalenessThresholdSeconds,
       updateAlertThreshold, updateStalenessThreshold,
+      luggageEvents,
     }}>
       {children}
     </FleetContext.Provider>
