@@ -80,5 +80,6 @@ export async function exportCapacityReviewCsv() {
   a.href = url;
   a.download = `capacity-review-${dateStr}.csv`;
   a.click();
-  URL.revokeObjectURL(url);
+  // Revoke after a short delay so the browser has time to initiate the download
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 }

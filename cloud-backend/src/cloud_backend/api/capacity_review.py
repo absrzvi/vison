@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class ReviewRequest(BaseModel):
-    note: str | None = None
+    note: str | None = Field(None, max_length=200)
     priority: str
 
     @field_validator("priority")

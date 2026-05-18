@@ -1,6 +1,6 @@
 # Story 3.2: Capacity Exceptions — Real Data & Date Range
 
-Status: review
+Status: done
 
 ## Story
 
@@ -443,3 +443,27 @@ claude-sonnet-4-6
 - `cloud-backend/tests/unit/test_capacity_review_security.py` (NEW)
 - `cloud-backend/tests/integration/test_capacity_review.py` (NEW)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (MODIFIED)
+
+### Review Findings
+
+#### Patch Findings
+
+- [x] [Review][Patch] F1: Raw API key stored as `queued_by` in DB and exported in CSV — replaced with `_key_fingerprint()` SHA-256 prefix [cloud-backend/src/cloud_backend/routes/capacity_review.py]
+- [x] [Review][Patch] F2: Retry button does not re-trigger fetch — added `retryCount` state, incremented on retry click, included in `useEffect` deps [control-centre/src/components/analytics/ExceptionWorkflow.jsx]
+- [x] [Review][Patch] F3: `INSERT…SELECT` silently no-ops when event_id absent — added `result.rowcount == 0` check, returns HTTP 404 [cloud-backend/src/cloud_backend/routes/capacity_review.py]
+- [x] [Review][Patch] F4: Reopen returns 200 even when no queue row exists — added `rowcount` check, returns HTTP 404 [cloud-backend/src/cloud_backend/routes/capacity_review.py]
+- [x] [Review][Patch] F5: CSV injection via unsanitized fields — added `_csv_safe()` helper prefixing formula chars with single quote [cloud-backend/src/cloud_backend/routes/capacity_review.py]
+- [x] [Review][Patch] F6: Duplicate `"queued_by"` key in `review_exception` params dict — eliminated by refactoring to `_key_fingerprint(api_key)` (single occurrence) [cloud-backend/src/cloud_backend/routes/capacity_review.py]
+- [x] [Review][Patch] F7: Race condition — stale action promises mutate new dataset — added `activeRangeRef` tracking; revert callbacks bail out if range changed [control-centre/src/components/analytics/ExceptionWorkflow.jsx]
+- [x] [Review][Patch] F8: `Content-Disposition` filename not quoted — changed to `filename="{filename}"` [cloud-backend/src/cloud_backend/routes/capacity_review.py]
+- [x] [Review][Patch] F9: `URL.revokeObjectURL` called before download starts — moved revoke into `setTimeout(..., 100)` [control-centre/src/api/analytics.js]
+- [x] [Review][Patch] F10: AC12 partial violation — `servicesOperated` now derived as `Set(journey_id)` count and displayed in summary strip [control-centre/src/components/analytics/ExceptionWorkflow.jsx]
+- [x] [Review][Patch] F12: Priority case mismatch — optimistic state now writes `priority.toLowerCase()` [control-centre/src/components/analytics/ExceptionWorkflow.jsx]
+- [x] [Review][Patch] F14: Note length not validated server-side — added `Field(None, max_length=200)` to `ReviewRequest.note` [cloud-backend/src/cloud_backend/api/capacity_review.py]
+
+#### Deferred Findings
+
+- [x] [Review][Defer] F11: `departure_date` stored as Text with mixed formats (ISO date vs datetime string) [cloud-backend/migrations/versions/0003_add_capacity_review_queue.py] — deferred, pre-existing data-model limitation
+- [x] [Review][Defer] F13: Export CSV materialises entire result in memory — no streaming/pagination for large queues [cloud-backend/src/cloud_backend/routes/capacity_review.py:130] — deferred, acceptable for PoC scale
+- [x] [Review][Defer] F15: No DB index on `status` or `queued_at` columns in `capacity_review_queue` [cloud-backend/migrations/versions/0003_add_capacity_review_queue.py] — deferred, add when query volumes warrant
+- [x] [Review][Defer] F16: `gen_random_uuid()` may need `pgcrypto` extension on Postgres < 13 [cloud-backend/migrations/versions/0003_add_capacity_review_queue.py] — deferred, dev targets Postgres 14+

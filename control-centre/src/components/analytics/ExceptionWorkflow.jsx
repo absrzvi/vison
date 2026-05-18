@@ -207,7 +207,14 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
   const [selectedId, setSelectedId] = useState(null);
   const [reviewModalFor, setReviewModalFor] = useState(null);
   const [showDismissed, setShowDismissed] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const detailRef = useRef(null);
+  // Track the active dateRange so stale action callbacks can bail out
+  const activeRangeRef = useRef(dateRange);
+
+  useEffect(() => {
+    activeRangeRef.current = dateRange;
+  }, [dateRange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -227,7 +234,7 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
 
     fetchData();
     return () => { cancelled = true; };
-  }, [dateRange]);
+  }, [dateRange, retryCount]);
 
   const selectedExc = useMemo(
     () => exceptions.find(e => e.exception_id === selectedId) ?? null,
@@ -238,23 +245,27 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
     if (detailRef.current) detailRef.current.scrollTop = 0;
   }, [selectedId]);
 
-  const criticalCount  = exceptions.filter(e => e.severity === 'critical' && e.status !== 'dismissed').length;
-  const warningCount   = exceptions.filter(e => e.severity === 'warning'  && e.status !== 'dismissed').length;
-  const conradCount    = exceptions.filter(e => e.conradFlag).length;
-  const dismissedCount = exceptions.filter(e => e.status === 'dismissed').length;
+  const criticalCount      = exceptions.filter(e => e.severity === 'critical' && e.status !== 'dismissed').length;
+  const warningCount       = exceptions.filter(e => e.severity === 'warning'  && e.status !== 'dismissed').length;
+  const conradCount        = exceptions.filter(e => e.conradFlag).length;
+  const dismissedCount     = exceptions.filter(e => e.status === 'dismissed').length;
+  const servicesOperated   = new Set(exceptions.map(e => e.journey_id).filter(Boolean)).size;
 
   const handleDismiss = (id) => {
+    const rangeAtDispatch = activeRangeRef.current;
     setExceptions(prev => prev.map(e => e.exception_id === id ? { ...e, status: 'dismissed' } : e));
     if (selectedId === id) setSelectedId(null);
     dismissException(id).catch(() => {
-      // revert optimistic update on failure
+      if (activeRangeRef.current !== rangeAtDispatch) return;
       setExceptions(prev => prev.map(e => e.exception_id === id ? { ...e, status: 'unreviewed' } : e));
     });
   };
 
   const handleReopen = (id) => {
+    const rangeAtDispatch = activeRangeRef.current;
     setExceptions(prev => prev.map(e => e.exception_id === id ? { ...e, status: 'unreviewed' } : e));
     reopenException(id).catch(() => {
+      if (activeRangeRef.current !== rangeAtDispatch) return;
       setExceptions(prev => prev.map(e => e.exception_id === id ? { ...e, status: 'dismissed' } : e));
     });
   };
@@ -263,19 +274,24 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
 
   const handleReviewConfirm = (note, priority) => {
     const id = reviewModalFor;
+    const rangeAtDispatch = activeRangeRef.current;
     setReviewModalFor(null);
+    // Normalise priority to lowercase to match server response and avoid display flicker
+    const normalPriority = priority.toLowerCase();
     setExceptions(prev => prev.map(e =>
       e.exception_id === id
-        ? { ...e, status: 'in_review', reviewNote: note, priority, queuedAt: new Date().toISOString() }
+        ? { ...e, status: 'in_review', reviewNote: note, priority: normalPriority, queuedAt: new Date().toISOString() }
         : e,
     ));
     reviewException(id, note, priority)
       .then(res => {
+        if (activeRangeRef.current !== rangeAtDispatch) return;
         setExceptions(prev => prev.map(e =>
           e.exception_id === id ? { ...e, queuedAt: res.queued_at ?? e.queuedAt } : e,
         ));
       })
       .catch(() => {
+        if (activeRangeRef.current !== rangeAtDispatch) return;
         setExceptions(prev => prev.map(e => e.exception_id === id ? { ...e, status: 'unreviewed' } : e));
       });
   };
@@ -309,7 +325,7 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
           <p>Exception data unavailable – retry</p>
           <button
             className="btn btn--secondary"
-            onClick={() => { setError(null); setLoading(true); setExceptions([]); }}
+            onClick={() => setRetryCount(c => c + 1)}
           >
             Retry
           </button>
@@ -334,6 +350,15 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
             <span className="exc-summary-stat__val">{conradCount}</span>
             <span className="exc-summary-stat__label"> Conrad flag{conradCount !== 1 ? 's' : ''}</span>
           </span>
+          {servicesOperated > 0 && (
+            <>
+              <span className="exc-summary-sep" />
+              <span className="exc-summary-stat">
+                <span className="exc-summary-stat__val">{servicesOperated}</span>
+                <span className="exc-summary-stat__label"> service{servicesOperated !== 1 ? 's' : ''} affected</span>
+              </span>
+            </>
+          )}
         </div>
         <div className="exc-summary-strip__date">{rangeInfo.label} · {rangeInfo.from} – {rangeInfo.to}</div>
       </div>

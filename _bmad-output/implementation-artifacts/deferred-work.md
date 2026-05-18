@@ -9,6 +9,13 @@
 
 - **`getLuggageKPIs` silently drops unattended events when `elapsedMin` returns null** [`luggage.js:213`] — pre-existing null-elapsed contract; add explicit null guard in `getLuggageKPIs` if timestamp quality degrades in production
 
+## Deferred from: code review of 3-2-capacity-exceptions-real-data (2026-05-19)
+
+- **F11: `departure_date` stored as Text with mixed formats** [`cloud-backend/migrations/versions/0003_add_capacity_review_queue.py`] — COALESCE picks ISO date or datetime string depending on which payload field is present; normalise to ISO date when data contract with `events.payload` is locked
+- **F13: Export CSV materialises entire result set in memory** [`routes/capacity_review.py`] — acceptable for PoC; add server-side cursor streaming or pagination when queue reaches thousands of rows
+- **F15: No DB index on `status` or `queued_at` on `capacity_review_queue`** [`migrations/versions/0003_add_capacity_review_queue.py`] — add when query volumes warrant; likely needed at fleet rollout
+- **F16: `gen_random_uuid()` may require `pgcrypto` on Postgres < 13** [`migrations/versions/0003_add_capacity_review_queue.py`] — dev target is Postgres 14+; add a migration guard or switch to `uuid_generate_v4()` if older Postgres is needed
+
 ## Deferred from: code review of 3-1-analytics-rest-endpoints (2026-05-19)
 
 - **`status`/`severity` fields accept arbitrary strings** [`api/analytics.py`] — add `Literal`/`Enum` validation when data contract with frontend is stable

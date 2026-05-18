@@ -133,7 +133,10 @@ describe('exportCapacityReviewCsv', () => {
     vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
     vi.stubGlobal('document', { createElement: vi.fn(() => mockA) });
 
+    vi.useFakeTimers();
     await exportCapacityReviewCsv();
+    vi.runAllTimers();
+    vi.useRealTimers();
 
     const [url, opts] = mockFetch.mock.calls[0];
     expect(url).toMatch(/\/api\/v1\/capacity-review-queue\/export\?format=csv$/);

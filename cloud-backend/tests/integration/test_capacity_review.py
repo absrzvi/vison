@@ -183,3 +183,25 @@ async def test_review_invalid_priority_returns_422(client: AsyncClient) -> None:
         headers=_HEADERS,
     )
     assert r.status_code == 422
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_review_missing_event_returns_404(client: AsyncClient) -> None:
+    r = await client.post(
+        "/api/v1/analytics/exceptions/nonexistent-id/review",
+        json={"priority": "high"},
+        headers=_HEADERS,
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_reopen_missing_queue_row_returns_404(client: AsyncClient) -> None:
+    # No row in queue for this id — reopen should 404
+    r = await client.post(
+        "/api/v1/analytics/exceptions/nonexistent-id/reopen",
+        headers=_HEADERS,
+    )
+    assert r.status_code == 404

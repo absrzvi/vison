@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, Security
+from fastapi import APIRouter, Depends, HTTPException, Security
 from fastapi.responses import StreamingResponse
 from sqlalchemy import text
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.auth import require_api_key
@@ -16,6 +19,24 @@ from ..api.capacity_review import ReviewRequest, ReviewResponse, StatusResponse
 from ..database import get_db
 
 log = structlog.get_logger()
+
+_CSV_FORMULA_CHARS = ('=', '+', '-', '@', '\t', '\r')
+
+
+def _csv_safe(value: str | None) -> str:
+    """Prefix formula-triggering characters to prevent CSV injection."""
+    if value is None:
+        return ''
+    s = str(value)
+    if s and s[0] in _CSV_FORMULA_CHARS:
+        return "'" + s
+    return s
+
+
+def _key_fingerprint(api_key: str) -> str:
+    """Return a short SHA-256 fingerprint of the API key — never store the raw secret."""
+    return hashlib.sha256(api_key.encode()).hexdigest()[:16]
+
 
 # review/dismiss/reopen share the same router prefix as the analytics exceptions endpoint
 _exceptions_router = APIRouter(
@@ -29,6 +50,7 @@ _export_router = APIRouter(
     dependencies=[Security(require_api_key)],
 )
 
+
 @_exceptions_router.post("/{exception_id}/review", response_model=ReviewResponse)
 async def review_exception(
     exception_id: str,
@@ -37,7 +59,7 @@ async def review_exception(
     api_key: str = Security(require_api_key),
 ) -> ReviewResponse:
     now = datetime.now(UTC)
-    await db.execute(
+    result: CursorResult[Any] = await db.execute(  # type: ignore[assignment]
         text("""
             INSERT INTO capacity_review_queue
               (exception_id, route, train_id, departure_date,
@@ -66,10 +88,12 @@ async def review_exception(
             "eid": exception_id,
             "priority": body.priority,
             "note": body.note,
-            "queued_by": api_key,
+            "queued_by": _key_fingerprint(api_key),
             "queued_at": now,
         },
     )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="exception not found")
     await db.commit()
     return ReviewResponse(status="in_review", queued_at=now.isoformat())
 
@@ -80,7 +104,7 @@ async def dismiss_exception(
     db: AsyncSession = Depends(get_db),
     api_key: str = Security(require_api_key),
 ) -> StatusResponse:
-    await db.execute(
+    result: CursorResult[Any] = await db.execute(  # type: ignore[assignment]
         text("""
             INSERT INTO capacity_review_queue
               (exception_id, route, train_id, departure_date,
@@ -100,8 +124,10 @@ async def dismiss_exception(
             ON CONFLICT (exception_id)
             DO UPDATE SET status = 'dismissed'
         """),
-        {"eid": exception_id, "queued_by": api_key},
+        {"eid": exception_id, "queued_by": _key_fingerprint(api_key)},
     )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="exception not found")
     await db.commit()
     return StatusResponse(status="dismissed")
 
@@ -111,7 +137,7 @@ async def reopen_exception(
     exception_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> StatusResponse:
-    await db.execute(
+    result: CursorResult[Any] = await db.execute(  # type: ignore[assignment]
         text("""
             UPDATE capacity_review_queue
             SET status = 'unreviewed'
@@ -119,6 +145,8 @@ async def reopen_exception(
         """),
         {"eid": exception_id},
     )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="exception not found in review queue")
     await db.commit()
     return StatusResponse(status="unreviewed")
 
@@ -154,9 +182,15 @@ async def export_capacity_review_csv(
     ])
     for row in rows:
         writer.writerow([
-            row["exception_id"], row["route"], row["train_id"],
-            row["departure_date"], row["priority"], row["note"],
-            row["queued_by"], row["queued_at"], row["status"],
+            _csv_safe(row["exception_id"]),
+            _csv_safe(row["route"]),
+            _csv_safe(row["train_id"]),
+            _csv_safe(row["departure_date"]),
+            _csv_safe(row["priority"]),
+            _csv_safe(row["note"]),
+            _csv_safe(row["queued_by"]),
+            _csv_safe(row["queued_at"]),
+            _csv_safe(row["status"]),
         ])
 
     date_str = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -166,7 +200,7 @@ async def export_capacity_review_csv(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
