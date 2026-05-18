@@ -185,3 +185,14 @@
 - **`_get` `res.json()` throws SyntaxError on non-JSON 200 response (proxy HTML page)** [escalations.js] — pre-existing pattern from `_post`; add content-type check in hardening pass
 - **`confidence` `%` suffix assumes 0-100 scale — backend contract not yet locked** [TrainDetail.jsx] — revisit when API contract is finalised
 - **WS ALERT_RAISED payload prepended as-is — may lack canonical shape fields** [FleetContext.jsx] — WS event contract not yet specced; add transformation/validation when backend defines the shape
+
+## Deferred from: code review of 3-7-system-health-maintenance-ticket-api (2026-05-19)
+
+- **ESC during `--loading` clears UI but doesn't abort in-flight POST** [SystemHealth.jsx] — AC4 covers pre-send confirmation only; wire AbortController from ESC to fetch in a hardening story
+- **5-hex ticket ID has ~1M space, birthday collisions at ~1,200 tickets** [maintenance.py:33] — PoC scope; add UUID persistence + unique constraint when moving to production
+- **No input validation on TicketRequest fields (empty strings, unbounded length)** [maintenance.py:21] — add Pydantic validators (`min_length`, `max_length`) when persistence is added
+- **No ticket persistence — tickets exist only in logs** [maintenance.py] — explicitly PoC-deferred; add DB write + GET endpoint in maintenance epic
+- **Error toast swallows error object, no status differentiation** [SystemHealth.jsx:~180] — log to console and surface status code in a UX polish pass
+- **No rate limiting on ticket creation endpoint** [maintenance.py] — add per-key quota when API key rotates to OAuth2 (ADR-6/7)
+- **Orphan ticket on response timeout — no idempotency key** [maintenance.js + maintenance.py] — add `X-Idempotency-Key` header when persistence lands
+- **setState after unmount during in-flight ticket POST** [SystemHealth.jsx] — pre-existing React pattern; add `isMountedRef` pattern in hardening pass

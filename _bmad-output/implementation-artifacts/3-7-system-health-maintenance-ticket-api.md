@@ -1,6 +1,6 @@
 # Story 3.7: System Health Maintenance Ticket API
 
-Status: review
+Status: done
 
 ## Story
 
@@ -73,6 +73,21 @@ Then the Maintenance App CTA (`sh-panel-cta`) remains hidden; the flag value is 
   - [x] T5.2 `cloud-backend/tests/unit/test_maintenance_api.py` — 6 tests: 401 no key, 401 wrong key, 201 success + REF# pattern, unique ticket IDs, 422 missing train_id, 422 missing issue_summary
 
 - [x] **T6** Run full test suite and lint; confirm no regressions
+
+### Review Findings
+
+- [x] [Review][Decision→Defer] `MAINTENANCE_APP_ENABLED` declared but never wired — CTA is a future feature; constant is forward-compat scaffolding reading from env var (AC5 intent satisfied) [SystemHealth.jsx:7]
+- [x] [Review][Patch] `_RAISED_BY` sends API key as `raised_by` — replaced with hardcoded `'operator'` identifier; API key no longer leaks into logs [SystemHealth.jsx:9, maintenance.py:39]
+- [x] [Review][Patch] Double-submit not fully guarded — added `ticketPendingRef` mirroring state; `confirmRaiseTicket` guards on `ticketPendingRef.current !== null` before proceeding; ref reads are synchronous [SystemHealth.jsx:~167]
+- [x] [Review][Patch] `issue_summary` not logged by backend — added `issue_summary=body.issue_summary` to structlog call [maintenance.py:~36]
+- [x] [Review][Defer] ESC during `--loading` clears UI but doesn't abort in-flight POST — AC4 covers pre-send confirmation only; in-flight abort is beyond story scope [SystemHealth.jsx] — deferred, out of scope for PoC
+- [x] [Review][Defer] 5-hex ticket ID has ~1M space, birthday collisions at ~1,200 tickets — PoC scope; no persistence anyway [maintenance.py:~33] — deferred, PoC
+- [x] [Review][Defer] No input validation on TicketRequest fields (empty strings, unbounded) — PoC; no DB; future story [maintenance.py:~21]
+- [x] [Review][Defer] No ticket persistence — explicitly PoC-deferred in story spec [maintenance.py] — deferred per spec
+- [x] [Review][Defer] Error toast swallows error object entirely, no status differentiation — UX polish, out of scope [SystemHealth.jsx:~180] — deferred
+- [x] [Review][Defer] No rate limiting on endpoint [maintenance.py] — infrastructure concern, future story — deferred
+- [x] [Review][Defer] Orphan ticket on response timeout — no idempotency key [maintenance.js + maintenance.py] — deferred, PoC scope
+- [x] [Review][Defer] setState after unmount — pre-existing React pattern across codebase [SystemHealth.jsx] — deferred, pre-existing
 
 ## Dev Notes
 

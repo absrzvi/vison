@@ -6,7 +6,7 @@ import './SystemHealth.css';
 
 // eslint-disable-next-line no-unused-vars
 const MAINTENANCE_APP_ENABLED = import.meta.env.VITE_MAINTENANCE_APP_ENABLED === 'true';
-const _RAISED_BY = import.meta.env.VITE_API_KEY ?? 'dev-key';
+const _RAISED_BY = 'operator';
 
 const SEV_CLASS = { green: 'badge--green', amber: 'badge--amber', red: 'badge--red' };
 const SEV_ORDER = { red: 0, amber: 1, green: 2 };
@@ -96,6 +96,7 @@ export function SystemHealth() {
   const [ticketRaisedIds, setTicketRaisedIds] = useState(new Set());
   const [ticketRefs, setTicketRefs] = useState({});
   const [ticketPending, setTicketPending] = useState(null);
+  const ticketPendingRef = useRef(null);
   const [ticketToast, setTicketToast] = useState(null);
   const [tick, setTick] = useState(0);
   const firstIssueRef = useRef(null);
@@ -138,12 +139,12 @@ export function SystemHealth() {
   useEffect(() => {
     const handler = (e) => {
       if (e.key !== 'Escape') return;
-      if (ticketPending) { setTicketPending(null); return; }
+      if (ticketPending) { _setPending(null); return; }
       setSelectedTrainId(null);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [ticketPending]);
+  }, [ticketPending, _setPending]);
 
   // Merge WS cctvStatus patches into healthData.
   // Runs on every fleet reference change (CAMERA_DEGRADED/RECOVERED sets a new array).
@@ -164,8 +165,14 @@ export function SystemHealth() {
     });
   }, [fleet]);
 
+  const _setPending = useCallback((val) => {
+    ticketPendingRef.current = val;
+    setTicketPending(val);
+  }, []);
+
   const confirmRaiseTicket = useCallback(async (trainId) => {
-    setTicketPending(`${trainId}--loading`);
+    if (ticketPendingRef.current !== null) return;
+    _setPending(`${trainId}--loading`);
     try {
       const { ticket_id } = await raiseMaintenanceTicket(
         trainId,
@@ -174,17 +181,17 @@ export function SystemHealth() {
       );
       setTicketRaisedIds(prev => new Set([...prev, trainId]));
       setTicketRefs(prev => ({ ...prev, [trainId]: ticket_id }));
-      setTicketPending(null);
+      _setPending(null);
       setTicketToast({ trainId, ref: ticket_id });
       clearTimeout(toastTimerRef.current);
       toastTimerRef.current = setTimeout(() => setTicketToast(null), 4000);
     } catch {
-      setTicketPending(null);
+      _setPending(null);
       setTicketToast({ trainId, ref: null, error: true });
       clearTimeout(toastTimerRef.current);
       toastTimerRef.current = setTimeout(() => setTicketToast(null), 4000);
     }
-  }, []);
+  }, [_setPending]);
 
   useEffect(() => () => clearTimeout(toastTimerRef.current), []);
 
@@ -300,7 +307,7 @@ export function SystemHealth() {
             </button>
             <button
               className="btn btn--ghost"
-              onClick={() => setTicketPending(null)}
+              onClick={() => _setPending(null)}
             >
               Cancel
             </button>
@@ -313,7 +320,7 @@ export function SystemHealth() {
       <div className="sh-panel__footer">
         <button
           className="btn btn--secondary sh-panel__ticket-btn"
-          onClick={() => setTicketPending(trainId)}
+          onClick={() => _setPending(trainId)}
         >
           Raise Maintenance Ticket
         </button>

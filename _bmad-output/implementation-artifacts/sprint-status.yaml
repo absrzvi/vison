@@ -1,5 +1,5 @@
 # generated: 2026-05-17
-# last_updated: 2026-05-19  # E3-S1 done; E3-S2 done; E3-S3 done; E3-S4 done; E3-S5 done; E3-S6 done; E3-S7 ready-for-dev
+# last_updated: 2026-05-19  # E3-S1–S6 done; E3-S7 done (3 review patches applied)
 # project: oebb-agent
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-19  # E3-S1 done; E3-S2 done; E3-S3 done; E3-S4 done; E3-S5 done; E3-S6 done; E3-S7 ready-for-dev
+last_updated: 2026-05-19  # E3-S1–S6 done; E3-S7 done (3 review patches applied)
 project: oebb-agent
 # code-review 2026-05-17: story 2-2 → in-progress (1 patch finding: AC1 scroll-to-top)
 # code-review 2026-05-17: story 2-3 → done (5 patches applied)
@@ -87,7 +87,7 @@ development_status:
   3-4-dwell-time-real-data: done
   3-5-ai-detection-quality-real-data: done
   3-6-system-health-websocket-staleness: done
-  3-7-system-health-maintenance-ticket-api: review
+  3-7-system-health-maintenance-ticket-api: done
   epic-3-retrospective: optional
 
   # ── Epic 4: Onboard Edge Pipeline ──

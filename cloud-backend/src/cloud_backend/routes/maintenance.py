@@ -37,6 +37,7 @@ async def raise_ticket(body: TicketRequest) -> TicketResponse:
         "maintenance_ticket_raised",
         ticket_id=ticket_id,
         train_id=body.train_id,
+        issue_summary=body.issue_summary,
         raised_by=body.raised_by,
     )
     return TicketResponse(ticket_id=ticket_id, created_at=created_at)
