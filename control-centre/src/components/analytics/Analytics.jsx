@@ -3,7 +3,8 @@ import { OccupancyHeatmap } from './OccupancyHeatmap';
 import { DwellTime } from './DwellTime';
 import { AIDetection } from './AIDetection';
 import { ExceptionWorkflow } from './ExceptionWorkflow';
-import { DETECTION_TREND, getExceptionsForRange, getOccupancyHeatmap, getDwellData } from '../../mock/analytics';
+import { DETECTION_TREND, getOccupancyHeatmap, getDwellData } from '../../mock/analytics';
+import { exportCapacityReviewCsv } from '../../api/analytics';
 import './Analytics.css';
 
 const TABS = [
@@ -24,12 +25,7 @@ function mockExportCsv(tab, range) {
   const days = { '7d': 7, '14d': 14, '30d': 30 }[range] ?? 7;
   const multiplier = days / 7;
   let rows;
-  if (tab === 'exceptions') {
-    rows = ['Date,TrainId,Route,Departure,Coaches,PeakOccupancy(%),TrendDirection,Severity,ConradFlag,Status'];
-    getExceptionsForRange(range).forEach(e => rows.push(
-      `${e.date ?? '2026-05-15'},${e.trainId},"${e.route}",${e.departure},"${e.coaches.join('+')}",${e.peakOccupancy},${e.trendDirection},${e.severity},${e.conradFlag ? 'Yes' : 'No'},${e.status}`
-    ));
-  } else if (tab === 'occupancy') {
+  if (tab === 'occupancy') {
     // P2 fix: pass range to getOccupancyHeatmap so export matches what's on screen
     const heatmap = getOccupancyHeatmap(range);
     rows = ['Route,Hour,AvgOccupancy(%)'];
@@ -85,7 +81,7 @@ export function Analytics() {
           </div>
           <button
             className="btn btn--secondary analytics__export-btn"
-            onClick={() => mockExportCsv(activeTab, dateRange)}
+            onClick={() => activeTab === 'exceptions' ? exportCapacityReviewCsv() : mockExportCsv(activeTab, dateRange)}
           >Export CSV</button>
         </div>
       </div>

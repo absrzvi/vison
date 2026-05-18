@@ -617,3 +617,34 @@
   gap: 8px;
   padding-top: 4px;
 }
+
+
+.exc-card--skeleton {
+  background: var(--obb-surface-2);
+  animation: exc-pulse 1.4s ease-in-out infinite;
+  pointer-events: none;
+  height: 72px;
+  border-radius: 6px;
+  border: 1px solid var(--obb-border-dark);
+  margin-bottom: 6px;
+}
+@keyframes exc-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.4 } }
+
+.exc-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: var(--obb-text-on-dark-3);
+  font-size: 13px;
+}
+
+.exc-flag-box__link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--obb-blue-accent);
+  text-decoration: none;
+}
+.exc-flag-box__link:hover { text-decoration: underline; }

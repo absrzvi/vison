@@ -1,80 +1,51 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { EXCEPTION_DATE, EXCEPTION_DATE_RANGES, getExceptionsForRange } from '../../mock/analytics';
+import {
+  getCapacityExceptions,
+  reviewException,
+  dismissException,
+  reopenException,
+} from '../../api/analytics';
 import './ExceptionWorkflow.css';
 
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High'];
+const CONDUCTOR_APP_URL = import.meta.env.VITE_CONDUCTOR_APP_URL ?? '';
 
-// Derive peak occupancy per coach from timeline data
-function coachPeaks(exception) {
-  const timeKeys = exception.timeline.length > 0
-    ? Object.keys(exception.timeline[0]).filter(k => k !== 'time')
-    : exception.coaches.map(c => c.toLowerCase());
-  return timeKeys.map(key => ({
-    coach: key.toUpperCase(),
-    peak: Math.max(...exception.timeline.map(row => row[key] ?? 0)),
-    exceeded: exception.coaches.includes(key.toUpperCase()),
-  }));
+function sevClass(severity) {
+  if (severity === 'critical') return 'red';
+  if (severity === 'warning')  return 'amber';
+  return 'info';
 }
 
-function coachColor(pct, exceeded) {
+function coachColor(pct) {
   if (pct >= 90) return 'var(--obb-sev-critical)';
-  if (pct >= 85) return exceeded ? 'var(--obb-sev-warning)' : 'var(--obb-sev-warning)';
+  if (pct >= 85) return 'var(--obb-sev-warning)';
   return 'var(--obb-sev-normal)';
 }
 
-function TrendBadge({ direction, weeks }) {
-  if (direction === 'up')        return <span className="exc-trend exc-trend--up">↑ {weeks} consecutive week{weeks !== 1 ? 's' : ''}</span>;
-  if (direction === 'improving') return <span className="exc-trend exc-trend--down">Improving ↓</span>;
-  if (direction === 'new')       return <span className="exc-trend exc-trend--new">New</span>;
-  return <span className="exc-trend exc-trend--stable">Stable</span>;
-}
-
-// eslint-disable-next-line no-unused-vars
-function MiniSparkline({ peaks }) {
-  if (!peaks || peaks.length < 2) return null;
-  const max = Math.max(...peaks, 85);
-  const w = 80, h = 32;
-  const pts = peaks.map((v, i) => {
-    const x = (i / (peaks.length - 1)) * w;
-    const y = h - (v / max) * h;
-    return `${x},${y}`;
-  }).join(' ');
-  const threshY = h - (85 / max) * h;
-  return (
-    <svg width={w} height={h} className="exc-sparkline" aria-hidden="true">
-      <line x1={0} y1={threshY} x2={w} y2={threshY} stroke="var(--obb-sev-warning)" strokeWidth="1" strokeDasharray="3,2" />
-      <polyline points={pts} fill="none" stroke="var(--obb-blue-accent)" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
-// Coach occupancy bar chart — replaces the timeline
-function CoachOccupancyChart({ exception }) {
-  const coaches = coachPeaks(exception);
-  if (!coaches.length) return null;
-
+function CoachOccupancyChart({ coachPeaks, trainId, departure }) {
+  if (!coachPeaks || !coachPeaks.length) return null;
   return (
     <div className="exc-coach-chart">
-      <div className="exc-chart-title">Peak occupancy by coach — {exception.trainId} · {exception.departure}</div>
+      <div className="exc-chart-title">Peak occupancy by coach — {trainId} · {departure}</div>
       <div className="exc-coach-bars">
-        {coaches.map(({ coach, peak, exceeded }) => {
-          const color = coachColor(peak, exceeded);
+        {coachPeaks.map(({ coach_id, peak_pct }) => {
+          const color = coachColor(peak_pct);
+          const exceeded = peak_pct >= 85;
           return (
-            <div key={coach} className="exc-coach-row">
-              <span className="exc-coach-row__label">{coach}</span>
+            <div key={coach_id} className="exc-coach-row">
+              <span className="exc-coach-row__label">{coach_id}</span>
               <div className="exc-coach-row__track">
-                {/* 85% threshold marker */}
                 <div className="exc-coach-row__threshold" aria-hidden="true" />
                 <div
                   className="exc-coach-row__bar"
-                  style={{ width: `${peak}%`, background: color }}
+                  style={{ width: `${peak_pct}%`, background: color }}
                 />
               </div>
               <span
                 className="exc-coach-row__pct"
                 style={{ color: exceeded ? color : 'var(--obb-text-on-dark-4)' }}
               >
-                {peak}%
+                {peak_pct}%
               </span>
               {exceeded && (
                 <span className="exc-coach-row__flag" style={{ color }}>▲</span>
@@ -99,8 +70,9 @@ const WT_PAD_L = 28, WT_PAD_R = 8, WT_PAD_T = 10, WT_PAD_B = 22;
 const WT_CHART_W = WT_W - WT_PAD_L - WT_PAD_R;
 const WT_CHART_H = WT_H - WT_PAD_T - WT_PAD_B;
 
-function WeeklyTrendChart({ exception }) {
-  const peaks = exception.weeklyPeak;
+function WeeklyTrendChart({ trend, trainId }) {
+  if (!trend || !trend.length) return null;
+  const peaks = trend;
   const barSlot = WT_CHART_W / peaks.length;
   const barW = barSlot * 0.55;
   const toY = (v) => WT_PAD_T + WT_CHART_H - (v / 100) * WT_CHART_H;
@@ -113,7 +85,7 @@ function WeeklyTrendChart({ exception }) {
         viewBox={`0 0 ${WT_W} ${WT_H}`}
         width="100%"
         style={{ display: 'block' }}
-        aria-label={`7-day trend — ${exception.trainId}`}
+        aria-label={`7-day trend — ${trainId}`}
       >
         {[0, 50, 85, 100].map(v => {
           const y = toY(v);
@@ -160,7 +132,7 @@ function ReviewModal({ exception, onConfirm, onCancel }) {
           <span className="exc-modal__title">Add to capacity review queue</span>
           <button className="exc-modal__close" onClick={onCancel}>&times;</button>
         </div>
-        <div className="exc-modal__service">{exception.trainId} · {exception.route} · {exception.date ?? EXCEPTION_DATE}</div>
+        <div className="exc-modal__service">{exception.train_id} · {exception.route} · {exception.date}</div>
 
         <label className="exc-modal__label">Note <span className="exc-modal__optional">(optional)</span></label>
         <textarea
@@ -196,92 +168,165 @@ function ReviewModal({ exception, onConfirm, onCancel }) {
   );
 }
 
-// Group exceptions by route, preserving severity sort within each group
 function groupByRoute(exceptions) {
   const map = new Map();
   exceptions.forEach(exc => {
     if (!map.has(exc.route)) map.set(exc.route, []);
     map.get(exc.route).push(exc);
   });
-  // Sort groups by worst severity in group (red first)
   return [...map.entries()].sort(([, a], [, b]) => {
-    const sevA = a.some(e => e.severity === 'red') ? 0 : 1;
-    const sevB = b.some(e => e.severity === 'red') ? 0 : 1;
+    const sevA = a.some(e => e.severity === 'critical') ? 0 : 1;
+    const sevB = b.some(e => e.severity === 'critical') ? 0 : 1;
     return sevA - sevB;
   });
 }
 
+function rangeDates(range) {
+  const today = new Date();
+  const days = range === '30d' ? 30 : range === '14d' ? 14 : 7;
+  const from = new Date(today);
+  from.setDate(from.getDate() - (days - 1));
+  const fmt = d => d.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return { from: fmt(from), to: fmt(today), label: `Last ${days} days` };
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="exc-list">
+      {[1, 2, 3].map(i => (
+        <div key={i} className="exc-card exc-card--skeleton" aria-hidden="true" />
+      ))}
+    </div>
+  );
+}
+
 export function ExceptionWorkflow({ dateRange = '7d' }) {
-  const rangeInfo = EXCEPTION_DATE_RANGES[dateRange] ?? EXCEPTION_DATE_RANGES['7d'];
-  const exceptions = useMemo(() => getExceptionsForRange(dateRange), [dateRange]);
+  const [exceptions, setExceptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [reviewModalFor, setReviewModalFor] = useState(null);
   const [showDismissed, setShowDismissed] = useState(false);
   const detailRef = useRef(null);
 
-  // Reset selections when dateRange changes
-  const prevDateRange = useRef(dateRange);
-  if (prevDateRange.current !== dateRange) {
-    prevDateRange.current = dateRange;
-    setSelectedId(null);
-    setShowDismissed(false);
-  }
+  useEffect(() => {
+    let cancelled = false;
 
-  const selectedExc = useMemo(() => exceptions.find(e => e.id === selectedId) ?? null, [exceptions, selectedId]);
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      setSelectedId(null);
+      setShowDismissed(false);
+      try {
+        const data = await getCapacityExceptions(dateRange);
+        if (!cancelled) { setExceptions(data); setLoading(false); }
+      } catch (err) {
+        if (!cancelled) { setError(err); setLoading(false); }
+      }
+    };
+
+    fetchData();
+    return () => { cancelled = true; };
+  }, [dateRange]);
+
+  const selectedExc = useMemo(
+    () => exceptions.find(e => e.exception_id === selectedId) ?? null,
+    [exceptions, selectedId],
+  );
 
   useEffect(() => {
     if (detailRef.current) detailRef.current.scrollTop = 0;
   }, [selectedId]);
 
-  const redCount      = exceptions.filter(e => e.severity === 'red'   && e.status !== 'dismissed').length;
-  const amberCount    = exceptions.filter(e => e.severity === 'amber' && e.status !== 'dismissed').length;
-  const conradCount   = exceptions.filter(e => e.conradFlag).length;
+  const criticalCount  = exceptions.filter(e => e.severity === 'critical' && e.status !== 'dismissed').length;
+  const warningCount   = exceptions.filter(e => e.severity === 'warning'  && e.status !== 'dismissed').length;
+  const conradCount    = exceptions.filter(e => e.conradFlag).length;
   const dismissedCount = exceptions.filter(e => e.status === 'dismissed').length;
 
   const handleDismiss = (id) => {
-    setExceptions(prev => prev.map(e => e.id === id ? { ...e, status: 'dismissed' } : e));
+    setExceptions(prev => prev.map(e => e.exception_id === id ? { ...e, status: 'dismissed' } : e));
     if (selectedId === id) setSelectedId(null);
+    dismissException(id).catch(() => {
+      // revert optimistic update on failure
+      setExceptions(prev => prev.map(e => e.exception_id === id ? { ...e, status: 'unreviewed' } : e));
+    });
   };
 
   const handleReopen = (id) => {
-    setExceptions(prev => prev.map(e => e.id === id ? { ...e, status: 'unreviewed' } : e));
+    setExceptions(prev => prev.map(e => e.exception_id === id ? { ...e, status: 'unreviewed' } : e));
+    reopenException(id).catch(() => {
+      setExceptions(prev => prev.map(e => e.exception_id === id ? { ...e, status: 'dismissed' } : e));
+    });
   };
 
   const handleReview = (id) => setReviewModalFor(id);
 
   const handleReviewConfirm = (note, priority) => {
-    const queuedAt = new Date().toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
-    setExceptions(prev => prev.map(e => e.id === reviewModalFor ? { ...e, status: 'in_review', reviewNote: note, priority, queuedAt } : e));
+    const id = reviewModalFor;
     setReviewModalFor(null);
+    setExceptions(prev => prev.map(e =>
+      e.exception_id === id
+        ? { ...e, status: 'in_review', reviewNote: note, priority, queuedAt: new Date().toISOString() }
+        : e,
+    ));
+    reviewException(id, note, priority)
+      .then(res => {
+        setExceptions(prev => prev.map(e =>
+          e.exception_id === id ? { ...e, queuedAt: res.queued_at ?? e.queuedAt } : e,
+        ));
+      })
+      .catch(() => {
+        setExceptions(prev => prev.map(e => e.exception_id === id ? { ...e, status: 'unreviewed' } : e));
+      });
   };
 
   const activeExceptions = useMemo(() => [
-    ...exceptions.filter(e => e.severity === 'red'   && e.status !== 'dismissed'),
-    ...exceptions.filter(e => e.severity === 'amber' && e.status !== 'dismissed'),
+    ...exceptions.filter(e => e.severity === 'critical' && e.status !== 'dismissed'),
+    ...exceptions.filter(e => e.severity === 'warning'  && e.status !== 'dismissed'),
+    ...exceptions.filter(e => e.severity === 'info'     && e.status !== 'dismissed'),
   ], [exceptions]);
 
   const dismissedExceptions = useMemo(() =>
     exceptions.filter(e => e.status === 'dismissed'),
   [exceptions]);
 
-  // Route groups for active exceptions
   const routeGroups = useMemo(() => groupByRoute(activeExceptions), [activeExceptions]);
+
+  const rangeInfo = rangeDates(dateRange);
+
+  if (loading) {
+    return (
+      <div className="exc-workflow">
+        <LoadingSkeleton />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="exc-workflow">
+        <div className="exc-error-state">
+          <p>Exception data unavailable – retry</p>
+          <button
+            className="btn btn--secondary"
+            onClick={() => { setError(null); setLoading(true); setExceptions([]); }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
     <div className="exc-workflow">
-      {/* Summary strip */}
       <div className="exc-summary-strip">
         <div className="exc-summary-strip__left">
           <span className="exc-summary-stat">
-            <span className="exc-summary-stat__val">{rangeInfo.servicesOperated}</span>
-            <span className="exc-summary-stat__label">services operated</span>
-          </span>
-          <span className="exc-summary-sep" />
-          <span className="exc-summary-stat">
-            <span className={`exc-summary-stat__val ${redCount > 0 ? 'exc-summary-stat__val--red' : ''}`}>{redCount} red</span>
+            <span className={`exc-summary-stat__val ${criticalCount > 0 ? 'exc-summary-stat__val--red' : ''}`}>{criticalCount} critical</span>
             <span className="exc-summary-stat__dot"> · </span>
-            <span className={`exc-summary-stat__val ${amberCount > 0 ? 'exc-summary-stat__val--amber' : ''}`}>{amberCount} amber</span>
+            <span className={`exc-summary-stat__val ${warningCount > 0 ? 'exc-summary-stat__val--amber' : ''}`}>{warningCount} warning</span>
             <span className="exc-summary-stat__label"> exceptions</span>
           </span>
           <span className="exc-summary-sep" />
@@ -293,9 +338,7 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
         <div className="exc-summary-strip__date">{rangeInfo.label} · {rangeInfo.from} – {rangeInfo.to}</div>
       </div>
 
-      {/* Two-column layout */}
       <div className="exc-columns">
-        {/* Exception list — grouped by route */}
         <div className="exc-list">
           {activeExceptions.length === 0 && (
             <div className="exc-list__empty">No exceptions in {rangeInfo.label.toLowerCase()} — all services within threshold.</div>
@@ -309,9 +352,9 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
               </div>
               {excs.map(exc => (
                 <ExceptionCard
-                  key={exc.id}
+                  key={exc.exception_id}
                   exc={exc}
-                  selected={selectedId === exc.id}
+                  selected={selectedId === exc.exception_id}
                   onSelect={setSelectedId}
                 />
               ))}
@@ -323,9 +366,9 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
           )}
           {showDismissed && dismissedExceptions.map(exc => (
             <ExceptionCard
-              key={exc.id}
+              key={exc.exception_id}
               exc={exc}
-              selected={selectedId === exc.id}
+              selected={selectedId === exc.exception_id}
               onSelect={setSelectedId}
             />
           ))}
@@ -340,7 +383,6 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
           )}
         </div>
 
-        {/* Service detail */}
         <div className="exc-detail" ref={detailRef}>
           {!selectedExc && (
             <div className="exc-detail__placeholder">Select a service from the list to view details</div>
@@ -349,33 +391,45 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
             <>
               <div className="exc-detail__header">
                 <div className="exc-detail__heading">
-                  <span className={`exc-sev-dot exc-sev-dot--${selectedExc.severity}`} />
-                  <h2 className="exc-detail__title">{selectedExc.trainId} · {selectedExc.route} · {selectedExc.date ?? EXCEPTION_DATE}</h2>
+                  <span className={`exc-sev-dot exc-sev-dot--${sevClass(selectedExc.severity)}`} />
+                  <h2 className="exc-detail__title">{selectedExc.train_id} · {selectedExc.route} · {selectedExc.date}</h2>
                 </div>
-                <span className={`badge ${selectedExc.severity === 'red' ? 'badge--red' : 'badge--amber'}`}>
-                  {selectedExc.severity === 'red' ? 'Red' : 'Amber'}
+                <span className={`badge badge--${sevClass(selectedExc.severity) === 'red' ? 'red' : 'amber'}`}>
+                  {selectedExc.severity === 'critical' ? 'Critical' : selectedExc.severity === 'warning' ? 'Warning' : 'Info'}
                 </span>
               </div>
 
               {selectedExc.conradFlag && (
                 <div className="exc-flag-box">
                   <span className="exc-flag-box__label">🚩 Conrad flagged this service</span>
-                  <span className="exc-flag-box__time">{selectedExc.conradFlag.time}</span>
                   <p className="exc-flag-box__note">"{selectedExc.conradFlag.note}"</p>
+                  {CONDUCTOR_APP_URL && selectedExc.conradFlag.flag_id && (
+                    <a
+                      className="exc-flag-box__link"
+                      href={`${CONDUCTOR_APP_URL}/flags/${selectedExc.conradFlag.flag_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      View Conrad's full flag ↗
+                    </a>
+                  )}
                 </div>
               )}
 
-              {/* Coach occupancy chart replaces timeline */}
-              <CoachOccupancyChart exception={selectedExc} />
-              <WeeklyTrendChart exception={selectedExc} />
+              <CoachOccupancyChart
+                coachPeaks={selectedExc.coach_peaks}
+                trainId={selectedExc.train_id}
+                departure={selectedExc.departure}
+              />
+              <WeeklyTrendChart trend={selectedExc.trend} trainId={selectedExc.train_id} />
 
               <div className="exc-action-strip">
                 {selectedExc.status === 'unreviewed' && (
                   <>
-                    <button className="btn btn--primary" onClick={() => handleReview(selectedExc.id)}>
+                    <button className="btn btn--primary" onClick={() => handleReview(selectedExc.exception_id)}>
                       Add to capacity review queue
                     </button>
-                    <button className="btn btn--secondary" onClick={() => handleDismiss(selectedExc.id)}>
+                    <button className="btn btn--secondary" onClick={() => handleDismiss(selectedExc.exception_id)}>
                       No action required
                     </button>
                   </>
@@ -384,14 +438,14 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
                   <div className="exc-action-strip__reviewed">
                     <span>Queued for capacity review · Priority: <strong>{selectedExc.priority}</strong></span>
                     {selectedExc.queuedAt && (
-                      <span className="exc-action-strip__queued-at">Added at {selectedExc.queuedAt}</span>
+                      <span className="exc-action-strip__queued-at">Added at {new Date(selectedExc.queuedAt).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })}</span>
                     )}
                   </div>
                 )}
                 {selectedExc.status === 'dismissed' && (
                   <div className="exc-action-strip__dismissed">
                     <span>Marked no action required</span>
-                    <button className="btn btn--ghost exc-action-strip__reopen" onClick={() => handleReopen(selectedExc.id)}>
+                    <button className="btn btn--ghost exc-action-strip__reopen" onClick={() => handleReopen(selectedExc.exception_id)}>
                       Reopen
                     </button>
                   </div>
@@ -405,7 +459,7 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
 
     {reviewModalFor && (
       <ReviewModal
-        exception={exceptions.find(e => e.id === reviewModalFor)}
+        exception={exceptions.find(e => e.exception_id === reviewModalFor)}
         onConfirm={handleReviewConfirm}
         onCancel={() => setReviewModalFor(null)}
       />
@@ -415,35 +469,41 @@ export function ExceptionWorkflow({ dateRange = '7d' }) {
 }
 
 function ExceptionCard({ exc, selected, onSelect }) {
+  const cls = sevClass(exc.severity);
+  const peakOccupancy = exc.coach_peaks?.length
+    ? Math.max(...exc.coach_peaks.map(cp => cp.peak_pct))
+    : null;
+  const coachIds = exc.coach_peaks?.filter(cp => cp.peak_pct >= 85).map(cp => cp.coach_id) ?? [];
+
   const handleKey = (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      onSelect(selected ? null : exc.id);
+      onSelect(selected ? null : exc.exception_id);
     }
   };
 
   return (
     <div
-      className={`exc-card exc-card--${exc.severity} ${exc.status === 'dismissed' ? 'exc-card--dismissed' : ''} ${selected ? 'exc-card--selected' : ''}`}
-      onClick={() => onSelect(selected ? null : exc.id)}
+      className={`exc-card exc-card--${cls} ${exc.status === 'dismissed' ? 'exc-card--dismissed' : ''} ${selected ? 'exc-card--selected' : ''}`}
+      onClick={() => onSelect(selected ? null : exc.exception_id)}
       tabIndex={0}
       role="button"
       aria-pressed={selected}
       onKeyDown={handleKey}
     >
       <div className="exc-card__top">
-        <span className={`exc-sev-dot exc-sev-dot--${exc.severity}`} />
-        <span className="exc-card__service">{exc.trainId} · {exc.departure}</span>
+        <span className={`exc-sev-dot exc-sev-dot--${cls}`} />
+        <span className="exc-card__service">{exc.train_id} · {exc.departure}</span>
         {exc.date && <span className="exc-card__date">{exc.date}</span>}
         {exc.status === 'in_review' && <span className="exc-card__pill exc-card__pill--review">In review</span>}
         {exc.status === 'dismissed' && <span className="exc-card__pill exc-card__pill--dismissed">Dismissed</span>}
       </div>
-      <div className="exc-card__meta">
-        <span className="exc-card__coaches">Coaches {exc.coaches.join(', ')} · Peak: {exc.peakOccupancy}%</span>
-      </div>
-      <div className="exc-card__bottom">
-        <TrendBadge direction={exc.trendDirection} weeks={exc.trendWeeks} />
-      </div>
+      {(coachIds.length > 0 || peakOccupancy !== null) && (
+        <div className="exc-card__meta">
+          {coachIds.length > 0 && <span className="exc-card__coaches">Coaches {coachIds.join(', ')} · </span>}
+          {peakOccupancy !== null && <span>Peak: {peakOccupancy}%</span>}
+        </div>
+      )}
       {exc.conradFlag && (
         <div className="exc-card__flag-row">
           <span className="exc-card__flag">🚩 Conrad flagged</span>

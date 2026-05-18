@@ -81,7 +81,7 @@ development_status:
   # ── Epic 3: Control Centre Dashboard — Analytics & System Health ──
   epic-3: in-progress
   3-1-analytics-rest-endpoints: done
-  3-2-capacity-exceptions-real-data: ready-for-dev
+  3-2-capacity-exceptions-real-data: review
   3-3-occupancy-heatmap-real-data: backlog
   3-4-dwell-time-real-data: backlog
   3-5-ai-detection-quality-real-data: backlog
