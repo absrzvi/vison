@@ -72,3 +72,23 @@
 - **Vitest `afterEach(vi.restoreAllMocks)` doesn't restore `vi.stubGlobal`** [escalations.test.js] — cosmetic; tests pass; `stubGlobal` persists for the file's lifetime which is fine
 - **`environment: node` in vite test config — jsdom needed for React component tests** [vite.config.js] — acceptable for pure API module tests; switch to jsdom when component tests are added
 - **No prop-types / runtime guard on `onResolve`/`onAcknowledge` props** [EscalationDetail.jsx] — pre-existing pattern; codebase has no prop-types; add if TypeScript is introduced
+
+## Deferred from: code review of 2-5-escalation-detail-acknowledge-resolve round 2 (2026-05-17)
+
+- **`TERMINAL_STATUSES` hardcoded** [FleetContext.jsx] — breaks if backend adds states like `closed`/`expired`; revisit when backend escalation status enum is locked
+- **`setState` during render (prevEscId pattern) — StrictMode warnings** [EscalationDetail.jsx] — pre-existing; refactor to `useEffect` when component is overhauled
+- **`ESCALATION_UPDATED` spread can null out `stillFrame` on partial payload** [FleetContext.jsx:56] — pre-existing; add payload schema validation when backend contract is formalised
+- **Cancel handler doesn't reset `frameExpanded`** [EscalationDetail.jsx] — cosmetic drift; extract reset to shared helper when component is refactored
+- **WS terminal tick landing before `submittedFromStatus` set** [EscalationDetail.jsx] — sub-millisecond window on single JS thread; acceptable for PoC
+- **No request-in-flight de-dupe across multiple callers of `acknowledge`/`resolve`** [FleetContext.jsx] — no parallel call path exists in current UI; guard when escalation actions are exposed in more places
+
+## Deferred from: code review of 2-6-train-detail-event-store-alert (2026-05-18)
+
+- **AC5: ADR-10 error envelope not parsed — raw Error logged, not response body JSON** [FleetContext.jsx `fetchTrainAlerts`] — backend endpoint not live yet; revisit when REST error contract is defined
+- **`td-alerts-list` testid on `<section>` always present — AC2 "list not rendered" is semantic** [TrainDetail.jsx] — section with heading always present; only list items absent; acceptable for PoC
+- **CSS modifier uses `a.type` not severity — alert row styling differs from escalation rows** [TrainDetail.jsx] — alert canonical shape has no severity field; type-based CSS is correct for new shape
+- **`trainAlerts` never pruned — memory growth in long operator sessions** [FleetContext.jsx] — PoC; add LRU eviction in a hardening story before fleet rollout
+- **`API_KEY` in browser bundle** [escalations.js `_get`] — pre-existing; covered by ADR-6/7 Keycloak OAuth2 path
+- **`_get` `res.json()` throws SyntaxError on non-JSON 200 response (proxy HTML page)** [escalations.js] — pre-existing pattern from `_post`; add content-type check in hardening pass
+- **`confidence` `%` suffix assumes 0-100 scale — backend contract not yet locked** [TrainDetail.jsx] — revisit when API contract is finalised
+- **WS ALERT_RAISED payload prepended as-is — may lack canonical shape fields** [FleetContext.jsx] — WS event contract not yet specced; add transformation/validation when backend defines the shape

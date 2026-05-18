@@ -1,6 +1,6 @@
 # Story E2-S6 — Train Detail Event-Store Alert Integration
 
-**Status:** review
+**Status:** done
 **Sprint:** Epic 2
 **Story Key:** 2-6-train-detail-event-store-alert
 
@@ -58,6 +58,26 @@
   - [x] T4.1 Success: returns parsed array
   - [x] T4.2 Non-2xx: throws with status
   - [x] T4.3 Network error: propagates
+
+### Review Findings (2026-05-18)
+
+#### Patches
+- [x] [Review][Patch] **Alert rows are non-interactive `<div>` — click to open EscalationDetail removed** [`TrainDetail.jsx`] — restored as `<button>` with onClick; falls back to cursor:default if no matching escalation found by alert_id
+- [x] [Review][Patch] **Stale REST response overwrites WS state — in-flight GET clobbers ALERT_RAISED/RESOLVED** [`FleetContext.jsx` `fetchTrainAlerts`] — fixed with per-trainId generation counter in `fetchGenRef`; stale responses discarded
+- [x] [Review][Patch] **Blank flash on first render — no branch matches when `activeAlerts=null, loading=false, error=null`** [`TrainDetail.jsx`] — `alertsLoading` now also true when `activeAlerts === null` (not yet fetched)
+- [x] [Review][Patch] **`selectedEscId` not reset on train switch** [`TrainDetail.jsx`] — render-phase ref comparison clears selectedEscId when train.id changes
+- [x] [Review][Patch] **WS ALERT_RAISED/RESOLVED payload not guarded — missing fields create `undefined` key in `trainAlerts`** [`FleetContext.jsx` L81-94] — destructures `train_id`/`alert_id` with guard before setState
+- [x] [Review][Patch] **WS ALERT_RAISED creates entries for trains never fetched — partial list shown as authoritative** [`FleetContext.jsx` L81-87] — only updates if `train_id in prev` (train already fetched)
+
+#### Deferred
+- [x] [Review][Defer] **AC5: ADR-10 error envelope not parsed — raw Error logged, not body JSON** [`FleetContext.jsx`] — backend endpoint doesn't exist yet; revisit when backend is live and error contract is defined
+- [x] [Review][Defer] **`td-alerts-list` testid on `<section>` always present — AC2 "list not rendered" is semantic** — section with heading always exists; only the `<p>` list items are absent; acceptable for PoC
+- [x] [Review][Defer] **CSS modifier uses `a.type` not severity — styling will differ from escalation rows** [`TrainDetail.jsx`] — alert shape has no severity field; type-based CSS is correct for the new shape; pre-existing CSS classes don't apply
+- [x] [Review][Defer] **`trainAlerts` never pruned — memory growth in long operator sessions** [`FleetContext.jsx`] — PoC; add LRU eviction in a follow-up hardening story
+- [x] [Review][Defer] **`API_KEY` in browser bundle** [`escalations.js`] — pre-existing, covered by ADR-6/7 Keycloak path
+- [x] [Review][Defer] **`_get` res.json() throws on non-JSON 200 (e.g. proxy HTML error page)** [`escalations.js`] — pre-existing pattern from `_post`; add content-type guard in a hardening pass
+- [x] [Review][Defer] **`confidence` `%` suffix assumes 0-100 scale — backend contract not yet locked** [`TrainDetail.jsx`] — revisit when API contract is finalised
+- [x] [Review][Defer] **WS ALERT_RAISED payload prepended as-is — may lack canonical shape fields** [`FleetContext.jsx`] — WS contract not yet defined; revisit when backend WS events are specced
 
 ---
 

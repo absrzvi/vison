@@ -79,18 +79,27 @@ export function FleetProvider({ children }) {
         setLastUpdate(new Date());
       }
       if (msg.type === 'ALERT_RAISED') {
-        setTrainAlerts(prev => {
-          const existing = prev[msg.payload.train_id] ?? [];
-          if (existing.some(a => a.alert_id === msg.payload.alert_id)) return prev;
-          return { ...prev, [msg.payload.train_id]: [msg.payload, ...existing] };
-        });
+        const { train_id, alert_id } = msg.payload ?? {};
+        if (train_id && alert_id) {
+          setTrainAlerts(prev => {
+            // Only update trains that have already been fetched — avoids seeding a
+            // partial list that later REST responses would treat as authoritative.
+            if (!(train_id in prev)) return prev;
+            const existing = prev[train_id];
+            if (existing.some(a => a.alert_id === alert_id)) return prev;
+            return { ...prev, [train_id]: [msg.payload, ...existing] };
+          });
+        }
       }
       if (msg.type === 'ALERT_RESOLVED') {
-        setTrainAlerts(prev => {
-          const existing = prev[msg.payload.train_id];
-          if (!existing) return prev;
-          return { ...prev, [msg.payload.train_id]: existing.filter(a => a.alert_id !== msg.payload.alert_id) };
-        });
+        const { train_id, alert_id } = msg.payload ?? {};
+        if (train_id && alert_id) {
+          setTrainAlerts(prev => {
+            const existing = prev[train_id];
+            if (!existing) return prev;
+            return { ...prev, [train_id]: existing.filter(a => a.alert_id !== alert_id) };
+          });
+        }
       }
       if (msg.type === 'TRAIN_UPDATE') {
         setFleet(prev => prev.map(t => {
@@ -107,17 +116,28 @@ export function FleetProvider({ children }) {
     return () => client.disconnect();
   }, []);
 
+  // generation counter per trainId — incremented on each fetch so a stale response
+  // that resolves after a newer one is silently discarded.
+  const fetchGenRef = useRef({});
+
   const fetchTrainAlerts = useCallback(async (trainId) => {
+    const gen = (fetchGenRef.current[trainId] ?? 0) + 1;
+    fetchGenRef.current = { ...fetchGenRef.current, [trainId]: gen };
     setTrainAlertsLoading(prev => ({ ...prev, [trainId]: true }));
     setTrainAlertsError(prev => { const n = { ...prev }; delete n[trainId]; return n; });
     try {
       const alerts = await getTrainAlerts(trainId);
+      // Discard if a newer fetch for this trainId has already completed.
+      if (fetchGenRef.current[trainId] !== gen) return;
       setTrainAlerts(prev => ({ ...prev, [trainId]: alerts }));
     } catch (err) {
+      if (fetchGenRef.current[trainId] !== gen) return;
       console.error('[FleetContext] fetchTrainAlerts error', err);
       setTrainAlertsError(prev => ({ ...prev, [trainId]: err }));
     } finally {
-      setTrainAlertsLoading(prev => { const n = { ...prev }; delete n[trainId]; return n; });
+      if (fetchGenRef.current[trainId] === gen) {
+        setTrainAlertsLoading(prev => { const n = { ...prev }; delete n[trainId]; return n; });
+      }
     }
   }, []);
 

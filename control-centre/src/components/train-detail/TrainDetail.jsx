@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { EscalationDetail } from '../live/EscalationDetail';
 import { SOURCE_LABEL, SEV_CLASS } from '../../constants/escalation';
 import { useFleetData } from '../../context/FleetContext';
@@ -16,7 +16,13 @@ export function TrainDetail({ train, escalations, onClose, onAcknowledge, onReso
   const [selectedEscId, setSelectedEscId] = useState(null);
   const { trainAlerts, trainAlertsLoading, trainAlertsError, fetchTrainAlerts } = useFleetData();
 
-  // Fetch alerts on mount and whenever the train id changes
+  // Fetch alerts on mount and whenever the train id changes; also reset selected escalation.
+  const prevTrainIdRef = useRef(train.id);
+  if (prevTrainIdRef.current !== train.id) {
+    prevTrainIdRef.current = train.id;
+    setSelectedEscId(null);
+  }
+
   useEffect(() => {
     fetchTrainAlerts(train.id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -25,8 +31,10 @@ export function TrainDetail({ train, escalations, onClose, onAcknowledge, onReso
   // Derive from live props by ID so status always reflects latest context state
   const selectedEsc = escalations.find(e => e.id === selectedEscId) ?? null;
 
+  // null = not yet fetched (treat as loading), array = fetched
   const activeAlerts = trainAlerts[train.id] ?? null;
-  const alertsLoading = !!trainAlertsLoading[train.id];
+  // Show loading if explicitly loading OR if data hasn't arrived yet (null)
+  const alertsLoading = !!trainAlertsLoading[train.id] || activeAlerts === null;
   const alertsError = trainAlertsError[train.id] ?? null;
 
   // All other open escalations (acknowledged but not resolved)
@@ -108,20 +116,26 @@ export function TrainDetail({ train, escalations, onClose, onAcknowledge, onReso
             <button className="btn btn--ghost" onClick={() => fetchTrainAlerts(train.id)}>Retry</button>
           </div>
         )}
-        {!alertsLoading && !alertsError && activeAlerts !== null && activeAlerts.length === 0 && (
+        {!alertsLoading && !alertsError && activeAlerts && activeAlerts.length === 0 && (
           <p className="train-detail__empty">No active alerts for this train</p>
         )}
-        {!alertsLoading && !alertsError && activeAlerts && activeAlerts.length > 0 && activeAlerts.map(a => (
-          <div
-            key={a.alert_id}
-            className={`train-detail__alert-row train-detail__alert-row--${a.type}`}
-          >
-            <span className="train-detail__alert-type">{a.title}</span>
-            {a.coach_id && <span className="train-detail__alert-detail">{a.coach_id}</span>}
-            {a.confidence != null && <span className="train-detail__alert-detail">{a.confidence}%</span>}
-            <span className="train-detail__alert-detail">{a.raised_at}</span>
-          </div>
-        ))}
+        {!alertsLoading && !alertsError && activeAlerts && activeAlerts.length > 0 && activeAlerts.map(a => {
+          // alert_id may match an escalation id for drill-in; fall back to no selection if not found
+          const matchingEsc = escalations.find(e => e.id === a.alert_id);
+          return (
+            <button
+              key={a.alert_id}
+              className={`train-detail__alert-row train-detail__alert-row--${a.type}`}
+              onClick={() => matchingEsc && setSelectedEscId(a.alert_id)}
+              style={matchingEsc ? undefined : { cursor: 'default' }}
+            >
+              <span className="train-detail__alert-type">{a.title}</span>
+              {a.coach_id && <span className="train-detail__alert-detail">{a.coach_id}</span>}
+              {a.confidence != null && <span className="train-detail__alert-detail">{a.confidence}%</span>}
+              <span className="train-detail__alert-detail">{a.raised_at}</span>
+            </button>
+          );
+        })}
       </section>
 
       {openEscalations.length > 0 && (
