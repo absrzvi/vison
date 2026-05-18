@@ -51,10 +51,10 @@ def test_invalid_range_returns_422(endpoint: str) -> None:
     with TestClient(app, raise_server_exceptions=False) as client:
         r = client.get(endpoint, headers=_HEADERS, params={"range": "90d"})
     assert r.status_code == 422
-    detail = r.json()["detail"]
-    assert detail["error"] == "INVALID_RANGE"
-    assert "7d" in detail["detail"]
-    assert detail["recoverable"] is True
+    body = r.json()
+    assert body["error"] == "INVALID_RANGE"
+    assert "7d" in body["detail"]
+    assert body["recoverable"] is True
 
 
 @pytest.mark.unit
@@ -63,4 +63,4 @@ def test_invalid_range_value_foo_returns_422(endpoint: str) -> None:
     with TestClient(app, raise_server_exceptions=False) as client:
         r = client.get(endpoint, headers=_HEADERS, params={"range": "foo"})
     assert r.status_code == 422
-    assert r.json()["detail"]["error"] == "INVALID_RANGE"
+    assert r.json()["error"] == "INVALID_RANGE"

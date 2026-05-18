@@ -1,6 +1,6 @@
 # Story 3.1: Analytics REST Endpoints (Backend)
 
-Status: review
+Status: done
 
 ## Story
 
@@ -91,6 +91,28 @@ All five endpoints require `X-API-Key` authentication (ADR-7); no endpoint retur
 - [x] **T6** Run `mypy --strict` and `ruff check` (AC9)
   - [x] T6.1 `python -m mypy src/` passes with no errors
   - [x] T6.2 `python -m ruff check src/` passes with no errors
+
+### Review Findings
+
+- [x] [Review][Defer] AC1 grouping by route — flat list kept for now; E3-S2 frontend story will define exact wire shape; decision deferred to E3-S2 [routes/analytics.py:get_exceptions] — deferred, resolve in E3-S2
+- [x] [Review][Patch] Lexical string comparison on TEXT timestamp drives all range filters — `_cutoff()` produces `+00:00` suffix but stored timestamps may use `Z`, no-offset, or mixed formats; use `CAST(timestamp AS timestamptz) >= :cutoff::timestamptz` consistently [routes/analytics.py:_cutoff]
+- [x] [Review][Patch] Heatmap `CAST(e.timestamp AS TIMESTAMPTZ)` raises 500 on any single malformed row — wrap in `TRY_CAST` equivalent or add `WHERE timestamp ~ '^\d{4}-\d{2}-\d{2}T'` guard [routes/analytics.py:get_occupancy_heatmap]
+- [x] [Review][Patch] `(payload->>'breach')::boolean` and `(payload->>'fp_flag')::boolean` crash on non-standard truthy strings — use `NULLIF(payload->>'breach','') IN ('true','1','yes')` instead of PostgreSQL boolean cast [routes/analytics.py]
+- [x] [Review][Patch] `::float` casts on JSONB string values crash on non-numeric payloads (e.g. `"n/a"`) — add `NULLIF(payload->>'occupancy_pct','')` guard before cast, or use `try_cast` helper [routes/analytics.py]
+- [x] [Review][Patch] `last_healthy` falls back to `datetime.now(UTC).isoformat()` — fabricates a "healthy right now" timestamp when payload is missing; use `None` or raise rather than inventing data [routes/analytics.py:get_system_health]
+- [x] [Review][Patch] Per-train uptime denominator counts journeys with ANY event, not all journeys — must join `journeys` table (as fleet-level query does), not derive denominator from `events WHERE timestamp >= :cutoff` [routes/analytics.py:get_detection_quality]
+- [x] [Review][Patch] Fleet-level uptime denominator counts ALL historical journeys — add `AND j.start_time >= :cutoff` filter to journeys LEFT JOIN [routes/analytics.py:get_detection_quality]
+- [x] [Review][Patch] `conrad_flag` always returns `None` — ConradFlag never populated from payload; at minimum query `payload->>'conrad_flag'` and deserialize if present [routes/analytics.py:get_exceptions]
+- [x] [Review][Patch] `trend` array length not validated to exactly 7 values per AC1 spec — add truncation/padding or return error if payload trend length != 7 [routes/analytics.py:get_exceptions]
+- [x] [Review][Patch] No integration test for `fp_rate is null` when no INFERENCE_RESULT events exist (AC4 + AC8 gap) — add `test_fp_rate_null_when_no_events` with empty DB [tests/integration/test_analytics_endpoints.py]
+- [x] [Review][Patch] AC6: `HTTPException(422, detail={...})` wraps error inside FastAPI's own `{"detail": {...}}` envelope — wire format has extra nesting vs spec's flat `{"error":"INVALID_RANGE",...}` [routes/analytics.py:_parse_range]
+- [x] [Review][Patch] `date=row.timestamp[:10]` crashes if asyncpg returns a datetime object (TEXT column currently safe, but coupling is implicit) — cast to string explicitly: `str(row.timestamp)[:10]` [routes/analytics.py:get_exceptions]
+- [x] [Review][Patch] Integration test `pg_url` fixture return type `str` should be `Iterator[str]` (generator fixture); mypy will flag this [tests/integration/test_analytics_endpoints.py:pg_url]
+- [x] [Review][Defer] `status`/`severity` fields accept arbitrary strings — add Literal/Enum when schema is stable [api/analytics.py] — deferred, pre-existing data contract
+- [x] [Review][Defer] No pagination/LIMIT on `/exceptions` or `/dwell-time` — DoS risk at large data volumes [routes/analytics.py] — deferred, PoC scope
+- [x] [Review][Defer] No CORS / rate limiting on analytics router [routes/analytics.py] — deferred, PoC scope
+- [x] [Review][Defer] `route_name or "unknown"` sentinel collides with legitimate "unknown" route names [routes/analytics.py:get_occupancy_heatmap] — deferred, low risk
+- [x] [Review][Defer] `get_db` override in tests missing explicit rollback on exception [tests/integration] — deferred, SQLAlchemy handles on context exit
 
 ## Security Tests
 

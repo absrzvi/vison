@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncGenerator
-from datetime import datetime, timezone
+from collections.abc import AsyncGenerator, Generator
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -13,17 +13,16 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-
 # ── Shared Postgres container (module-scoped, sync) ───────────────────────────
 
 @pytest.fixture(scope="module")
-def pg_url() -> str:
+def pg_url() -> Generator[str, None, None]:
     with PostgresContainer("postgres:16-alpine") as pg:
         yield pg.get_connection_url().replace("psycopg2", "asyncpg")
 
 
 def _now_ts() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 async def _seed(session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -255,6 +254,25 @@ async def test_invalid_range_integration(client: AsyncClient) -> None:
     r = await client.get("/api/v1/analytics/exceptions", headers=_HEADERS,
                          params={"range": "90d"})
     assert r.status_code == 422
-    detail = r.json()["detail"]
-    assert detail["error"] == "INVALID_RANGE"
-    assert detail["recoverable"] is True
+    body = r.json()
+    assert body["error"] == "INVALID_RANGE"
+    assert body["recoverable"] is True
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_fp_rate_null_when_no_events(client: AsyncClient, pg_url: str) -> None:
+    """fp_rate must be None (not 0.0) when no INFERENCE_RESULT events exist in range."""
+    engine = create_async_engine(pg_url)
+    factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+    async with factory() as conn:
+        await conn.execute(text("DELETE FROM events WHERE event_type = 'INFERENCE_RESULT'"))
+        await conn.commit()
+    await engine.dispose()
+
+    r = await client.get("/api/v1/analytics/detection-quality", headers=_HEADERS,
+                         params={"range": "7d"})
+    assert r.status_code == 200
+    kpi = r.json()["kpi"]
+    assert kpi["total_events"] == 0
+    assert kpi["fp_rate"] is None

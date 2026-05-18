@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Security
+from fastapi import APIRouter, Depends, Query, Security
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,7 @@ from ..api.analytics import (
     AppDetailItem,
     CoachPeak,
     ConnectivityInfo,
+    ConradFlag,
     DailyBar,
     DetectionKpi,
     DetectionQualityResponse,
@@ -31,36 +33,43 @@ router = APIRouter(prefix="/api/v1/analytics", dependencies=[Security(require_ap
 
 _VALID_RANGES = {"7d", "14d", "30d"}
 _RANGE_MAP = {"7d": timedelta(days=7), "14d": timedelta(days=14), "30d": timedelta(days=30)}
-_HEATMAP_HOURS = [f"{h:02d}:00" for h in range(5, 24)]  # 05:00 … 23:00
+_HEATMAP_HOURS = [f"{h:02d}:00" for h in range(5, 24)]  # 05:00 to 23:00
 
 
 def _parse_range(range_param: str) -> timedelta:
     if range_param not in _VALID_RANGES:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "error": "INVALID_RANGE",
-                "detail": "range must be one of: 7d, 14d, 30d",
-                "recoverable": True,
-            },
-        )
+        raise ValueError(range_param)
     return _RANGE_MAP[range_param]
 
 
-def _cutoff(delta: timedelta) -> str:
-    """ISO-8601 UTC string for (now - delta), used in DB text timestamp comparisons."""
-    return (datetime.now(UTC) - delta).isoformat()
+def _cutoff_dt(delta: timedelta) -> datetime:
+    """UTC datetime passed as timestamptz bind parameter (asyncpg requires datetime, not str)."""
+    return datetime.now(UTC) - delta
+
+
+def _invalid_range_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "INVALID_RANGE",
+            "detail": "range must be one of: 7d, 14d, 30d",
+            "recoverable": True,
+        },
+    )
 
 
 # ── GET /api/v1/analytics/exceptions ─────────────────────────────────────────
 
-@router.get("/exceptions", response_model=list[ExceptionRecord])
+@router.get("/exceptions", response_model=None)
 async def get_exceptions(
     range_param: str = Query(default="7d", alias="range"),
     db: AsyncSession = Depends(get_db),
-) -> list[ExceptionRecord]:
-    delta = _parse_range(range_param)
-    cutoff = _cutoff(delta)
+) -> JSONResponse | list[ExceptionRecord]:
+    try:
+        delta = _parse_range(range_param)
+    except ValueError:
+        return _invalid_range_response()
+    cutoff = _cutoff_dt(delta)
 
     rows = await db.execute(
         text("""
@@ -73,8 +82,8 @@ async def get_exceptions(
                 timestamp
             FROM events
             WHERE event_type = 'CAPACITY_EXCEPTION'
-              AND timestamp >= :cutoff
-            ORDER BY timestamp DESC
+              AND CAST(timestamp AS timestamptz) >= :cutoff
+            ORDER BY CAST(timestamp AS timestamptz) DESC
         """),
         {"cutoff": cutoff},
     )
@@ -83,21 +92,46 @@ async def get_exceptions(
     for row in rows:
         p = row.payload if isinstance(row.payload, dict) else {}
         coach_peaks = [
-            CoachPeak(coach_id=cp.get("coach_id", ""), peak_pct=float(cp.get("peak_pct", 0)))
+            CoachPeak(
+                coach_id=str(cp.get("coach_id", "")),
+                peak_pct=float(cp.get("peak_pct") or 0),
+            )
             for cp in (p.get("coach_peaks") or [])
+            if isinstance(cp, dict)
         ]
+        raw_trend = p.get("trend") or []
+        trend_vals: list[float] = []
+        for v in raw_trend:
+            try:
+                trend_vals.append(float(v))
+            except (TypeError, ValueError):
+                trend_vals.append(0.0)
+        # Spec requires exactly 7 daily peak values
+        if len(trend_vals) > 7:
+            trend_vals = trend_vals[-7:]
+        elif len(trend_vals) < 7:
+            trend_vals = ([0.0] * (7 - len(trend_vals))) + trend_vals
+
+        raw_flag = p.get("conrad_flag")
+        conrad_flag: ConradFlag | None = None
+        if isinstance(raw_flag, dict) and raw_flag.get("flag_id"):
+            conrad_flag = ConradFlag(
+                flag_id=str(raw_flag["flag_id"]),
+                note=str(raw_flag["note"]) if raw_flag.get("note") else None,
+            )
+
         records.append(
             ExceptionRecord(
                 exception_id=row.event_id,
                 route=p.get("route", ""),
                 train_id=row.vehicle_id,
                 departure=p.get("departure", ""),
-                date=row.timestamp[:10] if row.timestamp else "",
+                date=str(row.timestamp)[:10] if row.timestamp else "",
                 status=p.get("status", "unreviewed"),
                 severity=row.severity,
                 coach_peaks=coach_peaks,
-                trend=[float(v) for v in (p.get("trend") or [])],
-                conrad_flag=None,
+                trend=trend_vals,
+                conrad_flag=conrad_flag,
             )
         )
     return records
@@ -105,25 +139,30 @@ async def get_exceptions(
 
 # ── GET /api/v1/analytics/occupancy-heatmap ───────────────────────────────────
 
-@router.get("/occupancy-heatmap", response_model=HeatmapResponse)
+@router.get("/occupancy-heatmap", response_model=None)
 async def get_occupancy_heatmap(
     range_param: str = Query(default="7d", alias="range"),
     db: AsyncSession = Depends(get_db),
-) -> HeatmapResponse:
-    delta = _parse_range(range_param)
-    cutoff = _cutoff(delta)
+) -> JSONResponse | HeatmapResponse:
+    try:
+        delta = _parse_range(range_param)
+    except ValueError:
+        return _invalid_range_response()
+    cutoff = _cutoff_dt(delta)
 
     rows = await db.execute(
-        text("""
+        text(r"""
             SELECT
                 j.route_name,
                 EXTRACT(HOUR FROM CAST(e.timestamp AS TIMESTAMPTZ)) AS hour,
-                AVG((e.payload->>'occupancy_pct')::float) AS avg_pct
+                AVG(NULLIF(e.payload->>'occupancy_pct', '')::float)  AS avg_pct
             FROM events e
             JOIN journeys j ON j.journey_id = e.journey_id
             WHERE e.event_type = 'OCCUPANCY_UPDATE'
-              AND e.timestamp >= :cutoff
+              AND CAST(e.timestamp AS timestamptz) >= :cutoff
               AND e.payload->>'occupancy_pct' IS NOT NULL
+              AND e.payload->>'occupancy_pct' ~ '^-?[0-9]+(\.[0-9]+)?$'
+              AND e.timestamp ~ '^\d{4}-\d{2}-\d{2}T'
             GROUP BY j.route_name, hour
         """),
         {"cutoff": cutoff},
@@ -150,30 +189,33 @@ async def get_occupancy_heatmap(
 
 # ── GET /api/v1/analytics/dwell-time ─────────────────────────────────────────
 
-@router.get("/dwell-time", response_model=list[DwellStationRecord])
+@router.get("/dwell-time", response_model=None)
 async def get_dwell_time(
     range_param: str = Query(default="7d", alias="range"),
     db: AsyncSession = Depends(get_db),
-) -> list[DwellStationRecord]:
-    delta = _parse_range(range_param)
-    cutoff = _cutoff(delta)
+) -> JSONResponse | list[DwellStationRecord]:
+    try:
+        delta = _parse_range(range_param)
+    except ValueError:
+        return _invalid_range_response()
+    cutoff = _cutoff_dt(delta)
 
     rows = await db.execute(
         text("""
             SELECT
-                payload->>'station'                             AS station,
-                AVG((payload->>'scheduled_sec')::float)        AS scheduled_sec,
-                AVG((payload->>'actual_sec')::float)           AS actual_sec,
+                payload->>'station'                                          AS station,
+                AVG(NULLIF(payload->>'scheduled_sec', '')::float)           AS scheduled_sec,
+                AVG(NULLIF(payload->>'actual_sec', '')::float)              AS actual_sec,
                 COUNT(*) FILTER (
-                    WHERE (payload->>'breach')::boolean IS TRUE
-                )                                              AS breach_count,
-                AVG((payload->>'occupancy_pct')::float)        AS occupancy_pct
+                    WHERE payload->>'breach' IN ('true', '1', 'yes', 'True')
+                )                                                            AS breach_count,
+                AVG(NULLIF(payload->>'occupancy_pct', '')::float)           AS occupancy_pct
             FROM events
             WHERE event_type = 'DWELL_EVENT'
-              AND timestamp >= :cutoff
+              AND CAST(timestamp AS timestamptz) >= :cutoff
               AND payload->>'station' IS NOT NULL
             GROUP BY payload->>'station'
-            ORDER BY AVG((payload->>'actual_sec')::float) DESC
+            ORDER BY AVG(NULLIF(payload->>'actual_sec', '')::float) DESC
         """),
         {"cutoff": cutoff},
     )
@@ -192,26 +234,29 @@ async def get_dwell_time(
 
 # ── GET /api/v1/analytics/detection-quality ──────────────────────────────────
 
-@router.get("/detection-quality", response_model=DetectionQualityResponse)
+@router.get("/detection-quality", response_model=None)
 async def get_detection_quality(
     range_param: str = Query(default="7d", alias="range"),
     db: AsyncSession = Depends(get_db),
-) -> DetectionQualityResponse:
-    delta = _parse_range(range_param)
-    cutoff = _cutoff(delta)
+) -> JSONResponse | DetectionQualityResponse:
+    try:
+        delta = _parse_range(range_param)
+    except ValueError:
+        return _invalid_range_response()
+    cutoff = _cutoff_dt(delta)
 
     # KPI aggregates
     kpi_row = await db.execute(
         text("""
             SELECT
-                COUNT(*)                                          AS total_events,
+                COUNT(*)                                                      AS total_events,
                 COUNT(*) FILTER (
-                    WHERE (payload->>'fp_flag')::boolean IS TRUE
-                )                                                 AS total_fp,
-                AVG((payload->>'confidence')::float)             AS avg_confidence
+                    WHERE payload->>'fp_flag' IN ('true', '1', 'yes', 'True')
+                )                                                             AS total_fp,
+                AVG(NULLIF(payload->>'confidence', '')::float)               AS avg_confidence
             FROM events
             WHERE event_type = 'INFERENCE_RESULT'
-              AND timestamp >= :cutoff
+              AND CAST(timestamp AS timestamptz) >= :cutoff
         """),
         {"cutoff": cutoff},
     )
@@ -222,12 +267,12 @@ async def get_detection_quality(
         float(kpi.avg_confidence) if kpi is not None and kpi.avg_confidence is not None else None
     )
 
-    # fp_rate: null iff both totals are zero
+    # fp_rate: null iff total_events == 0
     fp_rate: float | None = None
     if total_events > 0:
         fp_rate = total_fp / total_events
 
-    # Fleet uptime — fraction of active journeys with at least one INFERENCE_RESULT in range
+    # Fleet uptime — journeys within range that had at least one INFERENCE_RESULT
     uptime_row = await db.execute(
         text("""
             SELECT
@@ -237,7 +282,9 @@ async def get_detection_quality(
             LEFT JOIN events e
                 ON e.journey_id = j.journey_id
                AND e.event_type = 'INFERENCE_RESULT'
-               AND e.timestamp >= :cutoff
+               AND CAST(e.timestamp AS timestamptz) >= :cutoff
+            WHERE j.start_time IS NULL
+               OR CAST(j.start_time AS timestamptz) >= :cutoff
         """),
         {"cutoff": cutoff},
     )
@@ -246,20 +293,20 @@ async def get_detection_quality(
     active_j = int(up.active_journeys or 0) if up is not None else 0
     fleet_uptime_pct = (active_j / total_j * 100.0) if total_j > 0 else None
 
-    # Daily bars
+    # Daily bars — group by UTC date prefix
     daily_rows = await db.execute(
         text("""
             SELECT
-                LEFT(timestamp, 10)                              AS date,
-                COUNT(*)                                         AS total_events,
+                CAST(CAST(timestamp AS timestamptz) AT TIME ZONE 'UTC' AS DATE)::text AS date,
+                COUNT(*)                                                                AS total_events,
                 COUNT(*) FILTER (
-                    WHERE (payload->>'fp_flag')::boolean IS TRUE
-                )                                                AS fp_count
+                    WHERE payload->>'fp_flag' IN ('true', '1', 'yes', 'True')
+                )                                                                      AS fp_count
             FROM events
             WHERE event_type = 'INFERENCE_RESULT'
-              AND timestamp >= :cutoff
-            GROUP BY LEFT(timestamp, 10)
-            ORDER BY date ASC
+              AND CAST(timestamp AS timestamptz) >= :cutoff
+            GROUP BY 1
+            ORDER BY 1 ASC
         """),
         {"cutoff": cutoff},
     )
@@ -272,27 +319,33 @@ async def get_detection_quality(
         for row in daily_rows
     ]
 
-    # Per-train uptime
+    # Per-train uptime — join journeys so trains with no events appear
     train_rows = await db.execute(
         text("""
             SELECT
-                vehicle_id,
-                CASE
-                    WHEN COUNT(DISTINCT journey_id) = 0 THEN 0.0
-                    ELSE COUNT(DISTINCT CASE WHEN event_type = 'INFERENCE_RESULT'
-                                              AND timestamp >= :cutoff
-                                         THEN journey_id END)::float
-                       / COUNT(DISTINCT journey_id) * 100.0
-                END AS uptime_pct
-            FROM events
-            WHERE timestamp >= :cutoff
-            GROUP BY vehicle_id
-            ORDER BY vehicle_id
+                j.vehicle_id,
+                COUNT(DISTINCT j.journey_id)                     AS total_journeys,
+                COUNT(DISTINCT e.journey_id)                     AS active_journeys
+            FROM journeys j
+            LEFT JOIN events e
+                ON e.journey_id = j.journey_id
+               AND e.event_type = 'INFERENCE_RESULT'
+               AND CAST(e.timestamp AS timestamptz) >= :cutoff
+            WHERE j.start_time IS NULL
+               OR CAST(j.start_time AS timestamptz) >= :cutoff
+            GROUP BY j.vehicle_id
+            ORDER BY j.vehicle_id
         """),
         {"cutoff": cutoff},
     )
     per_train = [
-        PerTrainUptime(train_id=row.vehicle_id, uptime_pct=float(row.uptime_pct or 0))
+        PerTrainUptime(
+            train_id=row.vehicle_id,
+            uptime_pct=(
+                int(row.active_journeys) / int(row.total_journeys) * 100.0
+                if int(row.total_journeys) > 0 else 0.0
+            ),
+        )
         for row in train_rows
     ]
 
@@ -314,9 +367,9 @@ async def get_detection_quality(
 async def get_system_health(
     db: AsyncSession = Depends(get_db),
 ) -> list[TrainHealthRecord]:
-    # Latest SYSTEM_HEALTH event per vehicle
+    # Latest SYSTEM_HEALTH event per vehicle (DISTINCT ON requires timestamptz sort)
     rows = await db.execute(
-        text("""
+        text(r"""
             SELECT DISTINCT ON (vehicle_id)
                 vehicle_id,
                 journey_id,
@@ -324,7 +377,8 @@ async def get_system_health(
                 timestamp
             FROM events
             WHERE event_type = 'SYSTEM_HEALTH'
-            ORDER BY vehicle_id, timestamp DESC
+              AND timestamp ~ '^\d{4}-\d{2}-\d{2}T'
+            ORDER BY vehicle_id, CAST(timestamp AS timestamptz) DESC
         """),
     )
 
@@ -334,43 +388,49 @@ async def get_system_health(
 
         app_detail = [
             AppDetailItem(
-                container=item.get("container", ""),
-                status=item.get("status", "unknown"),
-                last_healthy=item.get("last_healthy", row.timestamp or ""),
+                container=str(item.get("container", "")),
+                status=str(item.get("status", "unknown")),
+                last_healthy=str(item.get("last_healthy") or str(row.timestamp or "")),
             )
             for item in (p.get("appDetail") or [])
+            if isinstance(item, dict)
         ]
 
         device_detail = [
             DeviceDetailItem(
-                device=item.get("device", ""),
-                status=item.get("status", "unknown"),
+                device=str(item.get("device", "")),
+                status=str(item.get("status", "unknown")),
                 temperature_c=(
-                    float(item["temperature_c"]) if item.get("temperature_c") is not None else None
+                    float(item["temperature_c"])
+                    if item.get("temperature_c") is not None
+                    and str(item["temperature_c"]).replace(".", "", 1).lstrip("-").isdigit()
+                    else None
                 ),
             )
             for item in (p.get("deviceDetail") or [])
+            if isinstance(item, dict)
         ]
 
         conn_raw = p.get("connectivity") or {}
+        if not isinstance(conn_raw, dict):
+            conn_raw = {}
         connectivity = ConnectivityInfo(
-            lte_status=conn_raw.get("lte_status", "unknown"),
-            wifi_status=conn_raw.get("wifi_status", "unknown"),
-            last_sync=conn_raw.get("last_sync", row.timestamp or ""),
+            lte_status=str(conn_raw.get("lte_status", "unknown")),
+            wifi_status=str(conn_raw.get("wifi_status", "unknown")),
+            last_sync=str(conn_raw.get("last_sync") or str(row.timestamp or "")),
         )
 
-        last_healthy = (
-            p.get("last_healthy") or row.timestamp or datetime.now(UTC).isoformat()
-        )
+        # last_healthy: prefer explicit payload field, then event timestamp; never fabricate
+        last_healthy = p.get("last_healthy") or str(row.timestamp or "")
 
         records.append(
             TrainHealthRecord(
                 train_id=row.vehicle_id,
                 journey_id=row.journey_id,
-                cctvStatus=p.get("cctvStatus", "unknown"),
-                appStatus=p.get("appStatus", "unknown"),
-                deviceStatus=p.get("deviceStatus", "unknown"),
-                connectivityStatus=p.get("connectivityStatus", "unknown"),
+                cctvStatus=str(p.get("cctvStatus", "unknown")),
+                appStatus=str(p.get("appStatus", "unknown")),
+                deviceStatus=str(p.get("deviceStatus", "unknown")),
+                connectivityStatus=str(p.get("connectivityStatus", "unknown")),
                 last_healthy=last_healthy,
                 appDetail=app_detail,
                 deviceDetail=device_detail,
