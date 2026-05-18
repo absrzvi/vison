@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback } f
 import { MockWebSocketClient } from '../mock/websocket';
 import { RealWebSocketClient } from '../ws/RealWebSocketClient';
 import { LUGGAGE_EVENTS, luggageEventsToEscalations } from '../mock/luggage';
-import { acknowledgeEscalation, resolveEscalation } from '../api/escalations';
+import { acknowledgeEscalation, resolveEscalation, getTrainAlerts } from '../api/escalations';
 
 const LUGGAGE_ESCALATIONS = luggageEventsToEscalations(LUGGAGE_EVENTS);
 const OPERATOR_ID = import.meta.env.VITE_OPERATOR_ID ?? 'operator-unknown';
@@ -32,6 +32,10 @@ export function FleetProvider({ children }) {
   const [feedStatusFilter, setFeedStatusFilter] = useState(null);
   // Map<id, 'pending' | Error> — per-escalation action state
   const [escalationActionState, setEscalationActionState] = useState({});
+  // { [trainId]: alert[] } — fetched from REST, updated by WS events
+  const [trainAlerts, setTrainAlerts] = useState({});
+  const [trainAlertsLoading, setTrainAlertsLoading] = useState({});
+  const [trainAlertsError, setTrainAlertsError] = useState({});
   const wsRef = useRef(null);
 
   const clearFeedFilters = useCallback(() => {
@@ -74,6 +78,20 @@ export function FleetProvider({ children }) {
         });
         setLastUpdate(new Date());
       }
+      if (msg.type === 'ALERT_RAISED') {
+        setTrainAlerts(prev => {
+          const existing = prev[msg.payload.train_id] ?? [];
+          if (existing.some(a => a.alert_id === msg.payload.alert_id)) return prev;
+          return { ...prev, [msg.payload.train_id]: [msg.payload, ...existing] };
+        });
+      }
+      if (msg.type === 'ALERT_RESOLVED') {
+        setTrainAlerts(prev => {
+          const existing = prev[msg.payload.train_id];
+          if (!existing) return prev;
+          return { ...prev, [msg.payload.train_id]: existing.filter(a => a.alert_id !== msg.payload.alert_id) };
+        });
+      }
       if (msg.type === 'TRAIN_UPDATE') {
         setFleet(prev => prev.map(t => {
           if (t.id !== msg.payload.trainId) return t;
@@ -87,6 +105,20 @@ export function FleetProvider({ children }) {
     wsRef.current = client;
     client.connect();
     return () => client.disconnect();
+  }, []);
+
+  const fetchTrainAlerts = useCallback(async (trainId) => {
+    setTrainAlertsLoading(prev => ({ ...prev, [trainId]: true }));
+    setTrainAlertsError(prev => { const n = { ...prev }; delete n[trainId]; return n; });
+    try {
+      const alerts = await getTrainAlerts(trainId);
+      setTrainAlerts(prev => ({ ...prev, [trainId]: alerts }));
+    } catch (err) {
+      console.error('[FleetContext] fetchTrainAlerts error', err);
+      setTrainAlertsError(prev => ({ ...prev, [trainId]: err }));
+    } finally {
+      setTrainAlertsLoading(prev => { const n = { ...prev }; delete n[trainId]; return n; });
+    }
   }, []);
 
   const acknowledge = useCallback(async (id) => {
@@ -138,6 +170,7 @@ export function FleetProvider({ children }) {
     <FleetContext.Provider value={{
       fleet, kpis, escalations, lastUpdate, connected, wsStatus,
       acknowledge, resolve, escalationActionState,
+      trainAlerts, trainAlertsLoading, trainAlertsError, fetchTrainAlerts,
       feedTypeFilter, setFeedTypeFilter,
       feedStatusFilter, setFeedStatusFilter,
       clearFeedFilters,

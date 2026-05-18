@@ -30,8 +30,26 @@ async function _post(path, body) {
   return res.json();
 }
 
+async function _get(path) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'GET',
+    headers: { 'X-API-Key': API_KEY },
+    signal: _timeoutSignal(FETCH_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    const err = new Error(`API error ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
 export function acknowledgeEscalation(id) {
   return _post(`/api/v1/escalations/${encodeURIComponent(id)}/acknowledge`);
+}
+
+export function getTrainAlerts(trainId) {
+  return _get(`/api/v1/trains/${encodeURIComponent(trainId)}/alerts?status=active`);
 }
 
 export function resolveEscalation(id, outcome, actionTags, operatorId) {

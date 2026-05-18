@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { acknowledgeEscalation, resolveEscalation } from '../escalations';
+import { acknowledgeEscalation, resolveEscalation, getTrainAlerts } from '../escalations';
 
 // escalations.js reads import.meta.env at module load time — mock fetch instead.
 const mockFetch = vi.fn();
@@ -69,5 +69,28 @@ describe('resolveEscalation', () => {
   it('propagates network errors', async () => {
     mockFetch.mockRejectedValueOnce(new TypeError('Network failure'));
     await expect(resolveEscalation('esc-6', 'text', [], 'op-1')).rejects.toThrow('Network failure');
+  });
+});
+
+describe('getTrainAlerts', () => {
+  it('GETs /api/v1/trains/{id}/alerts?status=active and returns parsed array', async () => {
+    const alerts = [{ alert_id: 'a1', type: 'occupancy', coach_id: 'C1', title: 'High occupancy', confidence: 92, camera_id: 'cam-1', raised_at: '10:00', status: 'active' }];
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(alerts) });
+    const result = await getTrainAlerts('train-99');
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toMatch(/\/api\/v1\/trains\/train-99\/alerts\?status=active$/);
+    expect(opts.method).toBe('GET');
+    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(result).toEqual(alerts);
+  });
+
+  it('throws an Error with .status on non-2xx', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+    await expect(getTrainAlerts('train-99')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('propagates network errors', async () => {
+    mockFetch.mockRejectedValueOnce(new TypeError('Network failure'));
+    await expect(getTrainAlerts('train-99')).rejects.toThrow('Network failure');
   });
 });

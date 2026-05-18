@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { EscalationDetail } from '../live/EscalationDetail';
 import { SOURCE_LABEL, SEV_CLASS } from '../../constants/escalation';
+import { useFleetData } from '../../context/FleetContext';
 import './TrainDetail.css';
 
 // 4-band occupancy scale: gives operators finer granularity than the 3-band severity model
@@ -13,12 +14,21 @@ const STATUS_LABEL = { red: 'Alert', amber: 'Attention', green: 'Operational' };
 export function TrainDetail({ train, escalations, onClose, onAcknowledge, onResolve }) {
   const [dwellAcked, setDwellAcked] = useState(false);
   const [selectedEscId, setSelectedEscId] = useState(null);
+  const { trainAlerts, trainAlertsLoading, trainAlertsError, fetchTrainAlerts } = useFleetData();
+
+  // Fetch alerts on mount and whenever the train id changes
+  useEffect(() => {
+    fetchTrainAlerts(train.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [train.id]);
 
   // Derive from live props by ID so status always reflects latest context state
   const selectedEsc = escalations.find(e => e.id === selectedEscId) ?? null;
 
-  // Active alerts = unacknowledged escalations for this train (highest urgency)
-  const activeAlerts = escalations.filter(e => e.status === 'unacknowledged');
+  const activeAlerts = trainAlerts[train.id] ?? null;
+  const alertsLoading = !!trainAlertsLoading[train.id];
+  const alertsError = trainAlertsError[train.id] ?? null;
+
   // All other open escalations (acknowledged but not resolved)
   const openEscalations = escalations.filter(e => e.status === 'acknowledged');
 
@@ -87,24 +97,31 @@ export function TrainDetail({ train, escalations, onClose, onAcknowledge, onReso
         </div>
       </section>
 
-      <section className="train-detail__section">
+      <section className="train-detail__section" data-testid="td-alerts-list">
         <h3 className="train-detail__section-title">
-          Active Alerts {activeAlerts.length > 0 ? `(${activeAlerts.length})` : ''}
+          Active Alerts {activeAlerts && activeAlerts.length > 0 ? `(${activeAlerts.length})` : ''}
         </h3>
-        {activeAlerts.length === 0
-          ? <p className="train-detail__empty">No unacknowledged alerts</p>
-          : activeAlerts.map(e => (
-            <button
-              key={e.id}
-              className={`train-detail__alert-row train-detail__alert-row--${e.severity}`}
-              onClick={() => setSelectedEscId(e.id)}
-            >
-              <span className={`badge ${SEV_CLASS[e.severity]}`}>{SOURCE_LABEL[e.type]}</span>
-              <span className="train-detail__alert-type">{e.title}</span>
-              {e.coachId && <span className="train-detail__alert-detail">{e.coachId}</span>}
-            </button>
-          ))
-        }
+        {alertsLoading && <p className="train-detail__empty">Loading alerts…</p>}
+        {alertsError && !alertsLoading && (
+          <div className="train-detail__alerts-error">
+            <p className="train-detail__empty">Alert data unavailable</p>
+            <button className="btn btn--ghost" onClick={() => fetchTrainAlerts(train.id)}>Retry</button>
+          </div>
+        )}
+        {!alertsLoading && !alertsError && activeAlerts !== null && activeAlerts.length === 0 && (
+          <p className="train-detail__empty">No active alerts for this train</p>
+        )}
+        {!alertsLoading && !alertsError && activeAlerts && activeAlerts.length > 0 && activeAlerts.map(a => (
+          <div
+            key={a.alert_id}
+            className={`train-detail__alert-row train-detail__alert-row--${a.type}`}
+          >
+            <span className="train-detail__alert-type">{a.title}</span>
+            {a.coach_id && <span className="train-detail__alert-detail">{a.coach_id}</span>}
+            {a.confidence != null && <span className="train-detail__alert-detail">{a.confidence}%</span>}
+            <span className="train-detail__alert-detail">{a.raised_at}</span>
+          </div>
+        ))}
       </section>
 
       {openEscalations.length > 0 && (
