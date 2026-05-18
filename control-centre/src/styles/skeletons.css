@@ -1,0 +1,9 @@
+@keyframes skeleton-shimmer {
+  0%, 100% { background-color: var(--bg-surface); }
+  50%       { background-color: var(--bg-raised); }
+}
+
+.skeleton-pulse {
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}

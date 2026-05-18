@@ -1,4 +1,27 @@
 import { useState, useRef, useEffect } from 'react';
+
+export function UnifiedFeedSkeleton() {
+  return (
+    <div className="unified-feed" data-testid="unified-feed-skeleton">
+      <div className="unified-feed__header">
+        <span className="unified-feed__title">Escalations</span>
+      </div>
+      <div className="unified-feed__list">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="feed-item">
+            <div className="feed-item__header">
+              <span className="skeleton-pulse" style={{ display: 'inline-block', width: '48px', height: '18px', borderRadius: '4px' }} />
+              <span className="skeleton-pulse" style={{ display: 'inline-block', width: '160px', height: '14px', marginLeft: '8px' }} />
+            </div>
+            <div className="feed-item__meta" style={{ marginTop: '6px' }}>
+              <span className="skeleton-pulse" style={{ display: 'inline-block', width: '80px', height: '12px' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 import { EscalationDetail } from './EscalationDetail';
 import { SOURCE_LABEL, SEV_CLASS } from '../../constants/escalation';
 import './UnifiedFeed.css';

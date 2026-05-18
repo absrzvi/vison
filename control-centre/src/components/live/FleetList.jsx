@@ -1,6 +1,32 @@
 import { useState } from 'react';
 import './FleetList.css';
 
+export function FleetListSkeleton() {
+  return (
+    <div className="fleet-list" data-testid="fleet-list-skeleton">
+      <div className="fleet-list__header">
+        <span className="fleet-list__heading">Fleet</span>
+      </div>
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="train-card" style={{ pointerEvents: 'none' }}>
+          <div className="train-card__header">
+            <span className="skeleton-pulse" style={{ display: 'block', width: '60px', height: '14px' }} />
+            <span className="skeleton-pulse" style={{ display: 'block', width: '10px', height: '10px', borderRadius: '50%' }} />
+          </div>
+          <span className="skeleton-pulse" style={{ display: 'block', width: '120px', height: '12px', marginTop: '6px' }} />
+          <div className="train-card__coach-bar" style={{ marginTop: '8px' }}>
+            {Array.from({ length: 6 }).map((_, j) => (
+              <div key={j} className="coach-bar__track">
+                <div className="skeleton-pulse" style={{ height: '40%', width: '100%' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const SEVERITY_DOT = { red: '#FF3B3B', amber: '#F5A623', green: '#22C55E' };
 // 4-band occupancy scale: gives operators finer granularity than the 3-band severity model
 const OCCUPANCY_COLOR = (pct) =>

@@ -1,16 +1,16 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useFleetData } from '../../hooks/useFleetData';
-import { KpiStrip } from './KpiStrip';
-import { FleetList } from './FleetList';
+import { KpiStrip, KpiStripSkeleton } from './KpiStrip';
+import { FleetList, FleetListSkeleton } from './FleetList';
 import { FleetMap } from './FleetMap';
-import { UnifiedFeed } from './UnifiedFeed';
+import { UnifiedFeed, UnifiedFeedSkeleton } from './UnifiedFeed';
 import { TrainDetail } from '../train-detail/TrainDetail';
 import { LUGGAGE_EVENTS, getLuggageKPIs } from '../../mock/luggage';
 import './LiveMonitoring.css';
 
 export function LiveMonitoring() {
-  const { fleet, kpis, escalations, lastUpdate, connected, acknowledge, resolve, feedTypeFilter, setFeedTypeFilter, feedStatusFilter, setFeedStatusFilter, clearFeedFilters } = useFleetData();
+  const { fleet, kpis, escalations, lastUpdate, acknowledge, resolve, feedTypeFilter, setFeedTypeFilter, feedStatusFilter, setFeedStatusFilter, clearFeedFilters } = useFleetData();
   const location = useLocation();
   const navigate = useNavigate();
   const [selectedTrainId, setSelectedTrainId] = useState(location.state?.selectTrainId ?? null);
@@ -63,31 +63,29 @@ export function LiveMonitoring() {
     });
   }, [fleet, fleetSort]);
 
-  if (!connected) {
-    return (
-      <div className="live-monitoring live-monitoring--loading">
-        <div className="live-monitoring__loading-msg">Connecting to fleet data…</div>
-      </div>
-    );
-  }
+  const isLoading = fleet.length === 0;
 
   return (
     <div className="live-monitoring">
-      <KpiStrip kpis={kpis} lastUpdate={lastUpdate} luggageAlerts={luggageKpis.totalActive} onTileClick={(type) => {
-        if (type === 'escalations') {
-          setFeedTypeFilter('all');
-          setFeedStatusFilter('unacknowledged');
-          document.getElementById('unified-feed-root')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else if (type === 'incidents') {
-          setFeedTypeFilter('ai');
-          setFeedStatusFilter(null);
-        } else if (type === 'capacity') {
-          setFeedTypeFilter('occupancy');
-          setFeedStatusFilter(null);
-        } else if (type === 'luggage') {
-          navigate('/dashboard/luggage');
-        }
-      }} />
+      {isLoading ? (
+        <KpiStripSkeleton />
+      ) : (
+        <KpiStrip kpis={kpis} lastUpdate={lastUpdate} luggageAlerts={luggageKpis.totalActive} onTileClick={(type) => {
+          if (type === 'escalations') {
+            setFeedTypeFilter('all');
+            setFeedStatusFilter('unacknowledged');
+            document.getElementById('unified-feed-root')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else if (type === 'incidents') {
+            setFeedTypeFilter('ai');
+            setFeedStatusFilter(null);
+          } else if (type === 'capacity') {
+            setFeedTypeFilter('occupancy');
+            setFeedStatusFilter(null);
+          } else if (type === 'luggage') {
+            navigate('/dashboard/luggage');
+          }
+        }} />
+      )}
       {isStale && (
         <div className="live-monitoring__stale-banner">
           Data may be stale — last update over 60 seconds ago. Attempting to reconnect…
@@ -96,13 +94,17 @@ export function LiveMonitoring() {
 
       <div className="live-monitoring__body">
         <div className={`live-monitoring__left ${selectedTrain ? 'live-monitoring__left--narrow' : ''}`}>
-          <FleetList
-            trains={sortedFleet}
-            selectedTrainId={selectedTrainId}
-            onSelect={setSelectedTrainId}
-            sortBy={fleetSort}
-            onSortChange={setFleetSort}
-          />
+          {isLoading ? (
+            <FleetListSkeleton />
+          ) : (
+            <FleetList
+              trains={sortedFleet}
+              selectedTrainId={selectedTrainId}
+              onSelect={setSelectedTrainId}
+              sortBy={fleetSort}
+              onSortChange={setFleetSort}
+            />
+          )}
         </div>
 
         <div className="live-monitoring__right">
@@ -122,17 +124,21 @@ export function LiveMonitoring() {
                 onResolve={resolve}
               />
             )}
-            <UnifiedFeed
-              escalations={escalations}
-              activeFilter={feedTypeFilter}
-              onFilterChange={setFeedTypeFilter}
-              statusFilter={feedStatusFilter}
-              onStatusFilterChange={setFeedStatusFilter}
-              onClearFilters={clearFeedFilters}
-              onAcknowledge={acknowledge}
-              onResolve={resolve}
-              onTrainSelect={setSelectedTrainId}
-            />
+            {isLoading ? (
+              <UnifiedFeedSkeleton />
+            ) : (
+              <UnifiedFeed
+                escalations={escalations}
+                activeFilter={feedTypeFilter}
+                onFilterChange={setFeedTypeFilter}
+                statusFilter={feedStatusFilter}
+                onStatusFilterChange={setFeedStatusFilter}
+                onClearFilters={clearFeedFilters}
+                onAcknowledge={acknowledge}
+                onResolve={resolve}
+                onTrainSelect={setSelectedTrainId}
+              />
+            )}
           </div>
         </div>
       </div>

@@ -1,5 +1,18 @@
 import './KpiStrip.css';
 
+export function KpiStripSkeleton() {
+  return (
+    <div className="kpi-strip" data-testid="kpi-strip-skeleton">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="kpi-tile">
+          <span className="skeleton-pulse" style={{ display: 'block', width: '48px', height: '28px', marginBottom: '6px' }} />
+          <span className="skeleton-pulse" style={{ display: 'block', width: '80px', height: '14px' }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function freshnessLabel(date) {
   if (!date) return '—';
   const s = Math.floor((Date.now() - date.getTime()) / 1000);

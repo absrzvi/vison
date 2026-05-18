@@ -8,6 +8,7 @@ import { SystemHealth } from './components/health/SystemHealth';
 import { Analytics } from './components/analytics/Analytics';
 import { EscalationsDashboard } from './components/escalations/EscalationsDashboard';
 import './styles/global.css';
+import './styles/skeletons.css';
 
 export default function App() {
   return (

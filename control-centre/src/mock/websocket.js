@@ -266,13 +266,15 @@ export class MockWebSocketClient {
 
   connect() {
     this.connected = true;
-    // Simulate ~300ms network handshake before first payload
+    // VITE_MOCK_WS_DELAY_MS overrides the default 300ms — used by E2E tests to hold
+    // the skeleton state long enough for assertions to run.
+    const delay = parseInt(import.meta.env.VITE_MOCK_WS_DELAY_MS ?? '300', 10);
     setTimeout(() => {
       if (this.connected) {
         this.onStatusChange('connected');
         this._emit();
       }
-    }, 300);
+    }, delay);
   }
 
   disconnect() {
