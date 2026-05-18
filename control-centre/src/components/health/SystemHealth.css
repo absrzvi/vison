@@ -395,7 +395,7 @@
 
 /* ── Staleness ─────────────────────────────────────────────── */
 
-.sh-summary-tile--stale { background: rgba(255, 179, 0, 0.05); }
+.sh-summary-tile--stale { background: color-mix(in srgb, var(--obb-sev-warning) 5%, transparent); }
 .sh-summary-tile__value--stale { color: var(--obb-sev-warning); }
 
 /* ── Toast ─────────────────────────────────────────────────── */

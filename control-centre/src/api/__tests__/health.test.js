@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getSystemHealth } from '../health';
 
 const MOCK_RESPONSE = {
@@ -18,7 +18,10 @@ const MOCK_RESPONSE = {
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn());
-  vi.stubGlobal('import', { meta: { env: { VITE_API_URL: '', VITE_API_KEY: 'test-key' } } });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('getSystemHealth', () => {
@@ -31,7 +34,17 @@ describe('getSystemHealth', () => {
     expect(result).toEqual(MOCK_RESPONSE);
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/v1/analytics/system-health'),
-      expect.objectContaining({ headers: expect.any(Object) })
+      expect.objectContaining({ headers: expect.objectContaining({ 'X-API-Key': expect.any(String) }) })
+    );
+  });
+
+  it('passes the AbortSignal to fetch when provided', async () => {
+    fetch.mockResolvedValue({ ok: true, json: async () => MOCK_RESPONSE });
+    const ctrl = new AbortController();
+    await getSystemHealth(ctrl.signal);
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: ctrl.signal })
     );
   });
 

@@ -1,5 +1,14 @@
 # Deferred Work
 
+## Deferred from: code review of 2-9-system-health-data-feed (2026-05-19)
+
+- **API key shipped in client bundle (`VITE_API_KEY` / `X-API-Key` in health.js)** — pre-existing from E2-S1; covered by ADR-6/7 Keycloak OAuth2/OIDC path at fleet rollout
+- **`Math.random()` ticket ref collision-prone** [SystemHealth.jsx `confirmRaiseTicket`] — AC7 explicitly defers server-assigned ticket IDs to Phase 2; use `crypto.randomUUID()` or server-issued ID when Phase 2 lands
+- **`fleet.find` O(N·M) per WS CAMERA tick in merge effect** [SystemHealth.jsx WS merge useEffect] — PoC fleet sizes acceptable; replace with a `Map<id, cctvStatus>` when fleet grows
+- **`ticketRaisedIds` Set rebuilt with spread on each insert** [SystemHealth.jsx `confirmRaiseTicket`] — `new Set([...prev, id])` is O(n); use `new Set(prev).add(id)` in a hardening pass
+- **No auto-retry on WS reconnect when error state is showing** [SystemHealth.jsx] — UX enhancement; re-call `fetchHealth` when `wsStatus` transitions to `connected`; not required by any AC
+- **1-second `tick` interval runs when tab hidden** [SystemHealth.jsx] — pre-existing battery/CPU pattern from E2-S7; gate on `visibilitychange` in a hardening pass
+
 ## Deferred from: code review of 2-8-per-operator-configurable-alert-threshold (2026-05-18)
 
 - **API key used directly as operator_id (PK)** [0002_operator_preferences.py] — single-operator dev environment by design (pre-flight block); multi-tenant identity will come from Keycloak (ADR-6/7) at fleet rollout

@@ -131,7 +131,8 @@ export function FleetProvider({ children }) {
       }
       if (msg.type === 'CAMERA_DEGRADED' || msg.type === 'CAMERA_RECOVERED') {
         const { trainId, cctvStatus } = msg.payload ?? {};
-        if (trainId) {
+        const VALID = ['green', 'amber', 'red'];
+        if (trainId && VALID.includes(cctvStatus)) {
           setFleet(prev => prev.map(t =>
             t.id === trainId ? { ...t, cctvStatus } : t
           ));

@@ -1,6 +1,6 @@
 # Story E2-S9 — System Health Data Feed Integration
 
-**Status:** review
+**Status:** done
 **Sprint:** Epic 2
 **Story Key:** 2-9-system-health-data-feed
 
@@ -60,6 +60,25 @@
   - [x] T4.1 Renders the `sh-summary-strip` with "—" placeholders
   - [x] T4.2 Renders 3 `sh-grid__row` skeleton rows using `skeleton-pulse` spans (same class as `FleetList` skeleton)
   - [x] T4.3 Uses `data-testid="system-health-skeleton"`
+
+### Review Findings
+
+- [x] [Review][Patch] `vi.stubGlobal('import',...)` does not stub `import.meta.env` — test env stub has zero effect, X-API-Key assertion is uncovered [health.test.js]
+- [x] [Review][Patch] No abort/unmount guard on `fetchHealth` — `setState` on unmounted component + Retry can race with in-flight request (clobbers WS patches) [SystemHealth.jsx:fetchHealth]
+- [x] [Review][Patch] WS CAMERA event arriving before initial fetch resolves loses its patch — merge effect bails on `!healthData` [SystemHealth.jsx:WS merge effect]
+- [x] [Review][Patch] `prev.trains.map` throws if API returns `{ trains: null }` — merge effect has no Array guard [SystemHealth.jsx:WS merge effect]
+- [x] [Review][Patch] `cctvStatus` from WS not validated — `undefined` payload writes into fleet and propagates into `worstOf` / badge class [FleetContext.jsx + SystemHealth.jsx]
+- [x] [Review][Patch] `.sh-summary-tile--stale` uses hardcoded `rgba(255,179,0,0.05)` instead of design token [SystemHealth.css]
+- [x] [Review][Patch] `Number.isNaN` preferred over `isNaN` in `formatTime` [SystemHealth.jsx:formatTime]
+- [x] [Review][Patch] `health.js` empty-string `API_BASE` fallback has no console.warn (unlike WS fallback) [health.js]
+- [x] [Review][Patch] `selectedTrainId` not cleared on Retry — ghost panel if train absent from new data [SystemHealth.jsx:fetchHealth]
+- [x] [Review][Patch] `elapsedLabel` returns `"NaNs"` for non-ISO strings — missing `Number.isNaN` guard matching `formatTime` [SystemHealth.jsx:elapsedLabel]
+- [x] [Review][Defer] API key shipped in client bundle (`VITE_API_KEY` / `X-API-Key`) — pre-existing from E2-S1; covered by ADR-6/7 Keycloak OAuth2 path
+- [x] [Review][Defer] `Math.random()` ticket ref collision-prone — AC7 explicitly defers server-assigned IDs to Phase 2
+- [x] [Review][Defer] `fleet.find` O(N·M) per WS tick in merge effect — PoC fleet sizes acceptable; optimize with Map when fleet grows
+- [x] [Review][Defer] `ticketRaisedIds` spread O(n) insert — PoC scale acceptable
+- [x] [Review][Defer] No auto-retry on WS reconnect when error state is showing — UX enhancement; not an AC requirement
+- [x] [Review][Defer] 1-second `tick` interval runs when tab hidden — pre-existing battery/CPU pattern; not in scope
 
 - [x] **T5** Tests (Vitest unit)
   - [x] T5.1 Unit: `health.js` — `getSystemHealth()` resolves with parsed JSON on 200

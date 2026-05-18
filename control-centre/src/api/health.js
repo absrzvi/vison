@@ -1,9 +1,14 @@
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 const API_KEY  = import.meta.env.VITE_API_KEY  ?? '';
 
-export async function getSystemHealth() {
+if (!import.meta.env.VITE_API_URL) {
+  console.warn('[health] VITE_API_URL not set — requests will hit the current origin');
+}
+
+export async function getSystemHealth(signal) {
   const res = await fetch(`${API_BASE}/api/v1/analytics/system-health`, {
     headers: { 'X-API-Key': API_KEY },
+    signal,
   });
   if (!res.ok) {
     const err = new Error(`API error ${res.status}`);

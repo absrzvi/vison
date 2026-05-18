@@ -13,10 +13,12 @@ const worstOf = t => {
   return 'green';
 };
 
+const VALID_CCTV_STATUS = new Set(['green', 'amber', 'red']);
+
 function elapsedLabel(isoString) {
   if (!isoString) return null;
   const diffMs = Date.now() - Date.parse(isoString);
-  if (diffMs < 0) return 'just now';
+  if (Number.isNaN(diffMs) || diffMs < 0) return 'just now';
   const s = Math.floor(diffMs / 1000);
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
@@ -27,7 +29,7 @@ function elapsedLabel(isoString) {
 function formatTime(isoString) {
   if (!isoString) return null;
   const ts = Date.parse(isoString);
-  if (isNaN(ts)) return isoString; // already formatted (e.g. "11:35")
+  if (Number.isNaN(ts)) return isoString; // already formatted (e.g. "11:35")
   return new Date(ts).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
 }
 
@@ -94,22 +96,31 @@ export function SystemHealth() {
   const firstIssueRef = useRef(null);
   const toastTimerRef = useRef(null);
 
+  const fetchGenRef = useRef(0);
+
   const fetchHealth = useCallback(() => {
+    const gen = ++fetchGenRef.current;
     setHealthLoading(true);
     setHealthError(null);
-    getSystemHealth()
+    setSelectedTrainId(null);
+    const ctrl = new AbortController();
+    getSystemHealth(ctrl.signal)
       .then(data => {
+        if (fetchGenRef.current !== gen) return;
         setHealthData(data);
         setHealthLoading(false);
       })
       .catch(err => {
+        if (fetchGenRef.current !== gen || err.name === 'AbortError') return;
         setHealthError(err);
         setHealthLoading(false);
       });
+    return ctrl;
   }, []);
 
   useEffect(() => {
-    fetchHealth();
+    const ctrl = fetchHealth();
+    return () => ctrl?.abort();
   }, [fetchHealth]);
 
   // Live-tick every second — drives elapsed labels + staleness detection
@@ -129,22 +140,23 @@ export function SystemHealth() {
     return () => window.removeEventListener('keydown', handler);
   }, [ticketPending]);
 
-  // Merge WS cctvStatus patches into healthData
+  // Merge WS cctvStatus patches into healthData.
+  // Runs on every fleet reference change (CAMERA_DEGRADED/RECOVERED sets a new array).
+  // Uses setter form so it always operates on current state, not a stale closure.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!healthData || !fleet.length) return;
+    if (!fleet.length) return;
     setHealthData(prev => {
-      if (!prev) return prev;
+      if (!prev || !Array.isArray(prev.trains)) return prev;
       const patchedTrains = prev.trains.map(ht => {
         const wsEntry = fleet.find(t => t.id === ht.id);
-        if (!wsEntry || wsEntry.cctvStatus === ht.cctvStatus) return ht;
-        return { ...ht, cctvStatus: wsEntry.cctvStatus };
+        const incoming = wsEntry?.cctvStatus;
+        if (!incoming || !VALID_CCTV_STATUS.has(incoming) || incoming === ht.cctvStatus) return ht;
+        return { ...ht, cctvStatus: incoming };
       });
-      // Avoid re-render if nothing changed
       const changed = patchedTrains.some((t, i) => t !== prev.trains[i]);
       return changed ? { ...prev, trains: patchedTrains } : prev;
     });
-  // fleet reference changes on every WS CAMERA event — intentional dependency
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fleet]);
 
   const confirmRaiseTicket = useCallback((trainId) => {

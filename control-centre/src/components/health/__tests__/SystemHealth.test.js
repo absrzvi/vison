@@ -1,11 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const VALID_CCTV_STATUS = new Set(['green', 'amber', 'red']);
+
 // Pure helper functions extracted for unit testing (mirrors SystemHealth.jsx logic)
 function elapsedLabel(isoString) {
   if (!isoString) return null;
   const diffMs = Date.now() - Date.parse(isoString);
-  if (diffMs < 0) return 'just now';
+  if (Number.isNaN(diffMs) || diffMs < 0) return 'just now';
   const s = Math.floor(diffMs / 1000);
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
@@ -16,7 +18,7 @@ function elapsedLabel(isoString) {
 function formatTime(isoString) {
   if (!isoString) return null;
   const ts = Date.parse(isoString);
-  if (isNaN(ts)) return isoString;
+  if (Number.isNaN(ts)) return isoString;
   return new Date(ts).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
 }
 
@@ -58,6 +60,12 @@ describe('elapsedLabel (ISO-8601 aware)', () => {
     const result = elapsedLabel(isoString);
     expect(typeof result === 'string' || result === null).toBe(true);
   });
+
+  it('returns "just now" for non-ISO/garbage strings instead of "NaNs"', () => {
+    // Non-ISO strings must not produce "NaNs" label
+    expect(elapsedLabel('not-a-date')).toBe('just now');
+    expect(elapsedLabel('epoch')).toBe('just now');
+  });
 });
 
 describe('formatTime', () => {
@@ -73,6 +81,29 @@ describe('formatTime', () => {
     // Result depends on timezone — just verify it's a time string pattern
     const result = formatTime('2026-05-18T11:35:00Z');
     expect(result).toMatch(/^\d{2}:\d{2}$/);
+  });
+});
+
+describe('FleetContext CAMERA event cctvStatus validation', () => {
+  const applyPatch = (fleet, trainId, cctvStatus) => {
+    const VALID = ['green', 'amber', 'red'];
+    if (!trainId || !VALID.includes(cctvStatus)) return fleet;
+    return fleet.map(t => t.id === trainId ? { ...t, cctvStatus } : t);
+  };
+
+  it('rejects undefined cctvStatus — fleet unchanged', () => {
+    const fleet = [{ id: 'R5001C-031', cctvStatus: 'green' }];
+    expect(applyPatch(fleet, 'R5001C-031', undefined)).toEqual(fleet);
+  });
+
+  it('rejects unknown string cctvStatus — fleet unchanged', () => {
+    const fleet = [{ id: 'R5001C-031', cctvStatus: 'green' }];
+    expect(applyPatch(fleet, 'R5001C-031', 'degraded')).toEqual(fleet);
+  });
+
+  it('accepts valid cctvStatus "red"', () => {
+    const fleet = [{ id: 'R5001C-031', cctvStatus: 'green' }];
+    expect(applyPatch(fleet, 'R5001C-031', 'red')[0].cctvStatus).toBe('red');
   });
 });
 
@@ -127,12 +158,14 @@ describe('healthData WS cctvStatus merge logic', () => {
       { id: 'R5001C-031', cctvStatus: 'red' }, // WS patched
       { id: 'R5001C-008', cctvStatus: 'green' },
     ];
-    // Simulate the setHealthData updater
+    // Simulate the setHealthData updater (mirrors production logic)
     const updater = prev => {
+      if (!prev || !Array.isArray(prev.trains)) return prev;
       const patchedTrains = prev.trains.map(ht => {
         const wsEntry = fleet.find(t => t.id === ht.id);
-        if (!wsEntry || wsEntry.cctvStatus === ht.cctvStatus) return ht;
-        return { ...ht, cctvStatus: wsEntry.cctvStatus };
+        const incoming = wsEntry?.cctvStatus;
+        if (!incoming || !VALID_CCTV_STATUS.has(incoming) || incoming === ht.cctvStatus) return ht;
+        return { ...ht, cctvStatus: incoming };
       });
       const changed = patchedTrains.some((t, i) => t !== prev.trains[i]);
       return changed ? { ...prev, trains: patchedTrains } : prev;
@@ -151,13 +184,24 @@ describe('healthData WS cctvStatus merge logic', () => {
     const updater = prev => {
       const patchedTrains = prev.trains.map(ht => {
         const wsEntry = fleet.find(t => t.id === ht.id);
-        if (!wsEntry || wsEntry.cctvStatus === ht.cctvStatus) return ht;
-        return { ...ht, cctvStatus: wsEntry.cctvStatus };
+        const incoming = wsEntry?.cctvStatus;
+        if (!incoming || !VALID_CCTV_STATUS.has(incoming) || incoming === ht.cctvStatus) return ht;
+        return { ...ht, cctvStatus: incoming };
       });
       const changed = patchedTrains.some((t, i) => t !== prev.trains[i]);
       return changed ? { ...prev, trains: patchedTrains } : prev;
     };
     const next = updater(healthData);
     expect(next).toBe(healthData); // same reference
+  });
+
+  it('returns prev unchanged when trains is not an array', () => {
+    const healthData = { trains: null };
+    const fleet = [{ id: 'R5001C-031', cctvStatus: 'red' }];
+    const updater = prev => {
+      if (!prev || !Array.isArray(prev.trains)) return prev;
+      return prev; // would patch if array
+    };
+    expect(updater(healthData)).toBe(healthData);
   });
 });

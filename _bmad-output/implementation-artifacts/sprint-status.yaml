@@ -67,7 +67,7 @@ development_status:
   2-6-train-detail-event-store-alert: done
   2-7-loading-skeletons: done
   2-8-per-operator-configurable-alert-threshold: done
-  2-9-system-health-data-feed: review
+  2-9-system-health-data-feed: done
   epic-2-retrospective: optional
 
   # ── Epic 3: Control Centre Dashboard — Analytics & System Health ──
