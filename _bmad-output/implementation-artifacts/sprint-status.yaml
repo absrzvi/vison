@@ -83,7 +83,7 @@ development_status:
   3-1-analytics-rest-endpoints: done
   3-2-capacity-exceptions-real-data: done
   3-3-occupancy-heatmap-real-data: done
-  3-4-dwell-time-real-data: review
+  3-4-dwell-time-real-data: done
   3-5-ai-detection-quality-real-data: backlog
   3-6-system-health-websocket-staleness: backlog
   3-7-system-health-maintenance-ticket-api: backlog

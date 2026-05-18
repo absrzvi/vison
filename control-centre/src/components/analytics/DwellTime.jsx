@@ -92,13 +92,17 @@ export function DwellTime({ dateRange = '30d' }) {
   const regression = useMemo(() => {
     if (scatterPoints.length < 2) return null;
     const { slope, intercept, r2 } = linearRegression(scatterPoints);
+    // Guard: collinear-x data (all occupancy_pct identical) produces NaN/Infinity slope
+    if (!isFinite(slope) || isNaN(r2)) return null;
     const trendX1 = CROWD_MIN;
     const trendY1 = slope * CROWD_MIN + intercept;
     const trendX2 = CROWD_MIN + CROWD_RANGE;
     const trendY2 = slope * (CROWD_MIN + CROWD_RANGE) + intercept;
-    const dwellPer10 = Math.round(slope * 10);
+    const dwellPer10Signed = Math.round(slope * 10);
+    const dwellPer10 = Math.abs(dwellPer10Signed);
+    const slopeDirection = dwellPer10Signed >= 0 ? 'adds' : 'saves';
     const correlationLabel = r2 >= 0.7 ? 'Strong' : r2 >= 0.4 ? 'Moderate' : 'Weak';
-    return { slope, intercept, r2, trendX1, trendY1, trendX2, trendY2, dwellPer10, correlationLabel };
+    return { slope, intercept, r2, trendX1, trendY1, trendX2, trendY2, dwellPer10, slopeDirection, correlationLabel };
   }, [scatterPoints]);
 
   if (state.loading) {
@@ -122,7 +126,9 @@ export function DwellTime({ dateRange = '30d' }) {
     );
   }
 
-  const dwellData = Array.isArray(state.data) ? state.data : [];
+  const dwellData = Array.isArray(state.data)
+    ? [...state.data].sort((a, b) => b.actual_sec - a.actual_sec)
+    : [];
   const days = RANGE_DAYS[dateRange] ?? 30;
 
   if (!dwellData.length) {
@@ -133,7 +139,7 @@ export function DwellTime({ dateRange = '30d' }) {
     );
   }
 
-  const maxActual = Math.max(...dwellData.map(d => d.actual_sec));
+  const maxActual = Math.max(...dwellData.map(d => d.actual_sec ?? 0)) || 1;
 
   const handleScatterEnter = (e, pt) => {
     const rawX = e.clientX + 12;
@@ -285,7 +291,7 @@ export function DwellTime({ dateRange = '30d' }) {
         {/* P1 fix: correlation strength derived from R² */}
         {regression && (
           <div className="dwell-scatter__insight">
-            {regression.correlationLabel} positive correlation (R²={regression.r2.toFixed(2)}) — each 10% increase in platform crowding adds approximately <strong>{regression.dwellPer10}s</strong> of dwell time.
+            {regression.correlationLabel} correlation (R²={regression.r2.toFixed(2)}) — each 10% increase in platform crowding {regression.slopeDirection} approximately <strong>{regression.dwellPer10}s</strong> of dwell time.
           </div>
         )}
 

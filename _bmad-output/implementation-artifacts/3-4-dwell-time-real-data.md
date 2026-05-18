@@ -1,6 +1,6 @@
 # Story 3.4: Dwell Time — Real Data
 
-Status: review
+Status: done
 
 ## Story
 
@@ -57,6 +57,19 @@ All existing chart interactions are preserved: scheduled tick hover tooltip, sca
   - [x] T2.5 Move regression + correlation constants (`slope`, `intercept`, `r2`, `trendX1/X2/Y1/Y2`) into render/useMemo computed from live data
 
 - [x] **T3** Run full test suite and lint; confirm no regressions
+
+### Review Findings
+
+- [x] [Review][Decision] Bar chart sort order — added client-side `sort((a,b) => b.actual_sec - a.actual_sec)` safety net; backend still pre-sorts but client no longer relies solely on it [DwellTime.jsx]
+- [x] [Review][Decision] AC4 empty state scope — single early-return block accepted; matches E3-S2/S3 pattern [DwellTime.jsx]
+- [x] [Review][Patch] `linearRegression` denominator zero → NaN/Infinity slope — guarded with `!isFinite(slope) || isNaN(r2)` returning null [DwellTime.jsx]
+- [x] [Review][Patch] `Math.max` NaN/zero guard — `?? 0` per element + `|| 1` fallback prevents NaN and division-by-zero [DwellTime.jsx]
+- [x] [Review][Patch] Negative slope insight label — `dwellPer10` now absolute value; `slopeDirection` is "adds"/"saves" based on sign [DwellTime.jsx]
+- [x] [Review][Defer] Stale fetch overwrites newer state on rapid dateRange change — no AbortController [DwellTime.jsx] — deferred, pre-existing in all analytics components
+- [x] [Review][Defer] `breach_count` float from backend renders "1.5 breaches" — deferred, backend Pydantic declares int, PoC acceptable
+- [x] [Review][Defer] `occupancy_pct = 0` kept as valid scatter point — deferred, 0 is valid occupancy per spec; null means no data
+- [x] [Review][Defer] Trend line SVG coords not clamped to plot area on steep slope — deferred, pre-existing math
+- [x] [Review][Defer] `key={i}` on scatter dots — deferred, pre-existing pattern across codebase
 
 ## Dev Notes
 

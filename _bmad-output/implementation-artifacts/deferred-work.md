@@ -1,5 +1,13 @@
 # Deferred Work
 
+## Deferred from: code review of 3-4-dwell-time-real-data (2026-05-19)
+
+- **Stale fetch / no AbortController** [DwellTime.jsx] — pre-existing in all analytics components (ExceptionWorkflow, OccupancyHeatmap, SystemHealth); not introduced here
+- **`breach_count` float from backend** [DwellTime.jsx] — backend Pydantic schema declares `int`; PoC acceptable; validate if backend changes
+- **`occupancy_pct = 0` as valid scatter point** [DwellTime.jsx] — null means no data per spec; 0 is valid occupancy; revisit if backend uses 0 as sentinel
+- **Trend line SVG coords unclamped** [DwellTime.jsx] — pre-existing math; only visible with steep slopes from sparse data; low risk for PoC
+- **`key={i}` on scatter dots** [DwellTime.jsx] — pre-existing pattern across codebase; no functional impact at PoC scale
+
 ## Deferred from: code review of 3-3-occupancy-heatmap-real-data (2026-05-19)
 
 - **`peakHours` not memoized** [OccupancyHeatmap.jsx] — pre-existing pattern; recomputes on hover; cheap enough for PoC route counts
