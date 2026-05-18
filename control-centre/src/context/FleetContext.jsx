@@ -7,8 +7,10 @@ import { getPreferences, patchPreferences } from '../api/preferences';
 import {
   DEFAULT_ALERT_THRESHOLD_SECONDS,
   DEFAULT_STALENESS_THRESHOLD_SECONDS,
+  DEFAULT_UNATTENDED_THRESHOLD_MINUTES,
   LS_KEY_ALERT_THRESHOLD,
   LS_KEY_STALENESS_THRESHOLD,
+  LS_KEY_UNATTENDED_THRESHOLD,
 } from '../constants/preferences';
 
 const OPERATOR_ID = import.meta.env.VITE_OPERATOR_ID ?? 'operator-unknown';
@@ -48,6 +50,10 @@ export function FleetProvider({ children }) {
   const [stalenessThresholdSeconds, setStalenessThresholdSeconds] = useState(() => {
     const parsed = parseInt(localStorage.getItem(LS_KEY_STALENESS_THRESHOLD), 10);
     return Number.isFinite(parsed) ? parsed : DEFAULT_STALENESS_THRESHOLD_SECONDS;
+  });
+  const [unattendedThresholdMinutes, setUnattendedThresholdMinutes] = useState(() => {
+    const parsed = parseInt(localStorage.getItem(LS_KEY_UNATTENDED_THRESHOLD), 10);
+    return Number.isFinite(parsed) ? parsed : DEFAULT_UNATTENDED_THRESHOLD_MINUTES;
   });
   // Map<id, 'pending' | Error> — per-escalation action state
   const [escalationActionState, setEscalationActionState] = useState({});
@@ -198,6 +204,16 @@ export function FleetProvider({ children }) {
         }
         return prev;
       });
+      const serverUnattended = prefs.unattended_threshold_min;
+      if (Number.isFinite(serverUnattended)) {
+        setUnattendedThresholdMinutes(prev => {
+          if (prev !== serverUnattended) {
+            localStorage.setItem(LS_KEY_UNATTENDED_THRESHOLD, String(serverUnattended));
+            return serverUnattended;
+          }
+          return prev;
+        });
+      }
     }).catch(() => {
       // Network error — localStorage value stands; no-op
     });
@@ -214,6 +230,19 @@ export function FleetProvider({ children }) {
       return null;
     } catch (err) {
       setAlertThresholdSeconds(prevValue);
+      return err;
+    }
+  }, []);
+
+  const updateUnattendedThreshold = useCallback(async (value) => {
+    let prevValue;
+    setUnattendedThresholdMinutes(prev => { prevValue = prev; return value; });
+    try {
+      await patchPreferences({ unattended_threshold_min: value });
+      localStorage.setItem(LS_KEY_UNATTENDED_THRESHOLD, String(value));
+      return null;
+    } catch (err) {
+      setUnattendedThresholdMinutes(prevValue);
       return err;
     }
   }, []);
@@ -310,8 +339,8 @@ export function FleetProvider({ children }) {
       feedTypeFilter, setFeedTypeFilter,
       feedStatusFilter, setFeedStatusFilter,
       clearFeedFilters,
-      alertThresholdSeconds, stalenessThresholdSeconds,
-      updateAlertThreshold, updateStalenessThreshold,
+      alertThresholdSeconds, stalenessThresholdSeconds, unattendedThresholdMinutes,
+      updateAlertThreshold, updateStalenessThreshold, updateUnattendedThreshold,
       luggageEvents,
     }}>
       {children}

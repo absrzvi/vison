@@ -35,9 +35,10 @@ function LuggageMonitoringSkeleton() {
 
 export function LuggageMonitoring() {
   const [selectedTrainId, setSelectedTrainId] = useState(null);
-  const { luggageEvents: events, wsReady } = useFleetData();
+  const { luggageEvents: events, wsReady, lastUpdate, stalenessThresholdSeconds, unattendedThresholdMinutes } = useFleetData();
   const summary = useMemo(() => getLuggageSummaryByTrain(events), [events]);
-  const kpis = useMemo(() => getLuggageKPIs(events), [events]);
+  const kpis = useMemo(() => getLuggageKPIs(events, unattendedThresholdMinutes), [events, unattendedThresholdMinutes]);
+  const isLuggageStale = lastUpdate != null && (Date.now() - lastUpdate.getTime()) > stalenessThresholdSeconds * 1000;
 
   const handleTrainSelect = (id) => setSelectedTrainId(prev => prev === id ? null : id);
 
@@ -59,6 +60,11 @@ export function LuggageMonitoring() {
 
   return (
     <div className="luggage-monitoring">
+      {isLuggageStale && (
+        <div className="luggage-monitoring__stale-banner">
+          Luggage data may be stale — last update over {Math.round(stalenessThresholdSeconds / 60)} minutes ago.
+        </div>
+      )}
       <LuggageKpiStrip kpis={kpis} />
 
       <div className="luggage-monitoring__body">

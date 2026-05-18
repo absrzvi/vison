@@ -228,9 +228,10 @@ export function normaliseConf(c) {
   return c > 0 && c < 1 ? Math.round(c * 100) : Math.round(c);
 }
 
-export function getLuggageKPIs(events) {
+export function getLuggageKPIs(events, thresholdMin = 5) {
   const active = events.filter(e => e.state !== 'cleared' && e.state !== 'owner_returned');
   const unattendedEvents = active.filter(e => e.state === 'unattended');
+  const unattendedAlerts = unattendedEvents.filter(e => elapsedMin(e.timestamp) >= thresholdMin);
   const otherActive = active.filter(e => e.state !== 'unattended');
 
   const maxElapsed = (evs) => {
@@ -244,6 +245,7 @@ export function getLuggageKPIs(events) {
   return {
     totalActive: active.length,
     unattended: unattendedEvents.length,
+    unattendedAlerts: unattendedAlerts.length,
     overcrowded: active.filter(e => e.state === 'overcrowded').length,
     oversized: active.filter(e => e.state === 'oversized').length,
     clearedLastHour: events.filter(e => e.state === 'cleared' || e.state === 'owner_returned').length,

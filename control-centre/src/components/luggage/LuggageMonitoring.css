@@ -28,3 +28,12 @@
   color: var(--obb-text-on-dark-4);
   font-weight: 500;
 }
+
+.luggage-monitoring__stale-banner {
+  padding: 0.5rem 1rem;
+  background: var(--color-amber-subtle, rgba(232, 160, 32, 0.12));
+  color: var(--color-amber, #E8A020);
+  border-left: 3px solid var(--color-amber, #E8A020);
+  font-size: 0.8125rem;
+  margin-bottom: 0.75rem;
+}

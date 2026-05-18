@@ -13,9 +13,9 @@ export function LuggageKpiStrip({ kpis }) {
         <span className="lkpi__label">Longest Active</span>
       </div>
       <div className="lkpi-divider" />
-      <div className={`lkpi ${kpis.unattended > 0 ? 'lkpi--red' : ''}`}>
-        <span className="lkpi__value">{kpis.unattended}</span>
-        <span className="lkpi__label">Unattended Items</span>
+      <div className={`lkpi ${(kpis.unattendedAlerts ?? kpis.unattended) > 0 ? 'lkpi--red' : ''}`}>
+        <span className="lkpi__value">{kpis.unattendedAlerts ?? kpis.unattended}</span>
+        <span className="lkpi__label">Unattended Alerts</span>
       </div>
       <div className="lkpi-divider" />
       <div className={`lkpi ${kpis.overcrowded > 0 ? 'lkpi--amber' : ''}`}>

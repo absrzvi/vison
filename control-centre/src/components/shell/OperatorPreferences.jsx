@@ -3,6 +3,7 @@ import { useFleetData } from '../../hooks/useFleetData';
 import {
   ALERT_THRESHOLD_OPTIONS,
   STALENESS_THRESHOLD_OPTIONS,
+  UNATTENDED_THRESHOLD_OPTIONS,
 } from '../../constants/preferences';
 import './OperatorPreferences.css';
 
@@ -75,7 +76,7 @@ function formatSec(s) {
 }
 
 export function OperatorPreferences({ onClose }) {
-  const { alertThresholdSeconds, stalenessThresholdSeconds, updateAlertThreshold, updateStalenessThreshold } = useFleetData();
+  const { alertThresholdSeconds, stalenessThresholdSeconds, unattendedThresholdMinutes, updateAlertThreshold, updateStalenessThreshold, updateUnattendedThreshold } = useFleetData();
   const [toast, setToast] = useState(null);
   const panelRef = useRef(null);
   const toastTimerRef = useRef(null);
@@ -133,6 +134,11 @@ export function OperatorPreferences({ onClose }) {
     if (err) showToast('Preference not saved — please retry');
   }
 
+  async function handleUnattendedCommit(val) {
+    const err = await updateUnattendedThreshold(val);
+    if (err) showToast('Preference not saved — please retry');
+  }
+
   return (
     <div className="pref-backdrop" onClick={onClose} aria-modal="true" role="dialog" aria-label="Operator Preferences">
       <div
@@ -160,6 +166,13 @@ export function OperatorPreferences({ onClose }) {
             value={stalenessThresholdSeconds}
             onCommit={handleStalenessCommit}
             formatLabel={formatSec}
+          />
+          <SegmentedControl
+            label="Unattended bag alert after"
+            options={UNATTENDED_THRESHOLD_OPTIONS}
+            value={unattendedThresholdMinutes}
+            onCommit={handleUnattendedCommit}
+            formatLabel={(n) => `${n} min`}
           />
         </div>
 
