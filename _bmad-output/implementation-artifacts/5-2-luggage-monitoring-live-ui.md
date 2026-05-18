@@ -1,6 +1,6 @@
 # Story E5-S2 — Luggage Monitoring Live UI
 
-**Status:** review
+**Status:** done
 **Sprint:** Epic 5
 **Story Key:** 5-2-luggage-monitoring-live-ui
 
@@ -287,6 +287,33 @@ All 8 ACs satisfied. 88 tests pass (80 pre-existing + 8 new). No regressions. Ke
 | `control-centre/src/components/luggage/LuggageTrainDetail.jsx` | Imported `formatTimestamp`; replaced `{ev.timestamp}` with `{formatTimestamp(ev.timestamp)}` |
 | `control-centre/src/mock/__tests__/luggage.test.js` | NEW — 8 unit tests covering T5.1–T5.7 + security tests |
 
+### Senior Developer Review (AI)
+
+**Review Date:** 2026-05-18  
+**Outcome:** Changes Requested  
+**Layers:** Blind Hunter, Edge Case Hunter, Acceptance Auditor (claude-opus-4-7)
+
+#### Review Follow-ups (AI)
+
+**Decision-needed:**
+- [x] [Review][Decision] F3 — WS reconnect skeleton gate → resolved: use `!wsReady && !events?.length` to preserve last-known data on reconnect [`LuggageMonitoring.jsx`]
+- [x] [Review][Decision] F8 — Mixed-feed elapsed inconsistency → deferred: prod has no mock seed events; dev-mode cosmetic only [`mock/luggage.js`]
+
+**Patch:**
+- [x] [Review][Patch] F1 — `ISO_RE` tightened to `/^\d{4}-\d{2}-\d{2}T/` [`mock/luggage.js`]
+- [x] [Review][Patch] F2 — `elapsedMin` ISO branch guards HH:MM `nowTs` — falls back to `Date.now()` [`mock/luggage.js:elapsedMin`]
+- [x] [Review][Patch] F4 — `normaliseConf` boundary fixed: `c > 0 && c < 1` (integer 1 → 1%, not 100%) [`mock/luggage.js`]
+- [x] [Review][Patch] F5 — `normaliseConf` moved to `mock/luggage.js` as named export, imported by `LuggageFeed.jsx`
+- [x] [Review][Patch] F6 — Security tests and T5.6 now import and test `normaliseConf` directly [`luggage.test.js`]
+- [x] [Review][Patch] F9 — `sortEvents`: null elapsed → `-Infinity` so malformed-timestamp cards sort last [`LuggageFeed.jsx`]
+- [x] [Review][Patch] F10 — Restored null-guard: `!events?.length` in both skeleton and empty-state checks [`LuggageMonitoring.jsx`]
+
+**Defer:**
+- [x] [Review][Defer] F7 — IIFE in JSX for confidence rendering (style, not correctness) [`LuggageFeed.jsx:136`] — deferred, pre-existing pattern
+- [x] [Review][Defer] F11 — `elapsedMin` HH:MM path clamps to 0 across midnight/11:35 anchor [`mock/luggage.js`] — deferred, pre-existing behaviour
+
 ### Change Log
 
 - 2026-05-18: E5-S2 implemented — ISO timestamp support, loading skeleton, confidence normalisation, coach grid verification (claude-sonnet-4-6)
+- 2026-05-18: Code review — 2 decision-needed, 7 patches, 2 deferred (claude-opus-4-7)
+- 2026-05-18: Review patches applied — all 9 findings resolved; 95 tests passing (claude-sonnet-4-6)

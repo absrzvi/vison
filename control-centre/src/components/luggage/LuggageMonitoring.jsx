@@ -41,11 +41,11 @@ export function LuggageMonitoring() {
 
   const handleTrainSelect = (id) => setSelectedTrainId(prev => prev === id ? null : id);
 
-  if (!wsReady) {
+  if (!wsReady && !events?.length) {
     return <LuggageMonitoringSkeleton />;
   }
 
-  if (events.length === 0) {
+  if (!events?.length) {
     return (
       <div className="luggage-monitoring luggage-monitoring--empty">
         <div className="luggage-monitoring__empty-msg">No luggage events received yet.</div>

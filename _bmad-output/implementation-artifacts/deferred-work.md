@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 5-2-luggage-monitoring-live-ui (2026-05-18)
+
+- **F7 — IIFE in JSX for confidence rendering** [`LuggageFeed.jsx:136`] — style issue, not a correctness bug; refactor to variable in a polish pass
+- **F8 — Mixed-feed elapsed inconsistency: mock HH:MM + live ISO events in same KPI** [`mock/luggage.js getLuggageKPIs`] — dev-only; no mock seed events in production; revisit if mock-seeded dev mode is formally supported
+- **F11 — `elapsedMin` HH:MM path clamps negative elapsed to 0 across midnight/11:35 anchor** [`mock/luggage.js`] — pre-existing behaviour; not a regression; revisit if mock scenario spans midnight
+
 ## Deferred from: code review of 5-1-luggage-ws-live-feed (2026-05-19)
 
 - **`elapsedMin` anchored to mock `"11:35"`** — all live timestamps show "0 min"; deferred to E5-S4 (ISO timestamp story) [control-centre/src/mock/luggage.js]

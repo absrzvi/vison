@@ -191,7 +191,7 @@ function toMinutes(ts) {
   return h * 60 + m;
 }
 
-const ISO_RE = /^\d{4}-|T/;
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T/;
 
 const HH_MM_RE = /^\d{2}:\d{2}$/;
 
@@ -211,8 +211,9 @@ export function elapsedMin(timestamp, nowTs = null) {
   if (ISO_RE.test(timestamp)) {
     const t = new Date(timestamp).getTime();
     if (isNaN(t)) return null;
-    const now = nowTs ? new Date(nowTs).getTime() : Date.now();
-    return Math.max(0, Math.round((now - t) / 60000));
+    const nowMs = nowTs && ISO_RE.test(nowTs) ? new Date(nowTs).getTime() : Date.now();
+    if (isNaN(nowMs)) return null;
+    return Math.max(0, Math.round((nowMs - t) / 60000));
   }
   // Legacy HH:MM path — uses '11:35' mock anchor
   const refStr = nowTs ?? '11:35';
@@ -220,6 +221,11 @@ export function elapsedMin(timestamp, nowTs = null) {
   const t2 = toMinutes(timestamp);
   if (ref == null || t2 == null) return null;
   return Math.max(0, ref - t2);
+}
+
+export function normaliseConf(c) {
+  if (c == null || typeof c !== 'number' || !isFinite(c)) return null;
+  return c > 0 && c < 1 ? Math.round(c * 100) : Math.round(c);
 }
 
 export function getLuggageKPIs(events) {

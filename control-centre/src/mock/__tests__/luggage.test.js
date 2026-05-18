@@ -5,25 +5,28 @@ import {
   formatTimestamp,
   getLuggageKPIs,
   getLuggageSummaryByTrain,
+  normaliseConf,
 } from '../luggage.js';
 
 // ── Security Tests ───────────────────────────────────────────────────────────
 
 describe('Security: confidence normalisation', () => {
-  it('clamps decimal confidence to non-negative integer ≤ 100', () => {
-    const normalise = (c) => c == null ? null : (c <= 1 ? Math.round(c * 100) : Math.round(c));
-    expect(normalise(0.94)).toBe(94);
-    expect(normalise(94)).toBe(94);
-    expect(normalise(0)).toBe(0);
-    expect(normalise(1)).toBe(100);
-    expect(normalise(null)).toBe(null);
+  it('clamps decimal confidence to non-negative integer', () => {
+    expect(normaliseConf(0.94)).toBe(94);
+    expect(normaliseConf(94)).toBe(94);
+    expect(normaliseConf(0)).toBe(0);
+    expect(normaliseConf(null)).toBe(null);
   });
 
   it('does not produce NaN or negative confidence from edge inputs', () => {
-    const normalise = (c) => c == null ? null : (c <= 1 ? Math.round(c * 100) : Math.round(c));
-    const result = normalise(0.001);
+    const result = normaliseConf(0.001);
     expect(result).toBeGreaterThanOrEqual(0);
     expect(Number.isNaN(result)).toBe(false);
+  });
+
+  it('returns null for non-numeric input', () => {
+    expect(normaliseConf(NaN)).toBe(null);
+    expect(normaliseConf(Infinity)).toBe(null);
   });
 });
 
@@ -43,6 +46,13 @@ describe('elapsedMin — ISO timestamp', () => {
 
   it('returns null for invalid ISO string', () => {
     expect(elapsedMin('not-a-date')).toBe(null);
+  });
+
+  it('ignores HH:MM nowTs when timestamp is ISO — falls back to Date.now()', () => {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const result = elapsedMin(fiveMinAgo, '11:35');
+    expect(result).toBeGreaterThanOrEqual(4);
+    expect(Number.isNaN(result)).toBe(false);
   });
 });
 
@@ -81,6 +91,10 @@ describe('formatTimestamp', () => {
   it('returns --:-- for invalid ISO string', () => {
     expect(formatTimestamp('totally-invalid')).toBe('--:--');
   });
+
+  it('does not match string with bare T (e.g. "11:23T") as ISO', () => {
+    expect(formatTimestamp('11:23T')).toBe('--:--');
+  });
 });
 
 // ── T5.5 — getLuggageKPIs with ISO timestamps ───────────────────────────────
@@ -100,19 +114,35 @@ describe('getLuggageKPIs — ISO timestamps', () => {
     expect(kpis.longestUnattended).not.toBe(null);
     expect(kpis.longestUnattended).not.toBe('0 min');
     const mins = parseInt(kpis.longestUnattended, 10);
-    expect(mins).toBeGreaterThanOrEqual(9); // allow 1 min tolerance
+    expect(mins).toBeGreaterThanOrEqual(9);
   });
 });
 
-// ── T5.6 — Confidence normalisation formula ──────────────────────────────────
+// ── T5.6 — normaliseConf production function ─────────────────────────────────
 
-describe('confidence normalisation formula', () => {
+describe('normaliseConf', () => {
   it('decimal 0.94 normalises to 94', () => {
-    expect(Math.round(0.94 > 1 ? 0.94 : 0.94 * 100)).toBe(94);
+    expect(normaliseConf(0.94)).toBe(94);
   });
 
   it('integer 94 normalises to 94', () => {
-    expect(Math.round(94 > 1 ? 94 : 94 * 100)).toBe(94);
+    expect(normaliseConf(94)).toBe(94);
+  });
+
+  it('integer 1 normalises to 1 (not 100)', () => {
+    expect(normaliseConf(1)).toBe(1);
+  });
+
+  it('integer 0 normalises to 0', () => {
+    expect(normaliseConf(0)).toBe(0);
+  });
+
+  it('returns null for null', () => {
+    expect(normaliseConf(null)).toBe(null);
+  });
+
+  it('returns null for NaN', () => {
+    expect(normaliseConf(NaN)).toBe(null);
   });
 });
 
@@ -132,16 +162,12 @@ describe('getLuggageSummaryByTrain — live coachId C4', () => {
     const summary = getLuggageSummaryByTrain(events);
     const trainSummary = summary['R5001C-031'];
     expect(trainSummary).toBeDefined();
-    // Reproduce the coach map logic from LuggageTrainDetail
     const coachMap = {};
     trainSummary.events.forEach(ev => {
       if (!coachMap[ev.coachId]) coachMap[ev.coachId] = [];
       coachMap[ev.coachId].push(ev);
     });
-    const coaches = allCoachIds.map(id => ({
-      id,
-      events: coachMap[id] ?? [],
-    }));
+    const coaches = allCoachIds.map(id => ({ id, events: coachMap[id] ?? [] }));
     const c4 = coaches.find(c => c.id === 'C4');
     expect(c4).toBeDefined();
     expect(c4.events.length).toBe(1);

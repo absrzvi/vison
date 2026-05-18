@@ -1,12 +1,10 @@
 import { useState } from 'react';
-import { LUGGAGE_STATES, NEXT_STATION, elapsedMin, formatTimestamp } from '../../mock/luggage';
+import { LUGGAGE_STATES, NEXT_STATION, elapsedMin, formatTimestamp, normaliseConf } from '../../mock/luggage';
 import { EscalationDetail } from '../live/EscalationDetail';
 import './LuggageFeed.css';
 
 const RESOLVED_STATES = new Set(['cleared', 'owner_returned']);
 const SEV_BADGE = { red: 'badge--red', amber: 'badge--amber', green: 'badge--green' };
-
-const normaliseConf = (c) => c == null ? null : (c <= 1 ? Math.round(c * 100) : Math.round(c));
 
 const confClass = (pct) => {
   if (pct == null) return '';
@@ -30,7 +28,7 @@ const hasDoorRisk = (ev) =>
 const sortEvents = (evs) => [...evs].sort((a, b) => {
   if (a.state === 'unattended' && b.state !== 'unattended') return -1;
   if (b.state === 'unattended' && a.state !== 'unattended') return 1;
-  return (elapsedMin(a.timestamp) ?? 0) > (elapsedMin(b.timestamp) ?? 0) ? -1 : 1;
+  return (elapsedMin(a.timestamp) ?? -Infinity) > (elapsedMin(b.timestamp) ?? -Infinity) ? -1 : 1;
 });
 
 // Group sorted events by trainId, preserving sort order of first event in each group
