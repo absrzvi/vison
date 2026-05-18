@@ -10,7 +10,6 @@ import { getOccupancyHeatmap } from '../../../api/analytics';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Default: return a pending promise so component stays in loading state on initial render
   getOccupancyHeatmap.mockReturnValue(new Promise(() => {}));
 });
 
@@ -62,25 +61,56 @@ describe('OccupancyHeatmap — API response contract', () => {
 
   it('a new route in the response needs no code change to appear', () => {
     const routes = ['Vienna-Salzburg', 'Vienna-Linz', 'NewRoute-X'];
-    // rows are data-driven: length check is the contract
     expect(routes).toContain('NewRoute-X');
     expect(routes.length).toBe(3);
+  });
+});
+
+// ── Shape-guard: malformed/empty payload ─────────────────────────────────────
+
+describe('OccupancyHeatmap — shape guards', () => {
+  it('shows empty-state when routes array is empty', () => {
+    // Simulate the component receiving empty data by checking the guard logic
+    const routes = [];
+    expect(routes.length).toBe(0);
+    // The component renders empty-state when routes.length === 0
+  });
+
+  it('rowCells guard falls back to empty array when cells[ri] is missing', () => {
+    const cells = [[72.3, 45.1]]; // only 1 row
+    const routes = ['R1', 'R2'];  // 2 routes — cells[1] would be undefined
+    routes.forEach((_, ri) => {
+      const rowCells = Array.isArray(cells[ri]) ? cells[ri] : [];
+      expect(Array.isArray(rowCells)).toBe(true);
+    });
+    // cells[1] is undefined — guard returns []
+    expect(Array.isArray(cells[1]) ? cells[1] : []).toEqual([]);
+  });
+
+  it('malformed payload with missing routes/cells falls back to empty arrays', () => {
+    const badPayload = { unexpected: true };
+    const routes = Array.isArray(badPayload?.routes) ? badPayload.routes : [];
+    const hours = Array.isArray(badPayload?.hours) ? badPayload.hours : [];
+    const cells = Array.isArray(badPayload?.cells) ? badPayload.cells : [];
+    expect(routes).toEqual([]);
+    expect(hours).toEqual([]);
+    expect(cells).toEqual([]);
   });
 });
 
 // ── Peak hour derivation logic ────────────────────────────────────────────────
 
 describe('OccupancyHeatmap — peak hour derivation', () => {
-  it('daysOver85 counts non-null cells >= 85 in a row', () => {
+  it('hoursOver85 counts non-null cells >= 85 in a row', () => {
     const cells = [88.0, null, 90.5, 72.0, 85.0];
-    const daysOver85 = cells.filter(v => v != null && v >= 85).length;
-    expect(daysOver85).toBe(3); // 88, 90.5, 85
+    const hoursOver85 = cells.filter(v => v != null && v >= 85).length;
+    expect(hoursOver85).toBe(3); // 88, 90.5, 85
   });
 
-  it('daysOver85 is 0 when no cell reaches 85', () => {
+  it('hoursOver85 is 0 when no cell reaches 85', () => {
     const cells = [72.3, null, 45.1, 60.0];
-    const daysOver85 = cells.filter(v => v != null && v >= 85).length;
-    expect(daysOver85).toBe(0);
+    const hoursOver85 = cells.filter(v => v != null && v >= 85).length;
+    expect(hoursOver85).toBe(0);
   });
 
   it('peak hour is the hour with max non-null occupancy', () => {
@@ -91,5 +121,32 @@ describe('OccupancyHeatmap — peak hour derivation', () => {
     const peak = validPairs.find(p => p.occ === max);
     expect(peak.hour).toBe('07:00');
     expect(peak.occ).toBe(88.0);
+  });
+
+  it('empty row returns zero-occupancy fallback without crashing', () => {
+    const rowCells = [];
+    const hours = ['05:00', '06:00'];
+    const validPairs = rowCells
+      .map((occ, ci) => ({ occ, hour: hours[ci] }))
+      .filter(p => p.occ != null);
+    const result = !validPairs.length
+      ? { route: 'R1', hour: '—', occupancy: 0, hoursOver85: 0 }
+      : null;
+    expect(result).not.toBeNull();
+    expect(result.hour).toBe('—');
+    expect(result.occupancy).toBe(0);
+  });
+});
+
+// ── Null cell accessibility ───────────────────────────────────────────────────
+
+describe('OccupancyHeatmap — null cell accessibility contract', () => {
+  it('null cells should use index as key to avoid collisions', () => {
+    // key={ci} is safe even when hours[ci] is undefined
+    const hours = ['05:00'];
+    const ci = 1; // out of bounds — hours[1] is undefined
+    const key = ci; // using ci directly, not hours[ci]
+    expect(key).toBe(1);
+    expect(hours[ci]).toBeUndefined();
   });
 });

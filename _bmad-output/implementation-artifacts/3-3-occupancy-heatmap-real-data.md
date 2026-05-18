@@ -1,6 +1,6 @@
 # Story 3.3: Occupancy Heatmap — Real Data
 
-Status: review
+Status: done
 
 ## Story
 
@@ -95,6 +95,22 @@ Component data-fetch pattern: `useState({ data, loading, error })` + `useEffect(
 - Rows are fully data-driven from `routes` + `cells` — no hardcoded routes.
 - `daysOver85` derived client-side: count non-null cells ≥ 85 per route row.
 - 139/139 tests pass; no new lint errors in changed files.
+
+### Review Findings
+
+- [x] [Review][Decision] `daysOver85` counts hours-above-85, not calendar days — resolved: renamed to `hoursOver85`, label updated to "{n} hour slots ≥85% avg" [OccupancyHeatmap.jsx]
+- [x] [Review][Patch] `cells[ri]` undefined crash when backend returns fewer cell rows than routes [OccupancyHeatmap.jsx]
+- [x] [Review][Patch] Unguarded destructure on malformed payload — 200 OK with bad shape crashes [OccupancyHeatmap.jsx]
+- [x] [Review][Patch] Empty response `{routes:[],hours:[],cells:[]}` renders blank with no empty-state message [OccupancyHeatmap.jsx]
+- [x] [Review][Patch] Stale tooltip and hoveredCell not cleared when dateRange changes — AC3 miss [OccupancyHeatmap.jsx]
+- [x] [Review][Patch] `key={hour}` collision when `hours[ci]` is undefined — switched to `key={ci}` [OccupancyHeatmap.jsx]
+- [x] [Review][Patch] Null cells missing `role="gridcell"` and `tabIndex` — breaks keyboard nav continuity — AC6 [OccupancyHeatmap.jsx]
+- [x] [Review][Defer] `peakHours` not memoized — recomputes on hover [OccupancyHeatmap.jsx:97] — deferred, pre-existing pattern
+- [x] [Review][Defer] Retry button not debounced — N rapid clicks fire N requests [OccupancyHeatmap.jsx:85] — deferred, PoC acceptable
+- [x] [Review][Defer] AbortController not used — fetch leaks on rapid range changes [OccupancyHeatmap.jsx:37] — deferred, pre-existing in all analytics API functions
+- [x] [Review][Defer] Error state swallows `.status` — no 401/timeout differentiation [OccupancyHeatmap.jsx:83] — deferred, matches ExceptionWorkflow pattern
+- [x] [Review][Defer] `encodeURIComponent` coverage test missing for special char range values [analytics.test.js] — deferred, pre-existing
+- [x] [Review][Defer] `RANGE_DAYS[dateRange] ?? 7` silent fallback on unknown prop [OccupancyHeatmap.jsx:26] — deferred, dateRange constrained by parent
 
 ## File List
 

@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-19  # E3-S1 done; E3-S2 done (12 review patches applied); E3-S3 → review
+last_updated: 2026-05-19  # E3-S1 done; E3-S2 done (12 review patches applied); E3-S3 done (7 review patches)
 project: oebb-agent
 # code-review 2026-05-17: story 2-2 → in-progress (1 patch finding: AC1 scroll-to-top)
 # code-review 2026-05-17: story 2-3 → done (5 patches applied)
@@ -82,7 +82,7 @@ development_status:
   epic-3: in-progress
   3-1-analytics-rest-endpoints: done
   3-2-capacity-exceptions-real-data: done
-  3-3-occupancy-heatmap-real-data: review
+  3-3-occupancy-heatmap-real-data: done
   3-4-dwell-time-real-data: backlog
   3-5-ai-detection-quality-real-data: backlog
   3-6-system-health-websocket-staleness: backlog

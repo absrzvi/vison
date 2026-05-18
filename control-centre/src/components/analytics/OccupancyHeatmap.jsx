@@ -33,6 +33,9 @@ export function OccupancyHeatmap({ dateRange = '7d' }) {
 
   useEffect(() => {
     let cancelled = false;
+    // Clear stale hover/tooltip immediately so no stale overlay persists during refetch
+    setHoveredCell(null);
+    setTooltip(null);
     setState({ data: null, loading: true, error: null }); // eslint-disable-line react-hooks/set-state-in-effect
     getOccupancyHeatmap(dateRange)
       .then(data => { if (!cancelled) setState({ data, loading: false, error: null }); })
@@ -92,19 +95,30 @@ export function OccupancyHeatmap({ dateRange = '7d' }) {
     );
   }
 
-  const { routes, hours, cells } = state.data;
+  // Guard against malformed payload (200 OK with missing/invalid shape)
+  const routes = Array.isArray(state.data?.routes) ? state.data.routes : [];
+  const hours = Array.isArray(state.data?.hours) ? state.data.hours : [];
+  const cells = Array.isArray(state.data?.cells) ? state.data.cells : [];
+
+  if (routes.length === 0) {
+    return (
+      <div className="occ-heatmap occ-heatmap__empty" data-testid="occ-heatmap-empty">
+        <span>No occupancy data available for this period.</span>
+      </div>
+    );
+  }
 
   // Derive peak hours from API response — no separate request
   const peakHours = routes.map((route, ri) => {
-    const rowCells = cells[ri];
+    const rowCells = Array.isArray(cells[ri]) ? cells[ri] : [];
     const validPairs = rowCells
       .map((occ, ci) => ({ occ, hour: hours[ci] }))
       .filter(p => p.occ != null);
-    if (!validPairs.length) return { route, hour: '—', occupancy: 0, daysOver85: 0, daysInRange: days };
+    if (!validPairs.length) return { route, hour: '—', occupancy: 0, hoursOver85: 0 };
     const max = Math.max(...validPairs.map(p => p.occ));
     const peak = validPairs.find(p => p.occ === max);
-    const daysOver85 = rowCells.filter(v => v != null && v >= 85).length;
-    return { route, hour: peak.hour, occupancy: max, daysOver85, daysInRange: days };
+    const hoursOver85 = rowCells.filter(v => v != null && v >= 85).length;
+    return { route, hour: peak.hour, occupancy: max, hoursOver85 };
   });
 
   return (
@@ -123,43 +137,48 @@ export function OccupancyHeatmap({ dateRange = '7d' }) {
             ))}
           </div>
 
-          {routes.map((route, ri) => (
-            <div key={route} className="occ-heatmap__row">
-              <div className="occ-heatmap__route-label" title={route}>{route}</div>
-              {cells[ri].map((occ, ci) => {
-                const isHovered = hoveredCell?.ri === ri && hoveredCell?.ci === ci;
-                const hour = hours[ci];
-                if (occ == null) {
+          {routes.map((route, ri) => {
+            const rowCells = Array.isArray(cells[ri]) ? cells[ri] : [];
+            return (
+              <div key={route} className="occ-heatmap__row">
+                <div className="occ-heatmap__route-label" title={route}>{route}</div>
+                {rowCells.map((occ, ci) => {
+                  const isHovered = hoveredCell?.ri === ri && hoveredCell?.ci === ci;
+                  const hour = hours[ci] ?? `col-${ci}`;
+                  if (occ == null) {
+                    return (
+                      <div
+                        key={ci}
+                        className="occ-heatmap__cell occ-heatmap__cell--null"
+                        role="gridcell"
+                        tabIndex={0}
+                        aria-label={`${route}, ${hour}, no data`}
+                      >
+                        —
+                      </div>
+                    );
+                  }
+                  const { bg, text } = occupancyColor(occ);
                   return (
                     <div
-                      key={hour}
-                      className="occ-heatmap__cell occ-heatmap__cell--null"
-                      aria-label={`${route}, ${hour}, no data`}
+                      key={ci}
+                      className={`occ-heatmap__cell${isHovered ? ' occ-heatmap__cell--hovered' : ''}`}
+                      style={{ background: bg, color: text }}
+                      onMouseEnter={e => handleCellEnter(e, ri, ci, route, hour, occ)}
+                      onMouseLeave={handleCellLeave}
+                      tabIndex={0}
+                      role="gridcell"
+                      aria-label={`${route}, ${hour}, ${occ}% average occupancy`}
+                      onFocus={e => handleCellEnter(e, ri, ci, route, hour, occ)}
+                      onBlur={handleCellLeave}
                     >
-                      —
+                      {occ}%
                     </div>
                   );
-                }
-                const { bg, text } = occupancyColor(occ);
-                return (
-                  <div
-                    key={hour}
-                    className={`occ-heatmap__cell${isHovered ? ' occ-heatmap__cell--hovered' : ''}`}
-                    style={{ background: bg, color: text }}
-                    onMouseEnter={e => handleCellEnter(e, ri, ci, route, hour, occ)}
-                    onMouseLeave={handleCellLeave}
-                    tabIndex={0}
-                    role="gridcell"
-                    aria-label={`${route}, ${hour}, ${occ}% average occupancy`}
-                    onFocus={e => handleCellEnter(e, ri, ci, route, hour, occ)}
-                    onBlur={handleCellLeave}
-                  >
-                    {occ}%
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+                })}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -214,9 +233,9 @@ export function OccupancyHeatmap({ dateRange = '7d' }) {
             <span className="peak-hour-row__pct" style={{ color: occupancyColor(p.occupancy).text }}>
               {p.occupancy}%
             </span>
-            {p.daysOver85 > 0 && (
+            {p.hoursOver85 > 0 && (
               <span className="peak-hour-row__days-note">
-                {p.daysOver85}/{p.daysInRange} days ≥85%
+                {p.hoursOver85} hour slots ≥85% avg
               </span>
             )}
           </div>

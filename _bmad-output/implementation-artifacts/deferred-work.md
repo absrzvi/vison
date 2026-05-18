@@ -1,5 +1,14 @@
 # Deferred Work
 
+## Deferred from: code review of 3-3-occupancy-heatmap-real-data (2026-05-19)
+
+- **`peakHours` not memoized** [OccupancyHeatmap.jsx] — pre-existing pattern; recomputes on hover; cheap enough for PoC route counts
+- **Retry button not debounced** [OccupancyHeatmap.jsx] — N rapid clicks fire N requests; acceptable for PoC; add debounce/in-flight guard if operators report issues
+- **AbortController not used** [OccupancyHeatmap.jsx, analytics.js] — fetch leaks on rapid range changes; pre-existing in all analytics API functions; add when AbortSignal support is standardised across the API module
+- **Error state swallows `.status`** [OccupancyHeatmap.jsx] — no 401/timeout differentiation; matches ExceptionWorkflow pattern; revisit when auth error handling is centralised
+- **`encodeURIComponent` coverage missing for special char range values** [analytics.test.js] — low risk; range is always one of `7d|14d|30d`
+- **`RANGE_DAYS[dateRange] ?? 7` silent fallback** [OccupancyHeatmap.jsx] — dateRange is constrained by Analytics.jsx toggle to known values; will never hit the fallback in practice
+
 ## Deferred from: create-story of 3-2-capacity-exceptions-real-data (2026-05-19)
 
 - **Full calendar date picker with `from/to` API params** [ExceptionWorkflow.jsx, analytics routes] — Epic AC specifies a full calendar picker; deferred because E3-S1 backend only accepts `range=7d|14d|30d`; 3-option toggle satisfies PoC needs; implement as additive backend change when capacity planners need arbitrary windows
