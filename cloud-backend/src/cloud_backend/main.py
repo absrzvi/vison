@@ -11,6 +11,7 @@ from .routes.capacity_review import capacity_review_router
 from .routes.fleet import router as fleet_router
 from .routes.health import router as health_router
 from .routes.ingest import router as ingest_router
+from .routes.maintenance import router as maintenance_router
 from .routes.preferences import router as preferences_router
 
 structlog.configure(
@@ -33,6 +34,7 @@ app.include_router(health_router)
 app.include_router(ingest_router)
 app.include_router(fleet_router)
 app.include_router(alerts_router)
+app.include_router(maintenance_router)
 app.include_router(preferences_router)
 
 

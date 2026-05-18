@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useFleetData } from '../../context/FleetContext';
 import { getSystemHealth } from '../../api/health';
+import { raiseMaintenanceTicket } from '../../api/maintenance';
 import './SystemHealth.css';
+
+// eslint-disable-next-line no-unused-vars
+const MAINTENANCE_APP_ENABLED = import.meta.env.VITE_MAINTENANCE_APP_ENABLED === 'true';
+const _RAISED_BY = import.meta.env.VITE_API_KEY ?? 'dev-key';
 
 const SEV_CLASS = { green: 'badge--green', amber: 'badge--amber', red: 'badge--red' };
 const SEV_ORDER = { red: 0, amber: 1, green: 2 };
@@ -159,14 +164,26 @@ export function SystemHealth() {
     });
   }, [fleet]);
 
-  const confirmRaiseTicket = useCallback((trainId) => {
-    const ref = `REF#${Math.floor(10000 + Math.random() * 90000)}`;
-    setTicketRaisedIds(prev => new Set([...prev, trainId]));
-    setTicketRefs(prev => ({ ...prev, [trainId]: ref }));
-    setTicketPending(null);
-    setTicketToast({ trainId, ref });
-    clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setTicketToast(null), 4000);
+  const confirmRaiseTicket = useCallback(async (trainId) => {
+    setTicketPending(`${trainId}--loading`);
+    try {
+      const { ticket_id } = await raiseMaintenanceTicket(
+        trainId,
+        `Fleet health issue reported for ${trainId}`,
+        _RAISED_BY,
+      );
+      setTicketRaisedIds(prev => new Set([...prev, trainId]));
+      setTicketRefs(prev => ({ ...prev, [trainId]: ticket_id }));
+      setTicketPending(null);
+      setTicketToast({ trainId, ref: ticket_id });
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setTicketToast(null), 4000);
+    } catch {
+      setTicketPending(null);
+      setTicketToast({ trainId, ref: null, error: true });
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setTicketToast(null), 4000);
+    }
   }, []);
 
   useEffect(() => () => clearTimeout(toastTimerRef.current), []);
@@ -247,7 +264,8 @@ export function SystemHealth() {
     const trainId = train.id;
     const raised = ticketRaisedIds.has(trainId);
     const ref = ticketRefs[trainId];
-    const isPending = ticketPending === trainId;
+    const isPending = ticketPending === trainId || ticketPending === `${trainId}--loading`;
+    const isLoading = ticketPending === `${trainId}--loading`;
 
     if (raised) {
       return (
@@ -257,6 +275,14 @@ export function SystemHealth() {
             Ticket raised
             <span className="sh-panel__ticket-ref">{ref}</span>
           </div>
+        </div>
+      );
+    }
+
+    if (isLoading) {
+      return (
+        <div className="sh-panel__footer sh-panel__footer--confirm">
+          <span className="sh-panel__confirm-label">Raising ticket for {trainId}…</span>
         </div>
       );
     }
@@ -499,8 +525,10 @@ export function SystemHealth() {
       </div>
 
       {ticketToast && (
-        <div className="sh-toast">
-          Ticket raised — {ticketToast.ref} · {ticketToast.trainId}
+        <div className={`sh-toast${ticketToast.error ? ' sh-toast--error' : ''}`}>
+          {ticketToast.error
+            ? 'Ticket creation failed — please try again'
+            : `Ticket raised — ${ticketToast.ref} · ${ticketToast.trainId}`}
         </div>
       )}
     </div>

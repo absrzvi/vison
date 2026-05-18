@@ -1,6 +1,6 @@
 # Story 3.7: System Health Maintenance Ticket API
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -43,36 +43,36 @@ Then the Maintenance App CTA (`sh-panel-cta`) remains hidden; the flag value is 
 
 ## Tasks / Subtasks
 
-- [ ] **T1** Create `control-centre/src/api/maintenance.js` (AC1, AC2, AC3)
-  - [ ] T1.1 Follow the `escalations.js` pattern: shared `_post` helper with `X-API-Key` and 10s timeout
-  - [ ] T1.2 Export `raiseMaintenanceTicket(trainId, issueSummary, raisedBy)` → `POST /api/v1/maintenance/tickets`
-  - [ ] T1.3 On non-ok response throw `Error` with `.status` set (same pattern as escalations.js)
+- [x] **T1** Create `control-centre/src/api/maintenance.js` (AC1, AC2, AC3)
+  - [x] T1.1 Follow the `escalations.js` pattern: shared `_post` helper with `X-API-Key` and 10s timeout
+  - [x] T1.2 Export `raiseMaintenanceTicket(trainId, issueSummary, raisedBy)` → `POST /api/v1/maintenance/tickets`
+  - [x] T1.3 On non-ok response throw `Error` with `.status` set (same pattern as escalations.js)
 
-- [ ] **T2** Refactor `confirmRaiseTicket` in `SystemHealth.jsx` to call the API (AC1, AC2, AC3, AC6)
-  - [ ] T2.1 Import `raiseMaintenanceTicket` from `../../api/maintenance`
-  - [ ] T2.2 Remove `Math.random()` ticket ID generation entirely
-  - [ ] T2.3 Make `confirmRaiseTicket` async; call `raiseMaintenanceTicket`, await response
-  - [ ] T2.4 On success: set `ticketRaisedIds`, set `ticketRefs[trainId] = ticket_id` (from server), clear `ticketPending`, show toast "Ticket raised — {ticket_id} · {train_id}"
-  - [ ] T2.5 On error: revert `ticketPending` to null; show error toast "Ticket creation failed — please try again"; do NOT populate `ticketRefs`
-  - [ ] T2.6 Add `[ticketPending]` loading state to prevent double-submit (set before fetch, clear on resolve/reject)
+- [x] **T2** Refactor `confirmRaiseTicket` in `SystemHealth.jsx` to call the API (AC1, AC2, AC3, AC6)
+  - [x] T2.1 Import `raiseMaintenanceTicket` from `../../api/maintenance`
+  - [x] T2.2 Remove `Math.random()` ticket ID generation entirely
+  - [x] T2.3 Make `confirmRaiseTicket` async; call `raiseMaintenanceTicket`, await response
+  - [x] T2.4 On success: set `ticketRaisedIds`, set `ticketRefs[trainId] = ticket_id` (from server), clear `ticketPending`, show toast "Ticket raised — {ticket_id} · {train_id}"
+  - [x] T2.5 On error: revert `ticketPending` to null; show error toast "Ticket creation failed — please try again"; do NOT populate `ticketRefs`
+  - [x] T2.6 Add `[ticketPending]` loading state to prevent double-submit (set before fetch, clear on resolve/reject)
 
-- [ ] **T3** Wire `VITE_MAINTENANCE_APP_ENABLED` env flag (AC5)
-  - [ ] T3.1 In `SystemHealth.jsx` read `const maintenanceAppEnabled = import.meta.env.VITE_MAINTENANCE_APP_ENABLED === 'true'`
-  - [ ] T3.2 Conditionally render `sh-panel-cta` only when `maintenanceAppEnabled === true`
-  - [ ] T3.3 Remove any hardcoded `false` in component logic for that CTA
+- [x] **T3** Wire `VITE_MAINTENANCE_APP_ENABLED` env flag (AC5)
+  - [x] T3.1 In `SystemHealth.jsx` read `const MAINTENANCE_APP_ENABLED = import.meta.env.VITE_MAINTENANCE_APP_ENABLED === 'true'`
+  - [x] T3.2 `sh-panel-cta` does not currently exist in component — no CTA to gate; constant is defined ready for future use
+  - [x] T3.3 No hardcoded `false` in component logic for CTA
 
-- [ ] **T4** Create backend route `cloud-backend/src/cloud_backend/routes/maintenance.py` (AC7)
-  - [ ] T4.1 `POST /api/v1/maintenance/tickets` with `Security(require_api_key)`
-  - [ ] T4.2 Accept request body: `{ train_id: str, issue_summary: str, raised_by: str }`
-  - [ ] T4.3 Generate server-side `ticket_id`: `f"REF#{uuid4().hex[:5].upper()}"` (deterministic prefix, no Math.random)
-  - [ ] T4.4 Return HTTP 201 with `{ ticket_id, created_at: datetime.now(UTC).isoformat() }`
-  - [ ] T4.5 Register router in `cloud-backend/src/cloud_backend/main.py`
+- [x] **T4** Create backend route `cloud-backend/src/cloud_backend/routes/maintenance.py` (AC7)
+  - [x] T4.1 `POST /api/v1/maintenance/tickets` with `Security(require_api_key)`
+  - [x] T4.2 Accept request body: `{ train_id: str, issue_summary: str, raised_by: str }`
+  - [x] T4.3 Generate server-side `ticket_id`: `f"REF#{uuid4().hex[:5].upper()}"` (no Math.random)
+  - [x] T4.4 Return HTTP 201 with `{ ticket_id, created_at: datetime.now(UTC).isoformat() }`
+  - [x] T4.5 Register router in `cloud-backend/src/cloud_backend/main.py`
 
-- [ ] **T5** Write tests
-  - [ ] T5.1 `control-centre/src/api/__tests__/maintenance.test.js` — follow escalations.test.js pattern; test: 201 → returns `{ ticket_id, created_at }`; 4xx → throws Error with `.status`; 5xx → throws Error with `.status`; request body contains `train_id`, `issue_summary`, `raised_by`; `X-API-Key` header sent
-  - [ ] T5.2 `cloud-backend/tests/unit/test_maintenance_api.py` — test: 401 without key; 201 with valid key + body; `ticket_id` matches `REF#[A-F0-9]{5}` pattern; `created_at` is ISO-8601
+- [x] **T5** Write tests
+  - [x] T5.1 `control-centre/src/api/__tests__/maintenance.test.js` — 7 tests: 201 success, request body shape, X-API-Key header, Content-Type, 4xx throws, 5xx throws, network error propagation
+  - [x] T5.2 `cloud-backend/tests/unit/test_maintenance_api.py` — 6 tests: 401 no key, 401 wrong key, 201 success + REF# pattern, unique ticket IDs, 422 missing train_id, 422 missing issue_summary
 
-- [ ] **T6** Run full test suite and lint; confirm no regressions
+- [x] **T6** Run full test suite and lint; confirm no regressions
 
 ## Dev Notes
 
@@ -346,6 +346,16 @@ def test_raise_ticket_201():
 - Open Questions: None.
 - Simplicity Check: 2 new files (frontend module + backend route), 2 new test files, 1 component update (remove Math.random + wire async), 1 CSS addition, 1 main.py router registration.
 
+### Completion Notes
+- `raiseMaintenanceTicket` in `src/api/maintenance.js` follows `escalations.js` pattern exactly; 7 unit tests cover success, error, body shape, and headers.
+- `confirmRaiseTicket` in `SystemHealth.jsx` is now `async`; uses `"${trainId}--loading"` pending state for double-submit prevention; error path shows "Ticket creation failed — please try again" toast with `.sh-toast--error` styling; `Math.random()` removed.
+- `MAINTENANCE_APP_ENABLED` constant defined from `VITE_MAINTENANCE_APP_ENABLED` env var; no `sh-panel-cta` currently rendered — constant is ready for future gating.
+- Backend `POST /api/v1/maintenance/tickets` returns 201 `{ ticket_id: "REF#XXXXX", created_at }` — no DB write for PoC; 6 unit tests pass.
+- `--obb-sev-critical` used for error toast background (correct token — `--obb-sev-high` does not exist in this design system).
+- Pre-existing lint warning at SystemHealth.jsx line 127 (`setState in effect`) not introduced by this story.
+- 225/225 frontend tests pass; 48/48 backend unit tests pass.
+
 ## Change Log
 
 - 2026-05-19: Story created — system health maintenance ticket API
+- 2026-05-19: Implemented — backend route, frontend API wiring, Math.random() removed, 13 new tests; 225/225 frontend + 48/48 backend pass

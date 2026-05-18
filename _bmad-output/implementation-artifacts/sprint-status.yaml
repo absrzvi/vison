@@ -87,7 +87,7 @@ development_status:
   3-4-dwell-time-real-data: done
   3-5-ai-detection-quality-real-data: done
   3-6-system-health-websocket-staleness: done
-  3-7-system-health-maintenance-ticket-api: ready-for-dev
+  3-7-system-health-maintenance-ticket-api: review
   epic-3-retrospective: optional
 
   # ── Epic 4: Onboard Edge Pipeline ──
