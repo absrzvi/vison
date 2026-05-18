@@ -7,9 +7,11 @@ import './AppShell.css';
 function secsElapsed(timestamp) {
   const [h, m] = timestamp.split(':').map(Number);
   const now = new Date();
-  let diffMins = (now.getHours() * 60 + now.getMinutes()) - (h * 60 + m);
-  if (diffMins < 0) diffMins += 1440;
-  return diffMins * 60;
+  let diffSecs =
+    (now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) -
+    (h * 3600 + m * 60);
+  if (diffSecs < 0) diffSecs += 86400;
+  return diffSecs;
 }
 
 export function AppShell() {

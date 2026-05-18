@@ -103,7 +103,7 @@ Transform tasks into verifiable goals. For multi-step tasks state a brief plan w
 
 ## Skills & Workflow
 
-- BMAD skills handle PM/design process. Superpowers skills handle implementation workflow.
+- **Use BMAD skills for all workflow tasks** (code review, story dev, create-story, etc.). Never substitute superpowers equivalents (e.g. `superpowers:requesting-code-review`) when a BMAD skill exists.
 - Context7 MCP: use for any library/framework/API documentation lookup — even well-known ones.
 - Brainstorm before any creative or feature work. Write plans before touching code on multi-step tasks.
 

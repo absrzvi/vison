@@ -25,6 +25,8 @@ router = APIRouter(
 
 _VALID_THRESHOLD = frozenset({30, 60, 90, 120})
 _VALID_STALENESS = frozenset({60, 120, 180, 300})
+_DEFAULT_THRESHOLD = 60
+_DEFAULT_STALENESS = 120
 
 
 class PreferencesOut(BaseModel):
@@ -120,8 +122,12 @@ async def patch_preferences(
         text(_UPSERT),
         {
             "oid": api_key,
-            "t": body.threshold_sec or 60,
-            "s": body.staleness_threshold_sec or 120,
+            "t": body.threshold_sec if body.threshold_sec is not None else _DEFAULT_THRESHOLD,
+            "s": (
+                body.staleness_threshold_sec
+                if body.staleness_threshold_sec is not None
+                else _DEFAULT_STALENESS
+            ),
             "t_patch": body.threshold_sec,
             "s_patch": body.staleness_threshold_sec,
         },

@@ -1,6 +1,6 @@
 # Story E2-S8 — Per-Operator Configurable Alert Threshold
 
-**Status:** review
+**Status:** done
 **Sprint:** Epic 2
 **Story Key:** 2-8-per-operator-configurable-alert-threshold
 
@@ -17,6 +17,7 @@
 ## Acceptance Criteria
 
 **AC1:** Given the operator opens their preferences (settings icon in top nav), when the preferences panel renders, then `GET /api/v1/operators/me/preferences` is called; two controls are shown: "Critical alert threshold" (30s / 60s / 90s / 120s, default 60s) and "Connection staleness warning" (60s / 120s / 180s / 300s, default 120s); returned values are highlighted; 404 uses defaults.
+> **Implementation note:** GET fires on `FleetContext` mount (page load), not on panel open. This satisfies AC3's instant-load requirement naturally and gives faster UX. The panel renders already-reconciled values. Decision confirmed 2026-05-18.
 
 **AC2:** Given the operator selects a new threshold and confirms, when the selection is confirmed, then `PATCH /api/v1/operators/me/preferences` is called with `{ threshold_sec: N }`; on HTTP 200 the alert hook immediately uses the new value; the preference is also persisted to `localStorage` key `oebb.cc.alertThresholdSeconds` as a cache for offline / fast-load.
 
@@ -35,6 +36,21 @@
 ---
 
 ## Tasks / Subtasks
+
+### Review Findings
+
+- [x] [Review][Decision] GET preferences fires on mount not panel open — resolved: keep mount-time GET (option a); AC1 note updated.
+- [x] [Review][Patch] secsElapsed rounds to full minutes — 30s threshold is effectively 60s [AppShell.jsx:7-13]
+- [x] [Review][Patch] focusIdxRef mutated during render (concurrent-mode unsafe) [OperatorPreferences.jsx SegmentedControl]
+- [x] [Review][Patch] localStorage NaN guard missing — corrupted value silently disables alert hook [FleetContext.jsx]
+- [x] [Review][Patch] Stale closure in updateAlertThreshold — prev captured at call time [FleetContext.jsx]
+- [x] [Review][Patch] `body.threshold_sec or 60` wrong idiom for None-check [preferences.py:123]
+- [x] [Review][Patch] AC8 magic numbers 60/120 in PATCH upsert defaults [preferences.py:123-124]
+- [x] [Review][Patch] Focus trap missing in preferences modal (Tab escapes panel) [OperatorPreferences.jsx]
+- [x] [Review][Patch] Toast setTimeout not cleared on unmount — memory leak [OperatorPreferences.jsx]
+- [x] [Review][Defer] API key as PK in operator_preferences [0002_operator_preferences.py] — deferred, pre-existing single-operator design
+- [x] [Review][Defer] VITE_API_KEY in client bundle — deferred, pre-existing architecture from E2-S1
+- [x] [Review][Defer] PATCH {} creates row with defaults instead of no-op — deferred, no AC requires empty-PATCH to be a no-op
 
 - [x] **T1** Alembic migration `0002_operator_preferences.py`
   - [x] T1.1 Create `operator_preferences` table with CHECK constraints

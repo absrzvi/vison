@@ -43,12 +43,12 @@ export function FleetProvider({ children }) {
   // ── Alert threshold (AC2/AC3/AC5) ───────────────────────────────────────
   // Initialise from localStorage for instant value; background GET reconciles.
   const [alertThresholdSeconds, setAlertThresholdSeconds] = useState(() => {
-    const stored = localStorage.getItem(LS_KEY_ALERT_THRESHOLD);
-    return stored ? parseInt(stored, 10) : DEFAULT_ALERT_THRESHOLD_SECONDS;
+    const parsed = parseInt(localStorage.getItem(LS_KEY_ALERT_THRESHOLD), 10);
+    return Number.isFinite(parsed) ? parsed : DEFAULT_ALERT_THRESHOLD_SECONDS;
   });
   const [stalenessThresholdSeconds, setStalenessThresholdSeconds] = useState(() => {
-    const stored = localStorage.getItem(LS_KEY_STALENESS_THRESHOLD);
-    return stored ? parseInt(stored, 10) : DEFAULT_STALENESS_THRESHOLD_SECONDS;
+    const parsed = parseInt(localStorage.getItem(LS_KEY_STALENESS_THRESHOLD), 10);
+    return Number.isFinite(parsed) ? parsed : DEFAULT_STALENESS_THRESHOLD_SECONDS;
   });
   // Map<id, 'pending' | Error> — per-escalation action state
   const [escalationActionState, setEscalationActionState] = useState({});
@@ -162,32 +162,33 @@ export function FleetProvider({ children }) {
   }, []);
 
   // updateAlertThreshold — PATCH + update state/localStorage; returns Error on failure (AC4)
+  // Uses setter callback to capture prev so the revert isn't a stale closure.
   const updateAlertThreshold = useCallback(async (value) => {
-    const prev = alertThresholdSeconds;
-    setAlertThresholdSeconds(value);
+    let prevValue;
+    setAlertThresholdSeconds(prev => { prevValue = prev; return value; });
     try {
       await patchPreferences({ threshold_sec: value });
       localStorage.setItem(LS_KEY_ALERT_THRESHOLD, String(value));
       return null;
     } catch (err) {
-      setAlertThresholdSeconds(prev);
+      setAlertThresholdSeconds(prevValue);
       return err;
     }
-  }, [alertThresholdSeconds]);
+  }, []);
 
   // updateStalenessThreshold — same pattern
   const updateStalenessThreshold = useCallback(async (value) => {
-    const prev = stalenessThresholdSeconds;
-    setStalenessThresholdSeconds(value);
+    let prevValue;
+    setStalenessThresholdSeconds(prev => { prevValue = prev; return value; });
     try {
       await patchPreferences({ staleness_threshold_sec: value });
       localStorage.setItem(LS_KEY_STALENESS_THRESHOLD, String(value));
       return null;
     } catch (err) {
-      setStalenessThresholdSeconds(prev);
+      setStalenessThresholdSeconds(prevValue);
       return err;
     }
-  }, [stalenessThresholdSeconds]);
+  }, []);
 
   // generation counter per trainId — incremented on each fetch so a stale response
   // that resolves after a newer one is silently discarded.

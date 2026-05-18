@@ -13,7 +13,11 @@ function SegmentedControl({ label, options, value, onCommit, formatLabel }) {
   const groupRef = useRef(null);
 
   // When value changes (e.g. server reconcile), keep focusIdx aligned.
-  focusIdxRef.current = options.indexOf(value) === -1 ? focusIdxRef.current : options.indexOf(value);
+  // Done in useEffect (not render body) to avoid mutating a ref during render in concurrent mode.
+  useEffect(() => {
+    const idx = options.indexOf(value);
+    if (idx !== -1) focusIdxRef.current = idx;
+  }, [value, options]);
 
   function moveFocus(newIdx) {
     focusIdxRef.current = newIdx;
@@ -74,35 +78,59 @@ export function OperatorPreferences({ onClose }) {
   const { alertThresholdSeconds, stalenessThresholdSeconds, updateAlertThreshold, updateStalenessThreshold } = useFleetData();
   const [toast, setToast] = useState(null);
   const panelRef = useRef(null);
+  const toastTimerRef = useRef(null);
 
-  // Close on Escape
+  // Close on Escape; trap Tab focus within panel
   useEffect(() => {
     function onKey(e) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab' && panelRef.current) {
+        const focusable = Array.from(
+          panelRef.current.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter(el => !el.disabled);
+        if (!focusable.length) { e.preventDefault(); return; }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+        } else {
+          if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+      }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Trap focus inside panel
+  // Initial focus
   useEffect(() => {
     panelRef.current?.focus();
   }, []);
 
+  // Clear toast timer on unmount
+  useEffect(() => {
+    return () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); };
+  }, []);
+
+  function showToast(msg) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(msg);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+  }
+
   async function handleThresholdCommit(val) {
     const err = await updateAlertThreshold(val);
-    if (err) {
-      setToast('Preference not saved — please retry');
-      setTimeout(() => setToast(null), 4000);
-    }
+    if (err) showToast('Preference not saved — please retry');
   }
 
   async function handleStalenessCommit(val) {
     const err = await updateStalenessThreshold(val);
-    if (err) {
-      setToast('Preference not saved — please retry');
-      setTimeout(() => setToast(null), 4000);
-    }
+    if (err) showToast('Preference not saved — please retry');
   }
 
   return (

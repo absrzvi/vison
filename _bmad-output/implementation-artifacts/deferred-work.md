@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 2-8-per-operator-configurable-alert-threshold (2026-05-18)
+
+- **API key used directly as operator_id (PK)** [0002_operator_preferences.py] — single-operator dev environment by design (pre-flight block); multi-tenant identity will come from Keycloak (ADR-6/7) at fleet rollout
+- **VITE_API_KEY in client bundle** — pre-existing architecture from E2-S1; covered by ADR-6/7 OAuth2/OIDC path
+- **PATCH {} creates row with server defaults instead of no-op** [preferences.py] — no AC requires empty-PATCH to be a no-op; revisit if a future story requires idempotent empty patches
+
 ## Deferred from: code review of 2-7-loading-skeletons (2026-05-18)
 
 - **FleetMap renders unconditionally with empty fleet while siblings show skeletons** — FleetMap has its own empty-state handling; cosmetic inconsistency acceptable for PoC. Revisit in Epic 3 when real map data arrives.
