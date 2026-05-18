@@ -41,6 +41,7 @@ project: oebb-agent
 # code-review 2026-05-17: story 2-3 → done (5 patches applied)
 # dev 2026-05-18: story 2-7 → review (loading skeletons + Playwright E2E setup)
 # dev 2026-05-18: story 2-8 → review (configurable alert threshold, preferences panel, backend router)
+# create-story 2026-05-19: story 2-9 → ready-for-dev (system health data feed)
 project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
@@ -66,7 +67,7 @@ development_status:
   2-6-train-detail-event-store-alert: done
   2-7-loading-skeletons: done
   2-8-per-operator-configurable-alert-threshold: done
-  2-9-system-health-data-feed: backlog
+  2-9-system-health-data-feed: review
   epic-2-retrospective: optional
 
   # ── Epic 3: Control Centre Dashboard — Analytics & System Health ──

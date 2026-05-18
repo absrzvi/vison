@@ -380,6 +380,24 @@
   font-style: italic;
 }
 
+/* ── Error state ───────────────────────────────────────────── */
+
+.sh-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 12px;
+  color: var(--obb-text-on-dark-3);
+  font-size: 13px;
+}
+
+/* ── Staleness ─────────────────────────────────────────────── */
+
+.sh-summary-tile--stale { background: rgba(255, 179, 0, 0.05); }
+.sh-summary-tile__value--stale { color: var(--obb-sev-warning); }
+
 /* ── Toast ─────────────────────────────────────────────────── */
 
 .sh-toast {

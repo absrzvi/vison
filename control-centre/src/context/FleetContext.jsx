@@ -129,6 +129,15 @@ export function FleetProvider({ children }) {
         }));
         setLastUpdate(new Date());
       }
+      if (msg.type === 'CAMERA_DEGRADED' || msg.type === 'CAMERA_RECOVERED') {
+        const { trainId, cctvStatus } = msg.payload ?? {};
+        if (trainId) {
+          setFleet(prev => prev.map(t =>
+            t.id === trainId ? { ...t, cctvStatus } : t
+          ));
+          setLastUpdate(new Date());
+        }
+      }
     };
 
     const client = makeClient(onMessage, onStatusChange);
