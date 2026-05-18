@@ -1,5 +1,42 @@
 # Deferred Work
 
+## E4 Sprint Planning Triage (2026-05-19)
+
+Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pipeline (Python async, no React).
+
+### Carry into E4 backlog
+
+| Item | From | Story | Rationale |
+|------|------|-------|-----------|
+| ESC during `--loading` doesn't abort in-flight POST — wire `AbortController` | E3-S7 | maintenance ticket | Applies to any future UI with async POST; not E4 (no React) — defer to E5 |
+| No ticket persistence — tickets exist only in logs | E3-S7 | maintenance ticket | Belongs in a dedicated Maintenance Epic, not E4 |
+| `5-hex ticket ID` collision risk at scale | E3-S7 | maintenance ticket | Belongs with persistence story above |
+| `@app.on_event("startup")` deprecated — migrate to `lifespan` | E1-S1 | cloud-backend | Low risk; do in E4 when touching `main.py` for new routers |
+| No index on `events.timestamp` / `event_type` | E1-S3 | PostgreSQL schema | Add in E4 when analytics query patterns are confirmed |
+| `next_cursor` off-by-one in SQLite event-store | E1-S4 | event-store | Fix in E4-S7 (event-store onboard REST API) — cursor contract will be formalised |
+| `insert_event` potential double-serialisation of payload | E1-S4 | event-store | Verify during E4-S7 when `oebb-shared` serialisation is finalised |
+| AbortController not used in analytics fetch (all components) | E3-S1–S5 | multiple | Pre-existing; address in a hardening sprint after E4 |
+
+### Not E4 — defer to later epics or hardening sprint
+
+| Item | Reason |
+|------|--------|
+| All React component deferred items (stale fetch, AbortController in JSX, etc.) | E4 has no React; address in E5 or hardening sprint |
+| `VITE_API_KEY` in browser bundle | Covered by ADR-6/7 Keycloak path at fleet rollout |
+| Operator identity from Keycloak session | Same ADR-6/7 path |
+| CSS class references without styles | Polish sprint after E4 |
+| All mock-data anchored issues (luggage `elapsedMin`, etc.) | Resolved in E5-S4 (ISO timestamp migration, done) |
+
+### Already resolved
+
+| Item | Resolution |
+|------|-----------|
+| `Math.random()` ticket ref | Replaced with server-assigned `uuid4` in E3-S7 |
+| `_RAISED_BY` logging API key | Fixed in E3-S7 review (uses `'operator'` literal) |
+| `--obb-sev-high` CSS token error | Fixed in E3-S5 review (use `--obb-sev-critical`) |
+
+---
+
 ## Deferred from: code review of 3-4-dwell-time-real-data (2026-05-19)
 
 - **Stale fetch / no AbortController** [DwellTime.jsx] — pre-existing in all analytics components (ExceptionWorkflow, OccupancyHeatmap, SystemHealth); not introduced here

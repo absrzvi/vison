@@ -1,0 +1,25 @@
+# Team overrides for bmad-create-story workflow.
+# Committed to repo — applies to every developer on the project.
+# Arrays append to the base customize.toml; scalars override.
+
+[workflow]
+
+persistent_facts = [
+  # A1: For every file marked UPDATE in the story, read the FULL file (not just the section
+  # being changed). Document in Dev Notes: (a) current state — what the file does today,
+  # (b) what this story changes — the specific sections/behaviors being modified,
+  # (c) what must be preserved — existing interactions and behaviors the story must not break.
+  # Skipping this is the primary cause of high review patch counts (E3 retrospective finding A1).
+  "STORY CONTEXT RULE — FULL FILE READS: For every file marked UPDATE in the story tasks, read the complete file before writing Dev Notes. Document three things: current state (what it does today), what this story changes (specific sections being modified), and what must be preserved (existing behaviors the story must not break). Never summarise from partial reads.",
+
+  # A2: When the story involves any CSS work (new .css file, modifying an existing one,
+  # or any component that uses design tokens), include the canonical token list in Dev Notes.
+  # Source of truth: control-centre/src/styles/colors_and_type.css
+  # Common mistake that has already caused review cycles: --obb-sev-warning does not exist
+  # (use --obb-sev-medium); --obb-sev-danger does not exist (use --obb-sev-critical).
+  "STORY CONTEXT RULE — CSS TOKENS: When the story involves any CSS work, include in Dev Notes the complete list of --obb-* tokens from control-centre/src/styles/colors_and_type.css. Call out the common mistakes explicitly: --obb-sev-warning does NOT exist (use --obb-sev-medium); --obb-sev-danger does NOT exist (use --obb-sev-critical). Severity ramp: --obb-sev-critical (red), --obb-sev-high (orange), --obb-sev-medium (amber), --obb-sev-advisory (blue), --obb-sev-normal (green).",
+
+  # Load project-context.md which now contains: async stale-closure patterns (A3),
+  # full CSS token reference (A2 backing), ADR-2 + ADR-18 full text, E4 dependency status.
+  "file:{project-root}/project-context.md",
+]
