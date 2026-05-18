@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useFleetData } from '../../context/FleetContext';
-import { WS_STALENESS_THRESHOLD_MS } from '../../constants/preferences';
 import { getSystemHealth } from '../../api/health';
 import './SystemHealth.css';
 
@@ -84,7 +83,7 @@ function SystemHealthSkeleton() {
 }
 
 export function SystemHealth() {
-  const { fleet, lastUpdate } = useFleetData();
+  const { fleet, lastUpdate, stalenessThresholdSeconds } = useFleetData();
   const [healthData, setHealthData] = useState(null);
   const [healthLoading, setHealthLoading] = useState(true);
   const [healthError, setHealthError] = useState(null);
@@ -182,9 +181,9 @@ export function SystemHealth() {
 
   const isStale = useMemo(() => {
     if (!lastUpdate) return false;
-    return (Date.now() - lastUpdate.getTime()) > WS_STALENESS_THRESHOLD_MS;
+    return (Date.now() - lastUpdate.getTime()) > stalenessThresholdSeconds * 1000;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastUpdate, tick]);
+  }, [lastUpdate, stalenessThresholdSeconds, tick]);
 
   if (healthLoading) return <SystemHealthSkeleton />;
 

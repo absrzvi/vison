@@ -86,7 +86,7 @@ development_status:
   3-3-occupancy-heatmap-real-data: done
   3-4-dwell-time-real-data: done
   3-5-ai-detection-quality-real-data: done
-  3-6-system-health-websocket-staleness: review
+  3-6-system-health-websocket-staleness: done
   3-7-system-health-maintenance-ticket-api: backlog
   epic-3-retrospective: optional
 

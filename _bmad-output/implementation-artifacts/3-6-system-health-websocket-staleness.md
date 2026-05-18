@@ -1,6 +1,6 @@
 # Story 3.6: System Health WebSocket Staleness & Live Timestamps
 
-Status: review
+Status: done
 
 ## Story
 
@@ -60,6 +60,15 @@ The "Last Update" summary tile's live-ticking elapsed counter (`setInterval`, 1s
   - [x] T4.1 `.sh-staleness-banner` — amber background (`var(--obb-sev-medium)`), full-width, above the summary strip, does not overlap summary strip
 
 - [x] **T5** Run full test suite and lint; confirm no regressions
+
+### Review Findings
+
+- [x] [Review][Patch] `isStale` ignores operator-configurable `stalenessThresholdSeconds` preference — reverted to use `stalenessThresholdSeconds * 1000`; `WS_STALENESS_THRESHOLD_MS` retained as named constant in `preferences.js` [SystemHealth.jsx:182]
+- [x] [Review][Patch] CSS `--obb-sev-medium` missing fallback — banner silently transparent if token undefined; added `#f59e0b` fallback [SystemHealth.css:9]
+- [x] [Review][Defer] `isStale` shows banner on cold WS connection failure (`lastUpdate === null` returns false) — deferred, pre-existing gap; no banner affordance for failed connection state
+- [x] [Review][Defer] Banner copy "reconnecting…" may be inaccurate if WS is connected but idle — deferred, copy matches existing tile wording pattern; future story can refine
+- [x] [Review][Defer] No `aria-live`/`role="status"` on staleness banner — deferred, pre-existing pattern across dashboard; no ARIA on dynamic elements
+- [x] [Review][Defer] Banner text duplicates info already shown in "last update" summary tile — deferred, intentional per AC1 (separate banner above strip)
 
 ## Dev Notes
 
@@ -262,3 +271,4 @@ Only two source files change; one test file extends:
 
 - 2026-05-19: Story created — system health WebSocket staleness & live timestamps
 - 2026-05-19: Implemented — staleness banner, WS_STALENESS_THRESHOLD_MS constant, 10 new tests; 218/218 pass
+- 2026-05-19: Code review patches — 2 findings resolved (stalenessThresholdSeconds re-wired; CSS fallback added)
