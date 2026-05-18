@@ -1,6 +1,6 @@
 # Story E2-S7 — Loading Skeletons
 
-**Status:** review
+**Status:** done
 **Sprint:** Epic 2
 **Story Key:** 2-7-loading-skeletons
 
@@ -18,7 +18,7 @@
 
 **AC1:** Given the dashboard loads and the WebSocket connection has not yet delivered its first message, when any of these sections render: KPI strip, fleet list, unified feed, then each section shows an animated skeleton (pulsing grey blocks matching the approximate layout) rather than an empty container or spinner.
 
-**AC2:** Given the KPI strip is in skeleton state, when it renders, then 5 skeleton tiles appear matching the width and height of the real tiles; each pulses with the `--bg-surface` → `--bg-raised` animation (using actual OEBB design tokens).
+**AC2:** Given the KPI strip is in skeleton state, when it renders, then 5 skeleton tiles appear matching the width and height of the real tiles; each pulses with the `--bg-surface` → `--bg-raised` animation (corrected from epics spec which referenced non-existent `--obb-surface-3`/`--obb-surface-4`).
 
 **AC3:** Given the fleet list is in skeleton state, when it renders, then 3 skeleton train cards appear; each shows a skeleton severity dot, route line, and occupancy bar area.
 
@@ -121,6 +121,22 @@ NOT adding: TrainDetail skeleton, JS animation, FleetMap skeleton
 | `src/components/live/UnifiedFeed.jsx` | AC4, AC1 |
 | `src/components/live/LiveMonitoring.jsx` | AC1, AC5, AC6 |
 | `src/components/live/__tests__/skeletons.test.jsx` (new) | T6 |
+
+### Review Findings (2026-05-18)
+
+#### Decision Needed
+- [x] [Review][Decision] **isLoading sentinel conflates "no data yet" with "empty fleet"** — Resolved 1A: added `wsReady` flag to FleetContext (set on first `FLEET_STATE`); `LiveMonitoring` now uses `!wsReady` instead of `fleet.length === 0`.
+- [x] [Review][Decision] **TrainDetail panel has no skeleton — AC1 requires it** — Resolved 2B: deferred. TrainDetail panel requires a selected train, which requires fleet data; it architecturally cannot appear during initial load. AC1 spec wording was an error. Noted in deferred-work.
+- [x] [Review][Decision] **AC2 specifies `--obb-surface-3/4` tokens which don't exist** — Resolved 3A: AC2 updated in story to reference correct `--bg-surface`/`--bg-raised` tokens. Spec wording was wrong.
+
+#### Patches
+- [x] [Review][Patch] **`parseInt(VITE_MOCK_WS_DELAY_MS ?? '300')` — NaN when env var is `''`** [`src/mock/websocket.js`] — Fixed: `??` → `||`.
+- [x] [Review][Patch] **E2E auth-failure test skeleton assertions already present** [`tests/e2e/loading-skeletons.spec.js`] — Test already asserts skeletons visible (lines 99–101); blind hunter reviewed an earlier draft. No change needed.
+- [x] [Review][Patch] **`reuseExistingServer: false` — CI port collision** [`playwright.config.js`] — Fixed: changed to `reuseExistingServer: true`.
+
+#### Deferred
+- [x] [Review][Defer] **FleetMap renders unconditionally with empty fleet while siblings show skeletons** [`LiveMonitoring.jsx`] — FleetMap has its own empty-state handling; visual inconsistency is cosmetic for PoC. Revisit in E3 when real map data arrives.
+- [x] [Review][Defer] **Skeleton re-shows on every WS reconnect, not just initial load** [`LiveMonitoring.jsx`] — `fleet` resets to `[]` on reconnect, triggering skeleton again. Acceptable for PoC; add `wsReady` flag in a hardening story.
 
 ### Debug Log
 

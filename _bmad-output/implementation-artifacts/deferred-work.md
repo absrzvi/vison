@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of 2-7-loading-skeletons (2026-05-18)
+
+- **FleetMap renders unconditionally with empty fleet while siblings show skeletons** — FleetMap has its own empty-state handling; cosmetic inconsistency acceptable for PoC. Revisit in Epic 3 when real map data arrives.
+- **Skeleton re-shows on every WS reconnect** — `fleet` resets to `[]` on reconnect, causing skeleton flash. Add a `wsReady` flag to FleetContext in a hardening story to distinguish "initial load" from "reconnect".
+
+
 ## Deferred from: code review of 1-1-e2e-skeleton-mvp (2026-05-17)
 
 - **#18 `@app.on_event("startup")` deprecated** — migrate to `lifespan` context manager in a future story (FastAPI ≥0.93 deprecation)

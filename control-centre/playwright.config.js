@@ -13,7 +13,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run test:dev',
     url: 'http://localhost:5174',
-    reuseExistingServer: false,
+    reuseExistingServer: true,
     timeout: 30000,
     env: {
       VITE_MOCK_WS_DELAY_MS: '5000',

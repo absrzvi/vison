@@ -10,7 +10,7 @@ import { LUGGAGE_EVENTS, getLuggageKPIs } from '../../mock/luggage';
 import './LiveMonitoring.css';
 
 export function LiveMonitoring() {
-  const { fleet, kpis, escalations, lastUpdate, acknowledge, resolve, feedTypeFilter, setFeedTypeFilter, feedStatusFilter, setFeedStatusFilter, clearFeedFilters } = useFleetData();
+  const { fleet, kpis, escalations, lastUpdate, wsReady, acknowledge, resolve, feedTypeFilter, setFeedTypeFilter, feedStatusFilter, setFeedStatusFilter, clearFeedFilters } = useFleetData();
   const location = useLocation();
   const navigate = useNavigate();
   const [selectedTrainId, setSelectedTrainId] = useState(location.state?.selectTrainId ?? null);
@@ -63,7 +63,7 @@ export function LiveMonitoring() {
     });
   }, [fleet, fleetSort]);
 
-  const isLoading = fleet.length === 0;
+  const isLoading = !wsReady;
 
   return (
     <div className="live-monitoring">

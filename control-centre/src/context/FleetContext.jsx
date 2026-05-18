@@ -28,6 +28,8 @@ export function FleetProvider({ children }) {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [connected, setConnected] = useState(false);
   const [wsStatus, setWsStatus] = useState('disconnected');
+  // true after the first FLEET_STATE message — distinguishes "initial load" from "empty fleet"
+  const [wsReady, setWsReady] = useState(false);
   const [feedTypeFilter, setFeedTypeFilter] = useState('all');
   const [feedStatusFilter, setFeedStatusFilter] = useState(null);
   // Map<id, 'pending' | Error> — per-escalation action state
@@ -55,6 +57,7 @@ export function FleetProvider({ children }) {
         setKpis(msg.payload.kpis);
         setEscalations([...msg.payload.escalations, ...LUGGAGE_ESCALATIONS]);
         setLastUpdate(new Date());
+        setWsReady(true);
       }
       if (msg.type === 'ESCALATION_UPDATED') {
         setEscalations(prev =>
@@ -188,7 +191,7 @@ export function FleetProvider({ children }) {
 
   return (
     <FleetContext.Provider value={{
-      fleet, kpis, escalations, lastUpdate, connected, wsStatus,
+      fleet, kpis, escalations, lastUpdate, connected, wsStatus, wsReady,
       acknowledge, resolve, escalationActionState,
       trainAlerts, trainAlertsLoading, trainAlertsError, fetchTrainAlerts,
       feedTypeFilter, setFeedTypeFilter,

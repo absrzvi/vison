@@ -63,7 +63,7 @@ development_status:
   2-4-unified-feed-new-items-chip: done
   2-5-escalation-detail-acknowledge-resolve: done
   2-6-train-detail-event-store-alert: done
-  2-7-loading-skeletons: review
+  2-7-loading-skeletons: done
   2-8-per-operator-configurable-alert-threshold: backlog
   2-9-system-health-data-feed: backlog
   epic-2-retrospective: optional
