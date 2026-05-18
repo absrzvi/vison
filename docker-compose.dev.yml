@@ -14,3 +14,29 @@ services:
     environment:
       LOG_LEVEL: DEBUG
     command: ["uvicorn", "cloud_backend.main:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]
+
+  snmp-stub:
+    image: tandrup/snmpsim
+    volumes:
+      - ./vlan-pollers/tests/fixtures:/usr/local/snmpsim/data
+    ports:
+      - "1161:161/udp"
+
+  vlan-pollers:
+    build: ./vlan-pollers
+    volumes:
+      - ./vlan-pollers/src:/app/src
+      - ./shared/src:/app/shared_src
+    environment:
+      VEHICLE_ID: OBB-TEST-4711
+      SNMP_HOST: snmp-stub
+      SNMP_PORT: 161
+      SNMP_COMMUNITY: public
+      EVENT_STORE_URL: http://event-store:8001
+      FUSION_URL: http://fusion:8003
+      INFERENCE_URL: http://inference:8004
+      RTSP_INGEST_URL: http://rtsp-ingest:8005
+    depends_on:
+      - event-store
+      - snmp-stub
+    restart: on-failure
