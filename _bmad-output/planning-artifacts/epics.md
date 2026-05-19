@@ -1270,7 +1270,7 @@ The system detects occupancy, congestion, luggage, door obstructions, accessibil
 #### Story E4-S4 — `inference` Detection, Tracking & Occupancy Events
 
 **As a** system operator,
-**I want** the `inference` container to run YOLOv8m on Hailo-8 frames, track persons across frames with BYTETracker, count people per zone, and emit `OCCUPANCY_UPDATE` and `OCCUPANCY_THRESHOLD_CROSSED` events,
+**I want** the `inference` container to run YOLOv8m on Hailo-8 frames via a TAPPAS-native GStreamer pipeline, track persons using the `hailotracker` plugin, count people per zone via a thin Python callback, and emit `OCCUPANCY_UPDATE` and `OCCUPANCY_THRESHOLD_CROSSED` events,
 **so that** real-time per-coach headcounts are available to the Control Centre Dashboard, Conductor App, and PIS.
 
 **Acceptance criteria:**
@@ -1281,15 +1281,15 @@ The system detects occupancy, congestion, luggage, door obstructions, accessibil
 
 **Given** a frame from `rtsp-ingest` is received  
 **When** `detector.py` processes it via the hailo-apps detection callback  
-**Then** detections are filtered to classes: `person`, `suitcase`, `bicycle`; zone masking is applied so only detections within the camera's configured zone are passed to `tracker.py`
+**Then** detections are filtered to classes: `person`, `suitcase`, `bicycle`; zone masking is applied in the Python callback so only detections within the camera's configured zone are passed to `zone_counter.py`
 
 **Given** `detector.py` loads zone masks for a coach  
 **When** `cameras.json` is parsed at startup  
 **Then** each camera entry includes a `seat_zones` array of static polygon masks defining seated vs. standing areas; these masks are fixed for the coach geometry and are NOT updated per frame — `zone_counter.py` uses them to classify persons as seated or standing (ADR-16); no dynamic zone calibration occurs during runtime
 
-**Given** `tracker.py` receives detections across consecutive frames  
-**When** BYTETracker associates detections to track IDs  
-**Then** `zone_counter.py` maintains a per-zone person count using tracking IDs; count updates are emitted at most once per second per coach (1 Hz rate limit enforced in `zone_counter.py`)
+**Given** the `hailotracker` GStreamer plugin processes detections across consecutive frames  
+**When** track IDs are assigned by the native Kalman+IoU tracker and flow through buffer metadata into the Python callback  
+**Then** `zone_counter.py` maintains a per-zone person count using those tracking IDs; count updates are emitted at most once per second per coach (1 Hz rate limit enforced in `zone_counter.py`)
 
 **Given** `zone_counter.py` produces a count update for a coach  
 **When** the count update is processed  
@@ -1309,7 +1309,7 @@ The system detects occupancy, congestion, luggage, door obstructions, accessibil
 **And** `datetime.now(timezone.utc)` used for all event timestamps; `structlog` with `camera_id` and `journey_id` bound at frame handler entry
 
 **Dependencies:** E1-S2 (EventEnvelope + payload models), E1-S4 (event-store POST endpoint), E4-S1 (`vlan-pollers` context for journey_id), E4-S3 (`rtsp-ingest` frames)  
-**Deliverables:** `inference/src/inference/hailo_device.py`, `detector.py`, `tracker.py`, `zone_counter.py`, `budget.py`, `health.py`; `tests/unit/test_budget.py`, `test_zone_counter.py`
+**Deliverables:** `inference/src/inference/pipeline.py`, `callback.py`, `zone_counter.py`, `budget.py`, `health.py`, `config.py`, `models.py`; `tests/unit/test_budget.py`, `test_zone_counter.py`, `test_security.py` (no `tracker.py` — tracking is native `hailotracker` GStreamer plugin)
 
 ---
 
@@ -1333,20 +1333,20 @@ The system detects occupancy, congestion, luggage, door obstructions, accessibil
 **When** `inference` receives the context update  
 **Then** a `RAMP_DEPLOYED` event is POSTed to `event-store` with `car_id`, `door_id`, `deployed_at` timestamp
 
-**Given** `pose.py` processes a frame via the `yolov8m_pose.hef` hailo-apps callback  
-**When** a person's pose keypoints indicate a fall (torso angle > configured threshold AND velocity > threshold across consecutive frames)  
-**Then** an `ALERT_RAISED` event with `alert_type: "slip_fall"` is emitted to `fusion` for enrichment and suppression check before posting to `event-store`
+**Given** a person's tracked bounding box height/aspect ratio across consecutive frames indicates a fall (height collapse > configured threshold AND centroid velocity > threshold)  
+**When** the condition is detected in `zone_counter.py` using hailotracker output  
+**Then** an `ALERT_RAISED` event with `alert_type: "slip_fall"` is emitted to `fusion` for enrichment and suppression check before posting to `event-store` (pose keypoints deferred to post-PoC; hailotracker bounding box heuristic used for PoC)
 
 **Given** a `VESTIBULE_CONGESTION` threshold is exceeded (person count in vestibule zone above configured limit)  
 **When** the condition is detected by `zone_counter.py`  
 **Then** a `VESTIBULE_CONGESTION` event is POSTed to `event-store` with `car_id`, `zone: "vestibule"`, `count`, `threshold`; payload matches `event-payload-schemas.md`
 
-**And** `tests/unit/test_pose_classifier.py` covers slip/fall angle and velocity thresholds with synthetic keypoint arrays — no Hailo-8 required  
+**And** `tests/unit/test_slip_fall.py` covers bounding box height/velocity heuristic thresholds with synthetic tracking sequences — no Hailo-8 required  
 **And** door obstruction candidates are passed to `fusion` via HTTP POST, not written directly to `event-store` — fusion applies suppression before emitting  
 **And** all confidence values are omitted (not set to 0) when the inference model is unavailable for a camera, per the cross-cutting constraint in `event-payload-schemas.md`
 
-**Dependencies:** E4-S4 (`hailo_device.py`, `detector.py`, `tracker.py`, `zone_counter.py` all exist), E4-S1 (context state for ramp signal), E4-S6 (fusion receives door obstruction candidates — note: E4-S5 and E4-S6 are developed together; the interface contract is defined here)  
-**Deliverables:** `inference/src/inference/pose.py`; updates to `detector.py` (door zone + accessibility logic); `tests/unit/test_pose_classifier.py`
+**Dependencies:** E4-S4 (`pipeline.py`, `callback.py`, `zone_counter.py` all exist), E4-S1 (context state for ramp signal), E4-S6 (fusion receives door obstruction candidates — note: E4-S5 and E4-S6 are developed together; the interface contract is defined here)  
+**Deliverables:** updates to `callback.py` (door zone + accessibility logic); `tests/unit/test_slip_fall.py`, `test_accessibility.py`
 
 ---
 
@@ -1467,7 +1467,7 @@ The system detects occupancy, congestion, luggage, door obstructions, accessibil
 **When** `rtsp-ingest` starts  
 **Then** each gangway camera is loaded with its tripwire configuration: `{ coach_from, coach_to, direction_axis, tripwire_polygon }`; the configuration is validated at startup — a missing `tripwire` field on a gangway-zone camera raises a startup error
 
-**Given** BYTETracker is tracking a `track_id` in a gangway camera frame  
+**Given** `hailotracker` is tracking a `track_id` in a gangway camera frame  
 **When** the tracked person's bounding box centroid crosses the tripwire polygon from the `coach_from` side to the `coach_to` side  
 **Then** a `WAGON_EXIT` event is POSTed to `event-store` with payload: `{ track_id, coach_from, coach_to, camera_id, direction, confidence }`; `direction` is `"forward"` or `"backward"` relative to train direction of travel; payload matches `event-payload-schemas.md`
 
@@ -1487,7 +1487,7 @@ The system detects occupancy, congestion, luggage, door obstructions, accessibil
 **And** gangway cameras are always P1 priority in `cameras.json` — they are never throttled by the TOPS budget scheduler  
 **And** `mypy --strict src/` passes for all new `inference` module additions
 
-**Dependencies:** E4-S4 (`tracker.py`, `zone_counter.py`), E4-S3 (`rtsp-ingest` gangway camera stream), E1-S2 (EventType enum — `WAGON_EXIT`, `WAGON_ENTRY` must be present), E1-S4 (event-store POST endpoint)  
+**Dependencies:** E4-S4 (`pipeline.py`, `callback.py`, `zone_counter.py`), E4-S3 (`rtsp-ingest` gangway camera stream), E1-S2 (EventType enum — `WAGON_EXIT`, `WAGON_ENTRY` must be present), E1-S4 (event-store POST endpoint)  
 **Deliverables:** `inference/src/inference/tripwire.py`; updates to `detector.py` (gangway zone routing); `cameras.json` gangway camera entries; `tests/unit/test_tripwire.py`
 
 ---

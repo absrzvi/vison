@@ -406,7 +406,7 @@ class EventType(StrEnum):
 
 **Decision:** Camera vision pipeline is the **primary and authoritative** source for passenger counting. APC (Automatic Passenger Counting) hardware data is a **calibration reference only** — it does not influence real-time occupancy counts.
 
-**Mechanism:** Directional tripwire polygons are configured at each door threshold in `cameras.json`. The `inference` container uses BYTETracker to assign stable track IDs across frames. When a track ID crosses the entry or exit side of a door tripwire, the `local-fusion-engine` increments or decrements the coach passenger count atomically. The result is emitted as `OCCUPANCY_UPDATE`.
+**Mechanism:** Directional tripwire polygons are configured at each door threshold in `cameras.json`. The `inference` container uses the native `hailotracker` GStreamer plugin (Kalman+IoU, part of TAPPAS) to assign stable track IDs across frames. Track IDs flow through GStreamer buffer metadata into the Python callback layer. When a track ID crosses the entry or exit side of a door tripwire, the `local-fusion-engine` increments or decrements the coach passenger count atomically. The result is emitted as `OCCUPANCY_UPDATE`.
 
 **APC role:** `vlan-pollers` continues to poll APC (VLAN 8) via `APCAdapter`. The APC count is compared to the camera-derived count on each APC poll cycle. If the delta exceeds a configurable threshold (default: ±10 passengers), a `CALIBRATION_DRIFT` event is emitted to `event-store` — flagging that zone configs may need recalibration. The APC count does **not** modify the live occupancy state.
 
@@ -1042,21 +1042,24 @@ def get_pool() -> Pool: return create_pool(settings.DB_URL)
 
 ### Hailo-Apps Dependency Decision
 
-**Source:** `hailo-ai/hailo-apps` (MIT licensed, HailoRT 4.23 for Hailo-8, actively maintained)
+**Source:** `hailo-ai/hailo-apps` (MIT licensed, HailoRT 4.23 for Hailo-8, actively maintained); `hailo-ai/hailo-apps-core` (LGPL-2.1, used as library — no modification, no source disclosure required)
 
-Rather than building RTSP ingestion, object detection, tracking, and pose estimation from scratch, we extend hailo-apps components:
+Rather than building RTSP ingestion, object detection, and tracking from scratch, we extend hailo-apps components natively via TAPPAS GStreamer pipelines. Thin Python callbacks handle zone counting and event emission only — no Python tracker wrapper.
 
-| Our container | Hailo-apps component | Reuse strategy |
+| Our container | Hailo-apps / TAPPAS component | Reuse strategy |
 |---|---|---|
 | `rtsp-ingest` | `multisource` pipeline | GStreamer `HailoRoundRobin` + `HailoStreamRouter` handles parallel RTSP streams, reconnect, decode — saves significant custom code |
-| `inference/detector.py` | `detection` app | Extend Python callback hooks for zone masking + counting; on-device NMS via HailoRT |
-| `inference/tracker.py` | BYTETracker (`--track` flag) | Cross-frame identity continuity; configurable IoU and persistence thresholds |
-| `inference/pose.py` | `pose_estimation` app | 17-point COCO keypoints via yolov8m_pose; custom Python post-processor for slip/fall |
+| `inference` | `detection` app + `GStreamerDetectionApp` | Full GStreamer pipeline: `hailonet` (YOLOv8m) → `hailofilter` (NMS) → `hailotracker` → Python callback |
+| `inference` | `hailotracker` GStreamer plugin | Native Kalman+IoU tracker in TAPPAS; outputs track IDs as buffer metadata consumed by thin Python callback |
+| `inference` | `reid_multisource` pipeline | Cross-camera re-ID for multi-car person identity continuity (E4-S5+) |
+
+**Pose estimation removed from PoC scope.** Seated vs. standing classification uses static zone polygon masks (`seat_zones` in `cameras.json`) — not pose keypoints. This eliminates `yolov8m_pose.hef` and `pose.py` from the inference container. Re-evaluate for E4-S5 (accessibility detection).
 
 **Still custom-built (not in hailo-apps):**
-- Luggage / wheelchair / pushchair classification — use COCO multi-class heuristics (person + suitcase + bicycle) + domain post-processing
+- Thin Python callbacks: zone mask application, per-coach 1 Hz occupancy count, OCCUPANCY_UPDATE / OCCUPANCY_THRESHOLD_CROSSED event emission
 - P1/P2/P3 priority budget manager — on top of `multisource` Python callbacks
 - Unattended bag stationary timer — custom post-processor in `fusion`
+- Luggage / wheelchair classification — COCO multi-class heuristics (person + suitcase + bicycle) + domain post-processing in `fusion`
 
 **Docker base image change:**
 - `rtsp-ingest` + `inference`: base from **Hailo Software Suite Docker image** (HailoRT 4.23 + TAPPAS 5.1.0, available from Hailo Developer Zone) rather than `python:3.11-slim-bookworm`
@@ -1143,33 +1146,30 @@ oebb-smart-rail/
 │       └── integration/
 │           └── test_snmp_live.py     # real SNMP endpoint (dev env only)
 │
-├── inference/                        # Hailo-8 detection, tracking, pose via hailo-apps
-│   ├── Dockerfile                    # FROM hailo-software-suite:4.23
+├── inference/                        # Hailo-8 detection + tracking via hailo-apps + TAPPAS natively
+│   ├── Dockerfile                    # FROM hailo-software-suite:4.23 (HailoRT + TAPPAS)
 │   ├── pyproject.toml
 │   ├── .env.example
 │   ├── models/                       # pre-compiled .hef model files (gitignored, fetched at build)
-│   │   ├── yolov8m.hef               # object detection (person, suitcase, bicycle)
-│   │   └── yolov8m_pose.hef          # pose estimation (17-point COCO keypoints)
+│   │   └── yolov8m.hef               # object detection (person, suitcase, bicycle)
 │   ├── src/
 │   │   └── inference/
 │   │       ├── __init__.py
-│   │       ├── main.py
-│   │       ├── config.py             # pydantic-settings: model paths, TOPS budget, batch size, INT8
-│   │       ├── models.py             # Detection, TrackingResult, PoseKeypoints dataclasses
-│   │       ├── hailo_device.py       # HailoRT device ownership + model loading (exclusive)
-│   │       ├── detector.py           # hailo-apps detection callback extension; zone masking
-│   │       ├── tracker.py            # BYTETracker wrapper; cross-frame identity + zone counting
-│   │       ├── pose.py               # hailo-apps pose callback; slip/fall angle/velocity classifier
-│   │       ├── budget.py             # TOPS budget manager; P2 throttle on overload
-│   │       ├── zone_counter.py       # per-zone people counting from tracking IDs
-│   │       └── health.py             # ready = Hailo-8 device initialised + model loaded
+│   │       ├── main.py               # entry point; builds GStreamer pipeline via hailo-apps-core helpers
+│   │       ├── config.py             # pydantic-settings: model paths, TOPS budget, zone config, thresholds
+│   │       ├── models.py             # ZoneMask, OccupancyState, DetectionClass dataclasses
+│   │       ├── pipeline.py           # GStreamerDetectionApp subclass; INFERENCE + TRACKER + USER_CALLBACK pipeline
+│   │       ├── callback.py           # thin Python callback: extract ROI metadata → zone_counter
+│   │       ├── budget.py             # TOPS budget manager; P2 throttle on overload via context state
+│   │       ├── zone_counter.py       # per-zone people counting from hailotracker track IDs; POST events
+│   │       └── health.py             # FastAPI: /health/ready, /health/live, POST /context
 │   └── tests/
 │       ├── unit/
 │       │   ├── test_budget.py        # TOPS enforcement; P2 throttle triggers correctly
-│       │   ├── test_zone_counter.py  # zone boundary logic with synthetic tracking IDs
-│       │   └── test_pose_classifier.py # slip/fall angle thresholds with synthetic keypoints
+│       │   ├── test_zone_counter.py  # zone boundary logic with synthetic track ID sequences
+│       │   └── test_security.py      # Rule 8: no os.environ.get(); payload schema validation
 │       └── integration/
-│           └── test_hailo_device.py  # real Hailo-8 (hardware dev env only)
+│           └── test_pipeline.py      # real Hailo-8 + TAPPAS (hardware dev env only)
 │
 ├── fusion/                           # rules, suppression, enrichment, alert generation
 │   ├── Dockerfile                    # FROM python:3.11-slim-bookworm
@@ -1377,7 +1377,7 @@ oebb-smart-rail/
 
 | Boundary | Protocol | Auth | Direction |
 |---|---|---|---|
-| `rtsp-ingest` → `inference` | HTTP POST (frame + metadata) | VLAN isolation | onboard internal |
+| `rtsp-ingest` → `inference` | GStreamer pipeline (shared TAPPAS process; no HTTP) | VLAN isolation | onboard internal |
 | `vlan-pollers` → `rtsp-ingest` | HTTP (context delta: P3 gate) | VLAN isolation | onboard internal |
 | `vlan-pollers` → `fusion` | HTTP POST (context delta) | VLAN isolation | onboard internal |
 | `inference` → `fusion` | HTTP POST (detections) | VLAN isolation | onboard internal |
@@ -1435,13 +1435,14 @@ oebb-smart-rail/
 cameras.json
      │
      ▼
-rtsp-ingest (hailo-apps multisource)
+rtsp-ingest (hailo-apps multisource — GStreamer HailoRoundRobin)
   P1 10fps always / P2 5fps always / P3 8fps station-window
-     │ frames + camera_id/zone/priority (HTTP)
+     │ GStreamer pipeline (frames flow internally via TAPPAS — no HTTP)
      ▼
-inference (hailo-apps detection + BYTETracker + pose)
-  Hailo-8 M.2 — yolov8m.hef + yolov8m_pose.hef
-     │ detections + tracking IDs + keypoints (HTTP)
+inference (hailo-apps detection + hailotracker — TAPPAS native)
+  Hailo-8 M.2 — yolov8m.hef (person/suitcase/bicycle)
+  hailotracker GStreamer plugin → thin Python callback → zone_counter
+     │ detections + tracking IDs (HTTP POST to fusion/event-store)
      │
      ├──────────────────────────────────────┐
      ▼                                      │
@@ -1476,7 +1477,7 @@ event-store (SQLite WAL, single writer) ◄───┘
 ### Validation Checklist (all 16 items passing)
 
 - [x] All technology choices are mutually compatible
-- [x] hailo-apps MIT license confirmed — multisource, detection, BYTETracker, pose_estimation directly reusable
+- [x] hailo-apps MIT licensed (application layer); hailo-apps-core LGPL-2.1 (used as library, no modification) — multisource, detection, hailotracker, reid_multisource directly reusable; pose_estimation deferred (out of PoC scope)
 - [x] `shared/` package installable in both `python:3.11-slim-bookworm` and Hailo Suite Docker base images
 - [x] snake_case / PascalCase / UPPER_SNAKE_CASE naming consistent across all layers
 - [x] All 14 MUST rules traceable to specific ADRs
@@ -1496,7 +1497,7 @@ event-store (SQLite WAL, single writer) ◄───┘
 
 All technology choices compatible: HailoRT 4.23, Python 3.11, asyncio, httpx, FastAPI, SQLite WAL, PostgreSQL, React + Vite.
 
-hailo-apps multisource + detection + BYTETracker + pose_estimation confirmed MIT licensed and directly reusable. `shared/` package installable in both `python:3.11-slim-bookworm` and Hailo Suite Docker base images — each `Dockerfile` must include `pip install -e ./shared`.
+hailo-apps (MIT) + hailo-apps-core (LGPL-2.1, library use) confirmed. TAPPAS-native pipeline: multisource + GStreamerDetectionApp + hailotracker + reid_multisource reusable without modification. Pose estimation deferred (not in PoC scope). `shared/` package installable in both `python:3.11-slim-bookworm` and Hailo Suite Docker base images — each `Dockerfile` must include `pip install -e ./shared`.
 
 ### Requirements Coverage ✅
 
