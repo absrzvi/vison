@@ -58,20 +58,19 @@ def wire(
     settings: Settings,
     cameras: list[dict[str, Any]],
     event_client: httpx.AsyncClient,
-    readiness: ReadinessHolder,
+    readiness: list[ReadinessHolder],
     loop_holder: LoopHolder,
     journey_holder: JourneyHolder | None = None,
 ) -> tuple[Budget, JourneyHolder, list[OccupancyCallback], FastAPI]:
-    """Wire components together. One OccupancyCallback per camera.
+    """Wire components together. One OccupancyCallback and one ReadinessHolder per camera.
 
     Returns (budget, journey_holder, [callbacks...], FastAPI app). pipeline.py is
     imported only by main(), not by wire() — so unit tests can call wire() without
     TAPPAS installed.
 
-    M1/M12 fix: this is now called ONCE, inside lifespan, where the running loop and
-    real httpx client both exist. The bootstrap path (before lifespan) only creates
-    the bare FastAPI app shell and the shared holders; no ZoneCounter or httpx client
-    is built until the asyncio loop is up.
+    F2 decision: readiness is a list of per-camera holders. health.py aggregates them.
+    M1/M12 fix: called ONCE inside lifespan where the running loop and real httpx
+    client both exist.
     """
     journey_holder = journey_holder or JourneyHolder(journey_id=settings.journey_id)
     zone_counter = ZoneCounter(
@@ -83,7 +82,7 @@ def wire(
     budget = Budget(settings=settings)
 
     callbacks: list[OccupancyCallback] = []
-    for cam in cameras:
+    for cam, cam_readiness in zip(cameras, readiness, strict=True):
         zone_masks = _zone_masks_for_camera(cam)
         callbacks.append(
             OccupancyCallback(
@@ -93,6 +92,7 @@ def wire(
                 budget=budget,
                 settings=settings,
                 loop_holder=loop_holder,
+                readiness=cam_readiness,
             )
         )
 
@@ -108,12 +108,15 @@ def _make_pipeline_thread(
     """Return a daemon thread that runs one InferencePipeline.
 
     M6/M7 fix: readiness is set True only when the pipeline thread signals it on first
-    successful buffer (via the ReadinessHolder), NOT immediately after t.start(). On
-    pipeline crash the thread wraps pipeline.run() in try/except and flips ready→False.
+    successful buffer (via callback._readiness), NOT immediately after t.start(). On
+    pipeline crash the thread wrapper flips ready→False.
+
+    F2: readiness is the per-camera holder passed through here only for the finally
+    flip; InferencePipeline reads it from callback._readiness directly.
     """
     from inference.pipeline import InferencePipeline  # noqa: PLC0415
 
-    pipeline = InferencePipeline(callback=callback, settings=settings, readiness=readiness)
+    pipeline = InferencePipeline(callback=callback, settings=settings)
 
     def _run() -> None:
         try:
@@ -134,7 +137,10 @@ def _make_pipeline_thread(
 def main() -> None:  # pragma: no cover — integration entry point
     settings = Settings()
     cameras = _load_cameras(settings.cameras_json_path)
-    readiness = ReadinessHolder(ready=False)
+    # F2 decision: one ReadinessHolder per camera; health.py aggregates.
+    cam_readiness = [
+        ReadinessHolder(camera_id=str(cam["camera_id"]), ready=False) for cam in cameras
+    ]
     loop_holder = LoopHolder(loop=None)
 
     @asynccontextmanager
@@ -144,16 +150,19 @@ def main() -> None:  # pragma: no cover — integration entry point
             # M1 fix: single wire() call here, where the running loop and real httpx
             # client both exist. Bootstrap below constructs only the app shell.
             budget, journey_holder, callbacks, wired_app = wire(
-                settings, cameras, client, readiness, loop_holder
+                settings, cameras, client, cam_readiness, loop_holder
             )
-            # Swap the health/context routes into the already-created app object so
-            # uvicorn's reference stays valid.
-            app.router.routes = wired_app.router.routes
+            # Patch E: append routes into the already-created app so uvicorn's reference
+            # stays valid. include_router only works before app startup; route list append
+            # is the safe runtime alternative.
+            for route in wired_app.routes:
+                app.router.routes.append(route)
             app.state.event_client = client
             app.state.callbacks = callbacks
 
             threads = [
-                _make_pipeline_thread(cb, settings, readiness) for cb in callbacks
+                _make_pipeline_thread(cb, settings, r)
+                for cb, r in zip(callbacks, cam_readiness, strict=True)
             ]
             for t in threads:
                 t.start()
@@ -162,16 +171,16 @@ def main() -> None:  # pragma: no cover — integration entry point
             try:
                 yield
             finally:
-                readiness.ready = False
+                for r in cam_readiness:
+                    r.ready = False
                 loop_holder.loop = None
 
-    # M12 fix: bootstrap builds only the bare app shell (ReadinessHolder + placeholder
-    # budget/journey). No ZoneCounter or httpx.AsyncClient is constructed here.
-    # lifespan replaces the routes once the real loop is running.
+    # M12 fix: bootstrap builds only the bare app shell. No ZoneCounter or httpx client
+    # constructed here. lifespan replaces the routes once the real loop is running.
     _bootstrap_budget = Budget(settings=settings)
     _bootstrap_journey = JourneyHolder(journey_id=settings.journey_id)
     app = build_app(
-        readiness=readiness,
+        readiness=cam_readiness,
         budget=_bootstrap_budget,
         journey_holder=_bootstrap_journey,
     )

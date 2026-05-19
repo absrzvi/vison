@@ -21,7 +21,7 @@ import structlog
 
 from inference.budget import Budget
 from inference.config import Settings
-from inference.models import LoopHolder, ZoneMask
+from inference.models import LoopHolder, ReadinessHolder, ZoneMask
 from inference.zone_counter import ZoneCounter
 
 log = structlog.get_logger(__name__)
@@ -110,12 +110,15 @@ class OccupancyCallback:
         budget: Budget,
         settings: Settings,
         loop_holder: LoopHolder,
+        readiness: ReadinessHolder | None = None,
     ) -> None:
         self._zone_counter = zone_counter
         self._budget = budget
         self._settings = settings
         self._zone_masks = zone_masks
         self._loop_holder = loop_holder
+        # F2: per-camera readiness holder; pipeline._dispatch flips it on first frame.
+        self._readiness = readiness
 
         self._camera_id = str(camera["camera_id"])
         self._car_id = str(camera["coach_id"])

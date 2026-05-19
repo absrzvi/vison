@@ -77,7 +77,7 @@ async def test_wire_returns_budget_callbacks_app(cameras_file: Path) -> None:
 
     settings = Settings(cameras_json_path=str(cameras_file))
     cameras = _load_cameras(str(cameras_file))
-    readiness = ReadinessHolder(ready=False)
+    readiness = [ReadinessHolder(camera_id="C1_DOOR_01", ready=False)]
     loop_holder = LoopHolder(loop=None)
 
     async with httpx.AsyncClient() as client:
@@ -121,7 +121,7 @@ async def test_wire_one_callback_per_camera(tmp_path: Path) -> None:
 
     settings = Settings(cameras_json_path=str(p))
     cameras = data["cameras"]
-    readiness = ReadinessHolder(ready=False)
+    readiness = [ReadinessHolder(camera_id="C1", ready=False), ReadinessHolder(camera_id="C2", ready=False)]
     loop_holder = LoopHolder(loop=None)
 
     async with httpx.AsyncClient() as client:
@@ -144,7 +144,7 @@ def test_readiness_false_before_first_buffer(cameras_file: Path) -> None:
 
     settings = Settings(cameras_json_path=str(cameras_file))
     cameras = _load_cameras(str(cameras_file))
-    readiness = ReadinessHolder(ready=False)
+    readiness = [ReadinessHolder(camera_id="C1_DOOR_01", ready=False)]
     loop_holder = LoopHolder(loop=None)
 
     async def _run() -> None:
@@ -152,7 +152,7 @@ def test_readiness_false_before_first_buffer(cameras_file: Path) -> None:
             wire(settings, cameras, client, readiness, loop_holder)
 
     asyncio.run(_run())
-    assert readiness.ready is False, (
+    assert readiness[0].ready is False, (
         "readiness must stay False until InferencePipeline._dispatch fires on first buffer"
     )
 
@@ -167,7 +167,7 @@ def test_callback_stores_rtsp_url(cameras_file: Path) -> None:
 
     settings = Settings(cameras_json_path=str(cameras_file))
     cameras = _load_cameras(str(cameras_file))
-    readiness = ReadinessHolder(ready=False)
+    readiness = [ReadinessHolder(camera_id="C1_DOOR_01", ready=False)]
     loop_holder = LoopHolder(loop=None)
 
     async def _run() -> str:
@@ -177,3 +177,108 @@ def test_callback_stores_rtsp_url(cameras_file: Path) -> None:
 
     url = asyncio.run(_run())
     assert url == "rtsp://test/1"
+
+
+@pytest.mark.unit
+def test_wire_called_once_produces_one_zone_counter(cameras_file: Path) -> None:
+    """Patch M: wire() must be called exactly once — double-wire would create two
+    ZoneCounters sharing the same httpx client, doubling event emission."""
+    import asyncio
+
+    from inference.main import _load_cameras, wire
+    from inference.zone_counter import ZoneCounter
+
+    settings = Settings(cameras_json_path=str(cameras_file))
+    cameras = _load_cameras(str(cameras_file))
+    readiness = [ReadinessHolder(camera_id="C1_DOOR_01", ready=False)]
+    loop_holder = LoopHolder(loop=None)
+    zone_counters: list[ZoneCounter] = []
+
+    original_init = ZoneCounter.__init__
+
+    def _counting_init(self: ZoneCounter, **kwargs: object) -> None:
+        zone_counters.append(self)
+        original_init(self, **kwargs)
+
+    import unittest.mock as mock
+
+    async def _run() -> None:
+        async with httpx.AsyncClient() as client:
+            with mock.patch.object(ZoneCounter, "__init__", _counting_init):
+                wire(settings, cameras, client, readiness, loop_holder)
+
+    asyncio.run(_run())
+    assert len(zone_counters) == 1, f"wire() created {len(zone_counters)} ZoneCounters; expected 1"
+
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_health_ready_all_cameras(cameras_file: Path) -> None:
+    """F2: /health/ready returns 200 + status=ready when all cameras are ready."""
+    from fastapi.testclient import TestClient
+
+    from inference.budget import Budget
+    from inference.health import build_app
+    from inference.models import JourneyHolder
+
+    settings = Settings(cameras_json_path=str(cameras_file))
+    readiness = [ReadinessHolder(camera_id="C1_DOOR_01", ready=True)]
+    app = build_app(
+        readiness=readiness,
+        budget=Budget(settings=settings),
+        journey_holder=JourneyHolder(journey_id="OBB_t1_20260519"),
+    )
+    client = TestClient(app)
+    resp = client.get("/health/ready")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ready"
+    assert resp.json()["cameras"][0]["camera_id"] == "C1_DOOR_01"
+
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_health_ready_degraded(cameras_file: Path) -> None:
+    """F2: /health/ready returns 200 + status=degraded when ≥1 but not all cameras ready."""
+    from fastapi.testclient import TestClient
+
+    from inference.budget import Budget
+    from inference.health import build_app
+    from inference.models import JourneyHolder
+
+    settings = Settings(cameras_json_path=str(cameras_file))
+    readiness = [
+        ReadinessHolder(camera_id="C1", ready=True),
+        ReadinessHolder(camera_id="C2", ready=False),
+    ]
+    app = build_app(
+        readiness=readiness,
+        budget=Budget(settings=settings),
+        journey_holder=JourneyHolder(journey_id="OBB_t1_20260519"),
+    )
+    client = TestClient(app)
+    resp = client.get("/health/ready")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "degraded"
+
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_health_ready_not_ready(cameras_file: Path) -> None:
+    """F2: /health/ready returns 503 when no cameras are ready."""
+    from fastapi.testclient import TestClient
+
+    from inference.budget import Budget
+    from inference.health import build_app
+    from inference.models import JourneyHolder
+
+    settings = Settings(cameras_json_path=str(cameras_file))
+    readiness = [ReadinessHolder(camera_id="C1_DOOR_01", ready=False)]
+    app = build_app(
+        readiness=readiness,
+        budget=Budget(settings=settings),
+        journey_holder=JourneyHolder(journey_id="OBB_t1_20260519"),
+    )
+    client = TestClient(app)
+    resp = client.get("/health/ready")
+    assert resp.status_code == 503
+    assert resp.json()["status"] == "not_ready"

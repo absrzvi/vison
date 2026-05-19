@@ -29,31 +29,7 @@ from hailo_apps_infra.hailo_rpi_common import (  # type: ignore[import-not-found
 
 from inference.callback import OccupancyCallback
 from inference.config import Settings
-from inference.models import DetectionClass, ReadinessHolder
-
-
-def _source_pipeline_multi(rtsp_urls: list[str], fps: int = 3) -> str:
-    """Build a GStreamer pipeline string that multiplexes N RTSP sources.
-
-    Each source runs through:
-      uridecodebin → videorate (capped at `fps`) → videoconvert → video/x-raw,format=RGB
-
-    Sources are funnelled via `hailoroundrobin` into a single inference/tracker chain.
-    """
-    sources = ""
-    for i, url in enumerate(rtsp_urls):
-        sources += (
-            f"uridecodebin uri={url} name=src{i} ! "
-            f"videorate ! video/x-raw,framerate={fps}/1 ! "
-            f"videoconvert ! video/x-raw,format=RGB ! "
-            f"queue ! "
-        )
-    # hailoroundrobin accepts N upstream pads and round-robins frames to one sink pad.
-    funnel = "hailoroundrobin name=funnel "
-    for i in range(len(rtsp_urls)):
-        funnel += f"src{i}. ! funnel. "
-    return sources + funnel + "funnel. ! "
-
+from inference.models import DetectionClass
 
 # COCO class IDs for the classes our pipeline routes through the tracker.
 # Story 4-4 tracks person only; suitcase/bicycle/wheelchair move to E4-S5 with
@@ -88,7 +64,6 @@ class InferencePipeline(GStreamerDetectionApp):  # type: ignore[misc]
         self,
         callback: OccupancyCallback,
         settings: Settings,
-        readiness: ReadinessHolder,
     ) -> None:
         if settings.detection_classes != [DetectionClass.PERSON.value]:
             raise ValueError(
@@ -99,15 +74,16 @@ class InferencePipeline(GStreamerDetectionApp):  # type: ignore[misc]
         tracker_class_id = _COCO_CLASS_ID[DetectionClass.PERSON]
 
         self._callback = callback
-        self._readiness = readiness
         self._first_frame = True
 
         # M2 fix: use the per-camera RTSP URL, not the JSON file path.
         # This pipeline is instantiated per callback (one per camera in story 4-4).
         # P-M16 full multi-source topology is prepared here; stream-id keying needs
         # hardware verification — for now each InferencePipeline handles one source.
-        rtsp_url = getattr(callback, "_rtsp_url", None)
-        if rtsp_url is None:
+        # Patch A: _rtsp_url defaults to "" (not None) in OccupancyCallback, so check
+        # truthiness rather than identity to catch missing/empty URLs.
+        rtsp_url = getattr(callback, "_rtsp_url", "")
+        if not rtsp_url:
             raise ValueError(
                 f"OccupancyCallback for {callback.camera_id} has no _rtsp_url — "
                 "set camera['rtsp_url'] in cameras.json."
@@ -128,8 +104,12 @@ class InferencePipeline(GStreamerDetectionApp):  # type: ignore[misc]
         super().__init__(app_callback=self._dispatch, pipeline_str=pipeline_str)
 
     def _dispatch(self, buffer: object, user_data: object) -> None:
-        """Wrap the real callback to set readiness on first successful buffer (M6/M7)."""
+        """Wrap the real callback to set readiness on first successful buffer (M6/M7).
+
+        F2: readiness lives on callback._readiness (per-camera); no separate arg needed.
+        """
         if self._first_frame:
-            self._readiness.ready = True
+            if self._callback._readiness is not None:
+                self._callback._readiness.ready = True
             self._first_frame = False
         self._callback(buffer, user_data)

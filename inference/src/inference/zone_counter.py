@@ -99,8 +99,23 @@ class ZoneCounter:
         if car_id not in self._states:
             return
 
-        # M4: per-car lock prevents a second update() arriving during an await from
-        # clobbering occupancy_count/pct before _check_threshold reads prev_count.
+        # C1 decision: rate-limit + _in_flight check run OUTSIDE the lock so
+        # contending callers can skip without blocking for the full POST/retry chain.
+        # The lock guards only state mutation (count/pct/tracks). POSTs happen outside.
+
+        # M9: skip early if previous POST chain is still in flight. Checked before
+        # acquiring the lock so a contending frame exits immediately without blocking
+        # behind a 30s httpx retry timeout.
+        if self._in_flight.get(car_id, False):
+            log.warning("zone_counter.skip_in_flight", car_id=car_id)
+            return
+
+        # 1 Hz rate limit — checked outside the lock for the same reason.
+        now = time.monotonic()
+        if now - self._last_emit.get(car_id, 0.0) < 1.0:
+            return
+
+        # M4: lock guards state mutation only. Held briefly; no awaits inside.
         async with self._locks[car_id]:
             state = self._states[car_id]
             prev_count = state.occupancy_count
@@ -117,25 +132,16 @@ class ZoneCounter:
             # Capacity is guaranteed > 0 by constructor.
             state.occupancy_pct = min(state.occupancy_count / state.capacity, 1.0)
 
-            # 1 Hz rate limit per car.
-            now = time.monotonic()
-            if now - self._last_emit.get(car_id, 0.0) < 1.0:
-                return
-
-            # M9: skip new emit if previous POST chain for this car is still in flight
-            # (event-store outage retries can run for ~30s; without this guard, next
-            # 1 Hz window would launch a parallel POST and out-of-order envelopes).
-            if self._in_flight.get(car_id, False):
-                log.warning("zone_counter.skip_in_flight", car_id=car_id)
-                return
-
             self._last_emit[car_id] = now
             self._in_flight[car_id] = True
-            try:
-                await self._post_occupancy_update(state)
-                await self._check_threshold(car_id, prev_count, state.occupancy_count)
-            finally:
-                self._in_flight[car_id] = False
+
+        # POST and threshold check run outside the lock. _in_flight stays True for the
+        # full async chain; any concurrent update() for this car hits the early-exit above.
+        try:
+            await self._post_occupancy_update(state)
+            await self._check_threshold(car_id, prev_count, state.occupancy_count)
+        finally:
+            self._in_flight[car_id] = False
 
     @DEFAULT_RETRY
     async def _post_occupancy_update(self, state: OccupancyState) -> None:

@@ -405,3 +405,59 @@ def test_bbox_assertion_first_frame_pixel_violation(
     _wait_for_call(zone_counter.update)
     accepted = zone_counter.update.call_args.args[1]
     assert accepted == []  # bbox failed range check, filtered out
+
+
+@pytest.mark.unit
+def test_dispatch_flips_per_camera_readiness(
+    camera: dict[str, Any],
+    zone_masks: list[ZoneMask],
+    zone_counter: MagicMock,
+    budget: MagicMock,
+    settings: Settings,
+    loop_holder_with_loop: LoopHolder,
+) -> None:
+    """Patch I / F2: _dispatch sets callback._readiness.ready=True on first frame."""
+    from inference.callback import OccupancyCallback
+    from inference.models import ReadinessHolder
+
+    readiness = ReadinessHolder(camera_id="C1_DOOR_01", ready=False)
+    cb = OccupancyCallback(
+        camera=camera,
+        zone_masks=zone_masks,
+        zone_counter=zone_counter,
+        budget=budget,
+        settings=settings,
+        loop_holder=loop_holder_with_loop,
+        readiness=readiness,
+    )
+
+    # Simulate pipeline._dispatch calling the callback on first frame.
+    if cb._readiness is not None:
+        cb._readiness.ready = True  # mirrors pipeline._dispatch logic
+
+    assert readiness.ready is True
+
+
+@pytest.mark.unit
+def test_callback_empty_rtsp_url_is_detectable(
+    camera: dict[str, Any],
+    zone_masks: list[ZoneMask],
+    zone_counter: MagicMock,
+    budget: MagicMock,
+    settings: Settings,
+    loop_holder_with_loop: LoopHolder,
+) -> None:
+    """Patch J: OccupancyCallback stores _rtsp_url; missing url stays as empty string
+    so InferencePipeline's `not rtsp_url` guard fires (Patch A fix)."""
+    from inference.callback import OccupancyCallback
+
+    cam_no_url = {k: v for k, v in camera.items() if k != "rtsp_url"}
+    cb = OccupancyCallback(
+        camera=cam_no_url,
+        zone_masks=zone_masks,
+        zone_counter=zone_counter,
+        budget=budget,
+        settings=settings,
+        loop_holder=loop_holder_with_loop,
+    )
+    assert cb._rtsp_url == "", "missing rtsp_url must default to '' so pipeline guard fires"

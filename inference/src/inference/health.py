@@ -22,27 +22,36 @@ class ContextPushModel(BaseModel):
 
 
 def build_app(
-    readiness: ReadinessHolder,
+    readiness: list[ReadinessHolder],
     budget: Budget,
     journey_holder: JourneyHolder,
 ) -> FastAPI:
     """Build the FastAPI app.
 
-    readiness is a mutable holder so main.py can flip pipeline_ready from True→False
-    if the GStreamer pipeline crashes after startup. journey_holder is mutated when
-    /context push carries a new journey_id (M13 — keeps outbound envelopes tied to
-    the live trip without container restart).
+    readiness is a list of per-camera ReadinessHolders (F2 decision). Aggregation:
+      - all ready   → status "ready",    HTTP 200
+      - some ready  → status "degraded", HTTP 200
+      - none ready  → status "not_ready", HTTP 503
+
+    journey_holder is mutated when /context push carries a new journey_id (M13).
     """
     app = FastAPI(title="inference-health")
 
     @app.get("/health/ready")
     def health_ready() -> JSONResponse:
-        if readiness.ready:
+        cameras = [{"camera_id": h.camera_id, "ready": h.ready} for h in readiness]
+        ready_count = sum(1 for h in readiness if h.ready)
+        total = len(readiness)
+        if ready_count == total and total > 0:
             return JSONResponse(
-                {"status": "ready", "hailo_initialised": True}, status_code=200
+                {"status": "ready", "cameras": cameras}, status_code=200
+            )
+        if ready_count > 0:
+            return JSONResponse(
+                {"status": "degraded", "cameras": cameras}, status_code=200
             )
         return JSONResponse(
-            {"status": "not_ready", "recoverable": False},
+            {"status": "not_ready", "cameras": cameras, "recoverable": False},
             status_code=503,
         )
 

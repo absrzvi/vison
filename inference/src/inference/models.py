@@ -22,8 +22,15 @@ class ZoneMask:
 
 @dataclass
 class ReadinessHolder:
-    """Mutable readiness flag flipped by main.py after pipeline init."""
+    """Per-camera readiness flag. One instance per camera.
 
+    F2 decision: per-camera holders aggregated in health.py so a single camera
+    failure produces a "degraded" response rather than taking the whole service
+    to not-ready. A camera that has never successfully initialised counts as
+    not-ready (not "don't care").
+    """
+
+    camera_id: str = ""
     ready: bool = False
 
 

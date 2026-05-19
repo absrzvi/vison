@@ -18,10 +18,11 @@ def make_client(
     ready: bool,
     budget: MagicMock | None = None,
     journey_holder: JourneyHolder | None = None,
+    camera_id: str = "C1",
 ) -> TestClient:
     from inference.health import build_app
 
-    readiness = ReadinessHolder(ready=ready)
+    readiness = [ReadinessHolder(camera_id=camera_id, ready=ready)]
     return TestClient(
         build_app(
             readiness=readiness,
@@ -38,7 +39,7 @@ def test_ready_returns_200() -> None:
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "ready"
-    assert body["hailo_initialised"] is True
+    assert "cameras" in body
 
 
 @pytest.mark.unit
@@ -56,10 +57,10 @@ def test_readiness_reflects_holder_flip() -> None:
     """When the holder flips, /health/ready reflects the new state — no static capture."""
     from inference.health import build_app
 
-    holder = ReadinessHolder(ready=True)
+    holder = ReadinessHolder(camera_id="C1", ready=True)
     client = TestClient(
         build_app(
-            readiness=holder,
+            readiness=[holder],
             budget=make_budget(),
             journey_holder=JourneyHolder(journey_id="OBB-TEST_t1_20260519"),
         )
@@ -67,6 +68,27 @@ def test_readiness_reflects_holder_flip() -> None:
     assert client.get("/health/ready").status_code == 200
     holder.ready = False
     assert client.get("/health/ready").status_code == 503
+
+
+@pytest.mark.unit
+def test_degraded_when_partial_cameras_ready() -> None:
+    """F2: partial camera failure produces degraded (200), not not_ready (503)."""
+    from inference.health import build_app
+
+    readiness = [
+        ReadinessHolder(camera_id="C1", ready=True),
+        ReadinessHolder(camera_id="C2", ready=False),
+    ]
+    client = TestClient(
+        build_app(
+            readiness=readiness,
+            budget=make_budget(),
+            journey_holder=JourneyHolder(journey_id="OBB-TEST_t1_20260519"),
+        )
+    )
+    r = client.get("/health/ready")
+    assert r.status_code == 200
+    assert r.json()["status"] == "degraded"
 
 
 @pytest.mark.unit
