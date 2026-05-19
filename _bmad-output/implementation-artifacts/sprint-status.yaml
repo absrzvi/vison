@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-19  # epic-2 retrospective completed
+last_updated: 2026-05-19  # epic-5 retrospective completed; all pending retros done
 project: oebb-agent
 # code-review 2026-05-17: story 2-2 → in-progress (1 patch finding: AC1 scroll-to-top)
 # code-review 2026-05-17: story 2-3 → done (5 patches applied)
@@ -112,4 +112,4 @@ development_status:
   5-2-luggage-monitoring-live-ui: done
   5-3-luggage-kpi-live-monitoring: done
   5-4-luggage-iso-timestamps: done
-  epic-5-retrospective: optional
+  epic-5-retrospective: done
