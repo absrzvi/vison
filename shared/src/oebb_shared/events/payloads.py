@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, model_serializer
+from pydantic import BaseModel, Field, field_validator, model_serializer
 
+from .envelope import _TIMESTAMP_RE
 from .types import EventType
 
 
@@ -240,6 +241,15 @@ class AlarmClearedPayload(_BasePayload):
 # ---------------------------------------------------------------------------
 
 
+def _validate_iso_utc(v: str) -> str:
+    """Reject naive datetimes and non-UTC offsets. Requires Z suffix per NFR9."""
+    if not _TIMESTAMP_RE.fullmatch(v):
+        raise ValueError(
+            f"timestamp must be ISO-8601 UTC with Z suffix (e.g. 2026-05-16T06:00:00Z), got: {v!r}"
+        )
+    return v
+
+
 class JourneyStartedPayload(_BasePayload):
     """JOURNEY_STARTED — emitted once on departure."""
 
@@ -249,6 +259,11 @@ class JourneyStartedPayload(_BasePayload):
     actual_departure: _NonEmptyStr
     consist: Annotated[list[_NonEmptyStr], Field(min_length=1)]
     service_class: _NonEmptyStr
+
+    @field_validator("scheduled_departure", "actual_departure", mode="before")
+    @classmethod
+    def _validate_departure_timestamps(cls, v: str) -> str:
+        return _validate_iso_utc(v)
 
 
 class JourneyEndedPayload(_BasePayload):
@@ -260,6 +275,11 @@ class JourneyEndedPayload(_BasePayload):
     actual_arrival: _NonEmptyStr
     total_duration_s: _NonNegFloat
     peak_occupancy_pct: Annotated[float, Field(ge=0.0, le=1.0)]
+
+    @field_validator("scheduled_arrival", "actual_arrival", mode="before")
+    @classmethod
+    def _validate_arrival_timestamps(cls, v: str) -> str:
+        return _validate_iso_utc(v)
 
 
 # ---------------------------------------------------------------------------

@@ -59,9 +59,10 @@ security:detect-secrets:
 
 test:shared:
   stage: test
+  # --cov-fail-under=80 enforces NFR12 (≥80% coverage); contract marker adds AC1 envelope/EventType tests (Epic-1 retro A3)
   script:
     - pip install -e "shared/[dev]"
-    - cd shared && python -m pytest tests/ -m "unit" --cov=oebb_shared --cov-report=term-missing --cov-fail-under=80
+    - cd shared && python -m pytest tests/ -m "unit or contract" --cov=oebb_shared --cov-report=term-missing --cov-fail-under=80
 
 test:event-store:
   stage: test
