@@ -18,8 +18,9 @@ if TYPE_CHECKING:
 # The date segment must be exactly 8 digits (calendar validity checked separately).
 _JOURNEY_ID_RE = re.compile(r"^[^_]+_[^_]+_(\d{8})$")
 
-# ISO-8601 UTC with Z suffix, optional sub-second precision.
-_TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
+# ISO-8601 UTC with Z suffix, optional sub-second precision. Public so payloads.py can reuse it.
+TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
+_TIMESTAMP_RE = TIMESTAMP_RE  # backwards-compatible alias
 
 _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",

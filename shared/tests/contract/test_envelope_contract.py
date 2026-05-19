@@ -223,6 +223,14 @@ _MINIMAL_PAYLOADS: dict[str, dict] = {
     },
 }
 
+# Fail fast with a clear message if a new EventType is added without a fixture entry.
+# Without this guard, test_every_event_type_roundtrips would raise a confusing KeyError.
+_MISSING_FIXTURES = {e.value for e in EventType} - set(_MINIMAL_PAYLOADS)
+assert not _MISSING_FIXTURES, (
+    f"_MINIMAL_PAYLOADS is missing entries for: {_MISSING_FIXTURES}. "
+    "Add a minimal valid payload dict for each new EventType."
+)
+
 _VALID_BASE = {
     "journey_id": "R5001C-031_RJ-0847_20260516",
     "vehicle_id": "R5001C-031",
@@ -344,6 +352,13 @@ def test_extra_envelope_field_raises() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Word-boundary pattern: matches the sentinel as a standalone identifier, not as a
+# substring of a longer name (e.g. avoids "MyEventType", "EventTypeRegistry").
+_SENTINEL_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(n) for n in sorted(_SENTINEL_NAMES)) + r")\b"
+)
+
+
 def _find_event_construction_files() -> list[Path]:
     """Return Python files in any container that reference OEBB event sentinels."""
     found: list[Path] = []
@@ -356,20 +371,17 @@ def _find_event_construction_files() -> list[Path]:
                 source = py_file.read_text(encoding="utf-8")
             except OSError:
                 continue
-            if any(name in source for name in _SENTINEL_NAMES):
+            if _SENTINEL_RE.search(source):
                 found.append(py_file)
     return found
 
 
-_CANONICAL_IMPORT_RE = re.compile(
-    r"from\s+oebb_shared(?:\.events(?:\.(?:envelope|types|payloads))?)?\s+import"
-    r"|import\s+oebb_shared",
-    re.MULTILINE,
-)
-
+# Matches `from <non-oebb_shared> import EventEnvelope|EventModel|EventType`
+# or `from . import EventEnvelope|EventModel|EventType` (relative shadow).
+# Deliberately does NOT match `from oebb_shared* import ...`.
 _LOCAL_SHADOW_RE = re.compile(
-    r"^(?:from\s+\.|\bfrom\s+(?!oebb_shared))\S+\s+import\s+"
-    r"(?:EventEnvelope|EventModel|EventType)",
+    r"^from\s+(?!oebb_shared\b)(?:\.|[\w.]+)\s+import\s+[^\n]*"
+    r"\b(?:EventEnvelope|EventModel|EventType)\b",
     re.MULTILINE,
 )
 
@@ -484,6 +496,7 @@ def test_journey_started_naive_or_non_utc_actual_departure_raises(bad_ts: str) -
         "2026-05-16T08:50:00",          # naive
         "2026-05-16T08:50:00+02:00",    # non-UTC offset
         "2026-05-16 08:50:00Z",         # space separator
+        "",                              # empty string
     ],
 )
 def test_journey_ended_naive_or_non_utc_scheduled_arrival_raises(bad_ts: str) -> None:
@@ -505,6 +518,7 @@ def test_journey_ended_naive_or_non_utc_scheduled_arrival_raises(bad_ts: str) ->
         "2026-05-16T08:53:41",          # naive
         "2026-05-16T08:53:41+01:00",    # non-UTC offset
         "2026-05-16 08:53:41Z",         # space separator
+        "",                              # empty string
     ],
 )
 def test_journey_ended_naive_or_non_utc_actual_arrival_raises(bad_ts: str) -> None:
@@ -517,3 +531,69 @@ def test_journey_ended_naive_or_non_utc_actual_arrival_raises(bad_ts: str) -> No
             total_duration_s=10287.0,
             peak_occupancy_pct=0.91,
         )
+
+
+# ---------------------------------------------------------------------------
+# P8 — Pin the deliberate NFR9 Z-suffix-only contract: +00:00 is semantically UTC
+# but is explicitly rejected. This test documents and locks that design decision.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.contract
+@pytest.mark.parametrize(
+    "field_name,kwargs",
+    [
+        (
+            "scheduled_departure",
+            {
+                "trip_number": "RJ-0847",
+                "origin_station_id": "Wien Hbf",
+                "scheduled_departure": "2026-05-16T06:00:00+00:00",
+                "actual_departure": "2026-05-16T06:02:14Z",
+                "consist": ["car-1"],
+                "service_class": "railjet",
+            },
+        ),
+        (
+            "actual_departure",
+            {
+                "trip_number": "RJ-0847",
+                "origin_station_id": "Wien Hbf",
+                "scheduled_departure": "2026-05-16T06:00:00Z",
+                "actual_departure": "2026-05-16T06:02:14+00:00",
+                "consist": ["car-1"],
+                "service_class": "railjet",
+            },
+        ),
+        (
+            "scheduled_arrival",
+            {
+                "trip_number": "RJ-0847",
+                "destination_station_id": "Salzburg Hbf",
+                "scheduled_arrival": "2026-05-16T08:50:00+00:00",
+                "actual_arrival": "2026-05-16T08:53:41Z",
+                "total_duration_s": 10287.0,
+                "peak_occupancy_pct": 0.91,
+            },
+        ),
+        (
+            "actual_arrival",
+            {
+                "trip_number": "RJ-0847",
+                "destination_station_id": "Salzburg Hbf",
+                "scheduled_arrival": "2026-05-16T08:50:00Z",
+                "actual_arrival": "2026-05-16T08:53:41+00:00",
+                "total_duration_s": 10287.0,
+                "peak_occupancy_pct": 0.91,
+            },
+        ),
+    ],
+)
+def test_plus_zero_offset_rejected(field_name: str, kwargs: dict) -> None:
+    """NFR9 requires Z suffix only; +00:00 (semantically UTC) is deliberately rejected."""
+    departure_fields = ("scheduled_departure", "actual_departure")
+    cls = JourneyStartedPayload if field_name in departure_fields else JourneyEndedPayload
+    with pytest.raises(ValidationError):
+        cls(**kwargs)  # type: ignore[arg-type]
+
+

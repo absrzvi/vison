@@ -281,3 +281,13 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - **No rate limiting on ticket creation endpoint** [maintenance.py] — add per-key quota when API key rotates to OAuth2 (ADR-6/7)
 - **Orphan ticket on response timeout — no idempotency key** [maintenance.js + maintenance.py] — add `X-Idempotency-Key` header when persistence lands
 - **setState after unmount during in-flight ticket POST** [SystemHealth.jsx] — pre-existing React pattern; add `isMountedRef` pattern in hardening pass
+
+## Deferred from: code review of 1-8-shared-contract-enforcement (2026-05-19)
+
+- **D1** — Payload timestamp regex accepts impossible calendar values (month 13, hour 25) — `_TIMESTAMP_RE` only checks digit shape; no `datetime.strptime` follow-up in payload layer. Pre-existing regex design, low practical risk.
+- **D2** — Empty payload `{}` bypasses `_validate_payload_shape` — pre-existing envelope design choice; enforcing non-empty would be a breaking change.
+- **D3** — Lowercase `z` in timestamp rejected silently — deliberate NFR9 Z-suffix-only contract; document in ADR if needed.
+- **D4** — Journey timestamp cross-field ordering not enforced (actual before scheduled is accepted) — would require cross-field `model_validator`; low operational risk.
+- **D5** — `_REPO_ROOT = parents[3]` fragile if test file moves or package is installed as wheel — acceptable for in-tree dev tests; would need fix if `oebb-shared` is ever published to PyPI.
+- **D6** — `STREAM_PRIORITY` constructable as valid `EventEnvelope` despite ADR-18 "never written to event-store" — enforcement gap at the envelope layer; would require a custom validator that checks ADR-18 semantics.
+- **D7** — Sub-second precision unbounded (`(\.\d+)?` allows nanosecond strings) — no practical issue; Python `datetime` drops anything beyond microseconds on round-trip.

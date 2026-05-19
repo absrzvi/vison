@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_serializer
 
-from .envelope import _TIMESTAMP_RE
+from .envelope import TIMESTAMP_RE
 from .types import EventType
 
 
@@ -241,9 +241,13 @@ class AlarmClearedPayload(_BasePayload):
 # ---------------------------------------------------------------------------
 
 
-def _validate_iso_utc(v: str) -> str:
+def _validate_iso_utc(v: object) -> str:
     """Reject naive datetimes and non-UTC offsets. Requires Z suffix per NFR9."""
-    if not _TIMESTAMP_RE.fullmatch(v):
+    if not isinstance(v, str):
+        raise ValueError(
+            f"timestamp must be a string, got {type(v).__name__!r}"
+        )
+    if not TIMESTAMP_RE.fullmatch(v):
         raise ValueError(
             f"timestamp must be ISO-8601 UTC with Z suffix (e.g. 2026-05-16T06:00:00Z), got: {v!r}"
         )

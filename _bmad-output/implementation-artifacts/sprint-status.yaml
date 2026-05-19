@@ -65,7 +65,7 @@ development_status:
   1-4-sqlite-event-store: done
   1-5-apc-adapter: done
   1-7-rest-api-sse-fleet: done
-  1-8-shared-contract-enforcement: review
+  1-8-shared-contract-enforcement: done
   epic-1-retrospective: done
 
   # ── Epic 2: Control Centre Dashboard — Live Operations ──

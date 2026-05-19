@@ -2,7 +2,7 @@
 
 **Epic:** 1 — Foundation & Shared Infrastructure (hardening)  
 **Story Key:** `1-8-shared-contract-enforcement`  
-**Status:** review  
+**Status:** done  
 **Agent:** Amelia  
 **Phase:** BMAD-DEV  
 **Date Created:** 2026-05-19  
@@ -299,6 +299,50 @@ Run `python -m pytest tests/ -m "unit" --cov=oebb_shared --cov-report=term-missi
 ### Change Log
 
 - 2026-05-19: Implemented story 1-8 — A1 envelope contract test (50 tests), A3 CI marker fix, C2 UTC timestamp validator on journey payloads. 99 tests pass, 87% coverage. Committed 545ffd9 and pushed.
+
+---
+
+---
+
+## Senior Developer Review (AI)
+
+**Review date:** 2026-05-19  
+**Reviewer layers:** Blind Hunter · Edge Case Hunter · Acceptance Auditor (Opus 4.7)  
+**Outcome:** Changes Requested — 8 patches, 7 deferred, 2 dismissed
+
+### Action Items
+
+#### Patch findings (must fix before done)
+
+- [x] [Review][Patch] P1 — Promote `_TIMESTAMP_RE` to non-private symbol to avoid cross-module private-API coupling [`shared/src/oebb_shared/events/payloads.py`]
+- [x] [Review][Patch] P2 — Add `isinstance(v, str)` guard in `_validate_iso_utc` — `mode="before"` can receive non-str; `fullmatch` raises `TypeError` not `ValidationError` [`shared/src/oebb_shared/events/payloads.py:248`]
+- [x] [Review][Patch] P3 — Remove dead `_CANONICAL_IMPORT_RE` constant — defined but never used in test [`shared/tests/contract/test_envelope_contract.py`]
+- [x] [Review][Patch] P4 — Replace substring sentinel scan with word-boundary regex to avoid false positives on comments/docstrings/composite names [`shared/tests/contract/test_envelope_contract.py:_find_event_construction_files`]
+- [x] [Review][Patch] P5 — Tighten `_LOCAL_SHADOW_RE` — current regex can match `from typing import EventType` and misses `import X as EventEnvelope` shadow patterns [`shared/tests/contract/test_envelope_contract.py`]
+- [x] [Review][Patch] P6 — Assert `_MINIMAL_PAYLOADS.keys() == {e.value for e in EventType}` at module level — `KeyError` on new EventType without fixture gives unhelpful error [`shared/tests/contract/test_envelope_contract.py`]
+- [x] [Review][Patch] P7 — Add empty-string `""` bad-timestamp case to `actual_departure`, `scheduled_arrival`, `actual_arrival` parametrize lists (currently only in `scheduled_departure`) [`shared/tests/contract/test_envelope_contract.py`]
+- [x] [Review][Patch] P8 — Add explicit test that `+00:00` (semantically UTC) is rejected — pins the deliberate NFR9 Z-suffix-only contract [`shared/tests/contract/test_envelope_contract.py`]
+
+#### Deferred findings
+
+- [x] [Review][Defer] D1 — Regex accepts impossible calendar times (month 13, hour 25) — no datetime.strptime follow-up in payload validator — deferred, pre-existing regex design
+- [x] [Review][Defer] D2 — Empty payload (`{}`) bypasses `_validate_payload_shape` — pre-existing envelope design, out of scope for this story
+- [x] [Review][Defer] D3 — Lowercase `z` (`2026-05-16T06:00:00z`) rejected — deliberate NFR9 choice, no test needed
+- [x] [Review][Defer] D4 — Timestamp cross-field ordering not enforced (actual < scheduled accepted) — out of scope, would require cross-field validator
+- [x] [Review][Defer] D5 — `_REPO_ROOT = parents[3]` fragile if file moves — acceptable for in-tree dev test; would need fix if packaged as wheel
+- [x] [Review][Defer] D6 — `STREAM_PRIORITY` constructable as valid EventEnvelope despite ADR-18 "never written to event-store" — pre-existing envelope design gap
+- [x] [Review][Defer] D7 — Sub-second precision unbounded (`.123456789Z` passes, >microsecond) — acceptable per NFR9, no practical issue
+
+### Review Follow-ups (AI)
+
+- [x] [AI-Review][High] P2 — `isinstance` guard in `_validate_iso_utc` before `fullmatch`
+- [x] [AI-Review][Med] P1 — Promote `_TIMESTAMP_RE` to non-private in `envelope.py` → update `payloads.py` import
+- [x] [AI-Review][Med] P3 — Remove dead `_CANONICAL_IMPORT_RE`
+- [x] [AI-Review][Med] P4 — Word-boundary sentinel scan in `_find_event_construction_files`
+- [x] [AI-Review][Med] P5 — Tighten `_LOCAL_SHADOW_RE`
+- [x] [AI-Review][Med] P6 — `_MINIMAL_PAYLOADS` completeness assertion
+- [x] [AI-Review][Low] P7 — Empty-string case in remaining 3 timestamp parametrize lists
+- [x] [AI-Review][Low] P8 — Pin `+00:00` rejection test
 
 ---
 
