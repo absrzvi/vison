@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-19  # E4-S4 META review found 4 critical bugs in the rewrite; story moved back to in-progress
+last_updated: 2026-05-19  # epic-1 retrospective completed
 project: oebb-agent
 # code-review 2026-05-17: story 2-2 → in-progress (1 patch finding: AC1 scroll-to-top)
 # code-review 2026-05-17: story 2-3 → done (5 patches applied)
@@ -65,7 +65,7 @@ development_status:
   1-4-sqlite-event-store: done
   1-5-apc-adapter: done
   1-7-rest-api-sse-fleet: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   # ── Epic 2: Control Centre Dashboard — Live Operations ──
   epic-2: in-progress
