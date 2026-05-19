@@ -39,6 +39,16 @@ class PISPoller:
         r.raise_for_status()
         return r.json()  # type: ignore[no-any-return]
 
+    @staticmethod
+    def _parse_delay_min(raw: object) -> int:
+        if raw is None or raw == "":
+            return 0
+        try:
+            return int(float(str(raw)))
+        except (ValueError, TypeError):
+            log.warning("pis_delay_min_invalid", value=raw, recoverable=True)
+            return 0
+
     async def _poll_once(self) -> None:
         data = await self._fetch_schedule()
         pis = PisState(
@@ -47,7 +57,7 @@ class PISPoller:
             scheduled_departure=str(data.get("scheduled_departure") or ""),
             actual_departure=str(data.get("actual_departure") or ""),
             platform=str(data.get("platform") or ""),
-            delay_min=int(str(data.get("delay_min") or 0)),
+            delay_min=self._parse_delay_min(data.get("delay_min")),
         )
         await self._ctx.update_pis(pis)
 

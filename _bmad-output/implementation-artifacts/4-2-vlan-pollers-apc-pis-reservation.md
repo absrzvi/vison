@@ -378,3 +378,14 @@ claude-sonnet-4-6
 - [x] [Review][Patch] `str(None)` → `"None"` for missing PIS JSON fields — fixed with `or ""` / `or 0` guards [pis_poller.py:43-49]
 - [x] [Review][Defer] No `asyncio.Lock` on `ContextState` — pre-existing architectural decision; CPython event loop single-threaded, no preemption at sync assignments [context_state.py] — deferred, pre-existing
 - [x] [Review][Defer] Partial APC car-id failure aborts entire `_poll_once` — pre-existing, matches SNMP poller all-or-nothing pattern; product decision needed for best-effort vs atomic [apc_poller.py:41-48] — deferred, pre-existing
+
+#### Round 2 Review Findings
+
+- [x] [Review][Patch] `test_apc_unknown_car_id_logs_warning` does not assert WARNING was logged — added explicit mock_log.warning assertion [test_apc_poller.py]
+- [x] [Review][Patch] `test_pis_malformed_json_logs_warning` asserts `pytest.raises(Exception)` from `_poll_once` — rewritten to simulate run-loop iteration and assert WARNING [test_pis_poller.py]
+- [x] [Review][Patch] `delay_min` parsing via `int(str(...))` raises ValueError on float strings ("3.5"), "NaN" — replaced with `_parse_delay_min()` using `int(float(...))` with fallback [pis_poller.py]
+- [x] [Review][Patch] `_fetch_reservations` does not validate `raw` is a dict — added isinstance check + ValueError; value types coerced to int [reservation_poller.py]
+- [x] [Review][Patch] `car_ids` stored as mutable list reference — converted to `tuple` in APCPoller, `frozenset` in ReservationPoller [apc_poller.py, reservation_poller.py]
+- [x] [Review][Defer] Module-scope `PISPoller`/`ReservationPoller` construction creates `httpx.AsyncClient` at import time — ResourceWarning in tests importing main.py without lifespan; pre-existing pattern from SnmpPoller [main.py:62-72] — deferred, pre-existing
+- [x] [Review][Defer] `mock-vlans` runs `pip install` on every container start — slow startup and fails without network; bake a proper image in hardening sprint [docker-compose.dev.yml] — deferred, pre-existing
+- [x] [Review][Defer] Sequential APC fetch blocks entire poll cycle on one slow car; partial successes discarded — same as round 1 F5 [apc_poller.py] — deferred, pre-existing

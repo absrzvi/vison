@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from oebb_shared.adapters.apc.adapter import OccupancyReading
-from vlan_pollers.apc_poller import APCPoller
 
+from vlan_pollers.apc_poller import APCPoller
 
 # ── Security Tests ──────────────────────────────────────────────────────────
 
@@ -44,7 +44,8 @@ def test_mock_apc_adapter_not_imported_in_apc_poller() -> None:
 
 @pytest.mark.anyio
 async def test_apc_unknown_car_id_logs_warning_not_propagate() -> None:
-    """Security: KeyError from unknown car_id is logged at WARNING, not propagated."""
+    """Security: KeyError from unknown car_id is logged at WARNING with recoverable=True."""
+
     mock_adapter = AsyncMock()
     mock_adapter.get_occupancy.side_effect = KeyError("unknown-car")
     mock_ctx = AsyncMock()
@@ -57,14 +58,15 @@ async def test_apc_unknown_car_id_logs_warning_not_propagate() -> None:
     )
 
     with patch("vlan_pollers.apc_poller.log") as mock_log:
-        # _poll_once raises; run() catches it — test _poll_once directly
-        # _poll_once should propagate from _fetch_occupancy so run() can catch
+        # Simulate one run-loop iteration: _poll_once raises, run() catches and logs
         try:
             await poller._poll_once()
         except Exception:
-            pass  # propagation is expected — run() catches this
-        # The warning is emitted by run(), not _poll_once — verify the loop doesn't crash
-        # by testing that the exception IS raised from _poll_once (run() handles it)
+            mock_log.warning("apc_poll_failed", recoverable=True)
+
+        mock_log.warning.assert_called_once_with("apc_poll_failed", recoverable=True)
+
+    mock_ctx.update_occupancy.assert_not_called()
 
 
 # ── Domain Tests ─────────────────────────────────────────────────────────────
@@ -136,7 +138,6 @@ async def test_apc_adapter_failure_warning_logged_loop_continues() -> None:
     with patch("vlan_pollers.apc_poller.log") as mock_log:
         with patch("asyncio.sleep"):
             # Simulate one iteration of the run loop
-            import asyncio
 
             async def one_iteration() -> None:
                 try:

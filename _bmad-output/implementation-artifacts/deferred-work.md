@@ -232,6 +232,12 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - **F21: `_push_context_delta` non-atomic across fusion+inference** [context_state.py] — sequential posts may leave consumers divergent on retry failure; add sequence number + per-service error capture in hardening story
 - **F23: `snmp_speed_oid` configured but never used** [snmp_poller.py / config.py] — speed varbind polling deferred until Stadler MIB OID for speed is confirmed; wire `update_speed` in E4-S2 when APC/SNMP speed OID is known
 
+## Deferred from: code review of 4-2-vlan-pollers-apc-pis-reservation round 2 (2026-05-19)
+
+- **Module-scope PISPoller/ReservationPoller construction creates httpx.AsyncClient at import time** [main.py:62-72] — pre-existing pattern from SnmpPoller; ResourceWarning in tests that import main.py without entering lifespan; fix by constructing pollers lazily inside _lifespan
+- **`mock-vlans` pip install on every container start** [docker-compose.dev.yml] — slow startup; fails without network; bake a proper image or use pre-built fastapi image in hardening sprint
+- **Sequential APC fetch blocks poll cycle on one slow car; partial successes discarded** [apc_poller.py] — pre-existing all-or-nothing decision; use asyncio.gather with return_exceptions=True when partial-write semantics are decided
+
 ## Deferred from: code review of 4-2-vlan-pollers-apc-pis-reservation (2026-05-19)
 
 - **No `asyncio.Lock` on `ContextState`** [context_state.py] — pre-existing architectural decision; CPython event loop is single-threaded, coroutines only interleave at `await` points, synchronous assignments are atomic; a lock would be needed only for OS thread concurrency

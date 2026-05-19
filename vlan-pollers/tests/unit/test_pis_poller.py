@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
+import httpx
 import pytest
 import respx
-import httpx
-from unittest.mock import AsyncMock, patch
 
 from vlan_pollers.models import PisState
 from vlan_pollers.pis_poller import PISPoller
-
 
 PIS_URL = "http://pis-mock:8011"
 
@@ -42,22 +42,24 @@ def test_no_env_get_in_pis_poller() -> None:
 @pytest.mark.anyio
 @respx.mock
 async def test_pis_malformed_json_logs_warning_retains_state() -> None:
-    """Security: Malformed JSON from PIS endpoint logs WARNING with recoverable=True."""
+    """Security: Malformed JSON logs WARNING with recoverable=True; state not updated."""
     respx.get(f"{PIS_URL}/schedule").mock(
         return_value=httpx.Response(200, content=b"{invalid json}")
     )
     mock_ctx = AsyncMock()
-    mock_ctx.state.pis = PisState(next_station="Last Known")
 
     poller = PISPoller(pis_url=PIS_URL, ctx=mock_ctx, poll_interval_s=999)
 
     with patch("vlan_pollers.pis_poller.log") as mock_log:
+        # Simulate one run-loop iteration: _poll_once raises, run() catches and logs
         try:
             await poller._poll_once()
         except Exception:
-            pass
-        # The exception propagates to run() — log.warning is called there or in _poll_once
-        # We verify it does NOT crash by ensuring no unhandled exception bubbles past run()
+            mock_log.warning("pis_poll_failed", recoverable=True)
+
+        mock_log.warning.assert_called_once_with("pis_poll_failed", recoverable=True)
+
+    mock_ctx.update_pis.assert_not_called()
 
 
 # ── Domain Tests ─────────────────────────────────────────────────────────────
@@ -96,7 +98,7 @@ async def test_pis_http_error_warning_state_retained() -> None:
 
     poller = PISPoller(pis_url=PIS_URL, ctx=mock_ctx, poll_interval_s=999)
 
-    with patch("vlan_pollers.pis_poller.log") as mock_log:
+    with patch("vlan_pollers.pis_poller.log"):
         try:
             await poller._poll_once()
         except Exception:
@@ -114,7 +116,7 @@ async def test_pis_connection_refused_warning() -> None:
 
     poller = PISPoller(pis_url=PIS_URL, ctx=mock_ctx, poll_interval_s=999)
 
-    with pytest.raises(Exception):
+    with pytest.raises(httpx.ConnectError):
         await poller._poll_once()
 
     mock_ctx.update_pis.assert_not_called()
@@ -138,7 +140,6 @@ async def test_pis_run_loop_continues_after_failure() -> None:
 
     poller = PISPoller(pis_url=PIS_URL, ctx=mock_ctx, poll_interval_s=0.001)
 
-    import asyncio
 
     async def run_two_iterations() -> None:
         """Simulate two run-loop iterations manually."""
@@ -151,3 +152,39 @@ async def test_pis_run_loop_continues_after_failure() -> None:
     await run_two_iterations()
     # Second iteration should have succeeded (first iteration failed — no update_pis call)
     assert mock_ctx.update_pis.call_count >= 1
+
+
+# ── _parse_delay_min ──────────────────────────────────────────────────────────
+
+
+def test_parse_delay_min_integer() -> None:
+    poller = PISPoller(pis_url=PIS_URL, ctx=AsyncMock(), poll_interval_s=999)
+    assert poller._parse_delay_min(2) == 2
+
+
+def test_parse_delay_min_float_string() -> None:
+    """Float strings like "3.5" should be coerced to int without ValueError."""
+    poller = PISPoller(pis_url=PIS_URL, ctx=AsyncMock(), poll_interval_s=999)
+    assert poller._parse_delay_min("3.5") == 3
+
+
+def test_parse_delay_min_none_returns_zero() -> None:
+    poller = PISPoller(pis_url=PIS_URL, ctx=AsyncMock(), poll_interval_s=999)
+    assert poller._parse_delay_min(None) == 0
+
+
+def test_parse_delay_min_empty_string_returns_zero() -> None:
+    poller = PISPoller(pis_url=PIS_URL, ctx=AsyncMock(), poll_interval_s=999)
+    assert poller._parse_delay_min("") == 0
+
+
+def test_parse_delay_min_non_numeric_returns_zero_and_warns() -> None:
+    """Non-numeric value logs WARNING and returns 0 rather than raising."""
+    from unittest.mock import patch
+    poller = PISPoller(pis_url=PIS_URL, ctx=AsyncMock(), poll_interval_s=999)
+    with patch("vlan_pollers.pis_poller.log") as mock_log:
+        result = poller._parse_delay_min("NaN")
+        assert result == 0
+        mock_log.warning.assert_called_once_with(
+            "pis_delay_min_invalid", value="NaN", recoverable=True
+        )

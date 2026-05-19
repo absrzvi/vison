@@ -26,7 +26,7 @@ class APCPoller:
     ) -> None:
         self._adapter = adapter
         self._ctx = ctx
-        self._car_ids = car_ids
+        self._car_ids: tuple[str, ...] = tuple(car_ids)
         self._poll_interval_s = poll_interval_s
 
     @DEFAULT_RETRY

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
+import httpx
 import pytest
 import respx
-import httpx
-from unittest.mock import AsyncMock, patch
 
 from vlan_pollers.reservation_poller import ReservationPoller
-
 
 RESERVATION_URL = "http://reservation-mock:8012"
 
@@ -79,7 +79,7 @@ async def test_reservation_http_error_no_update() -> None:
         poll_interval_s=999,
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(httpx.HTTPStatusError):
         await poller._poll_once()
 
     mock_ctx.update_reservations.assert_not_called()
@@ -137,3 +137,23 @@ async def test_reservation_filters_to_configured_car_ids() -> None:
     data = mock_ctx.update_reservations.call_args[0][0]
     # Only configured car IDs should be included
     assert set(data.keys()) == {"car-1", "car-3"}
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_reservation_non_dict_payload_raises() -> None:
+    """Edge: Non-dict JSON payload (array/null) raises ValueError — not silently stored."""
+    respx.get(f"{RESERVATION_URL}/reservations").mock(
+        return_value=httpx.Response(200, json=[42, 100])
+    )
+    mock_ctx = AsyncMock()
+    poller = ReservationPoller(
+        reservation_url=RESERVATION_URL,
+        ctx=mock_ctx,
+        car_ids=["car-1"],
+        poll_interval_s=999,
+    )
+    with pytest.raises(ValueError, match="not an object"):
+        await poller._poll_once()
+    mock_ctx.update_reservations.assert_not_called()
+    await poller.aclose()

@@ -27,7 +27,7 @@ class ReservationPoller:
     ) -> None:
         self._reservation_url = reservation_url
         self._ctx = ctx
-        self._car_ids = car_ids
+        self._car_ids: frozenset[str] = frozenset(car_ids)
         self._poll_interval_s = poll_interval_s
         self._http_client = httpx.AsyncClient()
 
@@ -38,9 +38,14 @@ class ReservationPoller:
     async def _fetch_reservations(self) -> dict[str, int]:
         r = await self._http_client.get(f"{self._reservation_url}/reservations", timeout=5.0)
         r.raise_for_status()
-        raw: dict[str, int] = r.json()
-        # Filter to only configured car IDs
-        return {k: v for k, v in raw.items() if k in self._car_ids}
+        raw = r.json()
+        if not isinstance(raw, dict):
+            raise ValueError(f"reservations payload not an object: {type(raw).__name__}")
+        return {
+            k: int(v)
+            for k, v in raw.items()
+            if k in self._car_ids and isinstance(v, (int, float))
+        }
 
     async def _poll_once(self) -> None:
         data = await self._fetch_reservations()
