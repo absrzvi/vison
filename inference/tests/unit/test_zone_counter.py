@@ -1,28 +1,30 @@
-"""Unit tests for zone_counter.py — rate limit, threshold crossing, no-duplicate guard."""
+"""Unit tests for zone_counter.py — rate limit, threshold crossing, envelope correctness.
+
+Uses respx.mock to mock httpx at the transport layer (Rule 13) — payloads and URLs
+are real-tested rather than asserting against AsyncMock call_args.
+"""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
 
+import httpx
 import pytest
+import respx
 
 from inference.config import Settings
-from inference.models import OccupancyState
 
 
 @pytest.fixture
 def settings() -> Settings:
-    return Settings(occupancy_threshold_pct=0.80, occupancy_capacity_default=200)
+    return Settings(
+        occupancy_threshold_pct=0.80,
+        occupancy_capacity_default=200,
+        event_store_url="http://event-store.test",
+    )
 
 
 @pytest.fixture
-def mock_client() -> AsyncMock:
-    client = AsyncMock()
-    client.post = AsyncMock(return_value=MagicMock(status_code=201))
-    return client
-
-
-@pytest.fixture
-def cameras() -> list[dict[str, object]]:
+def cameras() -> list[dict[str, Any]]:
     return [
         {
             "camera_id": "C1_DOOR_01",
@@ -30,178 +32,225 @@ def cameras() -> list[dict[str, object]]:
             "zone": "door",
             "priority": "P1",
             "capacity": 200,
-            "seat_zones": [{"name": "seating-fwd", "polygon": [[0, 0], [640, 0], [640, 480], [0, 480]]}],
         }
     ]
 
 
 @pytest.fixture
-def zone_counter(settings: Settings, mock_client: AsyncMock, cameras: list[dict[str, object]]) -> object:
-    from inference.zone_counter import ZoneCounter
-
-    return ZoneCounter(cameras=cameras, settings=settings, event_store_client=mock_client)
+async def client() -> httpx.AsyncClient:
+    async with httpx.AsyncClient() as c:
+        yield c
 
 
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_update_posts_occupancy_event(
-    zone_counter: object, mock_client: AsyncMock
+    settings: Settings, cameras: list[dict[str, Any]], client: httpx.AsyncClient
 ) -> None:
-    detections = [{"track_id": 1, "label": "person", "bbox": (0, 0, 100, 100)}]
-    await zone_counter.update("car-1", detections)  # type: ignore[attr-defined]
-    mock_client.post.assert_called_once()
-    call_kwargs = mock_client.post.call_args
-    payload = call_kwargs.kwargs.get("json") or call_kwargs.args[1] if len(call_kwargs.args) > 1 else call_kwargs.kwargs["json"]
-    assert payload["event_type"] == "OCCUPANCY_UPDATE"
+    from inference.zone_counter import ZoneCounter
+
+    with respx.mock(base_url="http://event-store.test") as mock:
+        route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
+        await zc.update("car-1", [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}])
+        assert route.called
+        body = route.calls[0].request.content
+        # Body must be valid JSON parseable as a canonical envelope.
+        import json
+        env = json.loads(body)
+        assert env["event_type"] == "OCCUPANCY_UPDATE"
+        assert env["source"] == "inference"
+        assert "journey_id" in env
+        assert "vehicle_id" in env
+        assert env["schema_version"] == 1
+        # confidence is omitted by OccupancyUpdatePayload._drop_none when None.
+        assert "confidence" not in env["payload"]
+        assert env["payload"]["service_tier"] == "standard"
 
 
 @pytest.mark.unit
 @pytest.mark.anyio
-async def test_rate_limit_1hz(zone_counter: object, mock_client: AsyncMock) -> None:
-    """Second update within 1 second must be skipped."""
-    detections = [{"track_id": 1, "label": "person", "bbox": (0, 0, 100, 100)}]
-    await zone_counter.update("car-1", detections)  # type: ignore[attr-defined]
-    await zone_counter.update("car-1", detections)  # type: ignore[attr-defined]
-    assert mock_client.post.call_count == 1
+async def test_rate_limit_1hz(
+    settings: Settings, cameras: list[dict[str, Any]], client: httpx.AsyncClient
+) -> None:
+    from inference.zone_counter import ZoneCounter
+
+    with respx.mock(base_url="http://event-store.test") as mock:
+        route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
+        d = [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}]
+        await zc.update("car-1", d)
+        await zc.update("car-1", d)
+        # Second call within 1s suppressed; only one OCCUPANCY_UPDATE.
+        assert route.call_count == 1
 
 
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_rate_limit_independent_per_car(
-    settings: Settings, mock_client: AsyncMock
+    settings: Settings, client: httpx.AsyncClient
 ) -> None:
-    """Rate limit is per car_id — two cars can emit independently."""
     from inference.zone_counter import ZoneCounter
 
     cameras = [
-        {
-            "camera_id": "C1_DOOR_01",
-            "coach_id": "car-1",
-            "zone": "door",
-            "priority": "P1",
-            "capacity": 200,
-            "seat_zones": [{"name": "s", "polygon": [[0, 0], [640, 0], [640, 480], [0, 480]]}],
-        },
-        {
-            "camera_id": "C2_DOOR_01",
-            "coach_id": "car-2",
-            "zone": "door",
-            "priority": "P1",
-            "capacity": 200,
-            "seat_zones": [{"name": "s", "polygon": [[0, 0], [640, 0], [640, 480], [0, 480]]}],
-        },
+        {"camera_id": "C1", "coach_id": "car-1", "zone": "d", "priority": "P1", "capacity": 200},
+        {"camera_id": "C2", "coach_id": "car-2", "zone": "d", "priority": "P1", "capacity": 200},
     ]
-    zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=mock_client)
-    d = [{"track_id": 1, "label": "person", "bbox": (0, 0, 100, 100)}]
-    await zc.update("car-1", d)
-    await zc.update("car-2", d)
-    assert mock_client.post.call_count == 2  # each car emits once
+    with respx.mock(base_url="http://event-store.test") as mock:
+        route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
+        d = [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}]
+        await zc.update("car-1", d)
+        await zc.update("car-2", d)
+        assert route.call_count == 2
 
 
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_threshold_rising_emits_event(
-    zone_counter: object, mock_client: AsyncMock
+    settings: Settings, cameras: list[dict[str, Any]], client: httpx.AsyncClient
 ) -> None:
-    """Crossing 80% in rising direction emits OCCUPANCY_THRESHOLD_CROSSED."""
-    # Patch time so rate limit doesn't block
+    from inference.zone_counter import ZoneCounter
 
-    # Set last_emit_time far in the past so first update goes through
-    zc = zone_counter  # type: ignore[assignment]
-    zc._last_emit: dict[str, float] = {"car-1": 0.0}  # type: ignore[attr-defined]
-
-    # 161/200 = 80.5% > threshold
-    detections = [{"track_id": i, "label": "person", "bbox": (0, 0, 10, 10)} for i in range(161)]
-    await zc.update("car-1", detections)
-
-    calls = [c for c in mock_client.post.call_args_list]
-    event_types = []
-    for c in calls:
-        j = c.kwargs.get("json") or (c.args[1] if len(c.args) > 1 else {})
-        event_types.append(j.get("event_type", ""))
-    assert "OCCUPANCY_THRESHOLD_CROSSED" in event_types
+    with respx.mock(base_url="http://event-store.test") as mock:
+        route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
+        zc._last_emit = {"car-1": 0.0}
+        # 161/200 = 80.5% — crosses 80% threshold rising.
+        detections = [
+            {"track_id": i, "label": "person", "bbox": (0, 0, 10, 10)} for i in range(161)
+        ]
+        await zc.update("car-1", detections)
+        import json
+        event_types = [json.loads(c.request.content)["event_type"] for c in route.calls]
+        assert "OCCUPANCY_UPDATE" in event_types
+        assert "OCCUPANCY_THRESHOLD_CROSSED" in event_types
 
 
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_threshold_no_duplicate_same_direction(
-    zone_counter: object, mock_client: AsyncMock
+    settings: Settings, cameras: list[dict[str, Any]], client: httpx.AsyncClient
 ) -> None:
-    """Second crossing in same direction must not emit a duplicate event."""
-    zc = zone_counter  # type: ignore[assignment]
-    zc._last_emit = {"car-1": 0.0}  # type: ignore[attr-defined]
+    from inference.zone_counter import ZoneCounter
 
-    detections_high = [{"track_id": i, "label": "person", "bbox": (0, 0, 10, 10)} for i in range(161)]
-    await zc.update("car-1", detections_high)
-    threshold_calls_1 = sum(
-        1
-        for c in mock_client.post.call_args_list
-        if (c.kwargs.get("json") or {}).get("event_type") == "OCCUPANCY_THRESHOLD_CROSSED"
-    )
+    with respx.mock(base_url="http://event-store.test") as mock:
+        route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
+        zc._last_emit = {"car-1": 0.0}
 
-    # Reset rate limit and emit again at same high occupancy
-    zc._last_emit = {"car-1": 0.0}  # type: ignore[attr-defined]
-    await zc.update("car-1", detections_high)
-    threshold_calls_2 = sum(
-        1
-        for c in mock_client.post.call_args_list
-        if (c.kwargs.get("json") or {}).get("event_type") == "OCCUPANCY_THRESHOLD_CROSSED"
-    )
-    assert threshold_calls_2 == threshold_calls_1  # no duplicate
+        high = [{"track_id": i, "label": "person", "bbox": (0, 0, 10, 10)} for i in range(161)]
+        await zc.update("car-1", high)
+        import json
+        crossed_1 = sum(
+            1 for c in route.calls
+            if json.loads(c.request.content)["event_type"] == "OCCUPANCY_THRESHOLD_CROSSED"
+        )
+
+        zc._last_emit = {"car-1": 0.0}
+        await zc.update("car-1", high)
+        crossed_2 = sum(
+            1 for c in route.calls
+            if json.loads(c.request.content)["event_type"] == "OCCUPANCY_THRESHOLD_CROSSED"
+        )
+        assert crossed_2 == crossed_1, "no duplicate threshold-crossed in same direction"
 
 
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_threshold_falling_emits_event(
-    zone_counter: object, mock_client: AsyncMock
+    settings: Settings, cameras: list[dict[str, Any]], client: httpx.AsyncClient
 ) -> None:
-    """Dropping below threshold in falling direction emits OCCUPANCY_THRESHOLD_CROSSED."""
-    zc = zone_counter  # type: ignore[assignment]
-    # Manually set state to already be above threshold
-    zc._states["car-1"].occupancy_pct = 0.85
-    zc._threshold_state[("car-1", 0.80)] = "rising"  # already crossed rising
-    zc._last_emit = {"car-1": 0.0}
+    from inference.zone_counter import ZoneCounter
 
-    # Drop below threshold (1 person / 200 = 0.5%)
-    detections = [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}]
-    await zc.update("car-1", detections)
+    with respx.mock(base_url="http://event-store.test") as mock:
+        route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
+        # Start above threshold so falling can fire.
+        zc._states["car-1"].occupancy_pct = 0.85
+        zc._threshold_state[("car-1", 0.80)] = "rising"
+        zc._last_emit = {"car-1": 0.0}
 
-    event_types = [
-        (c.kwargs.get("json") or {}).get("event_type", "")
-        for c in mock_client.post.call_args_list
-    ]
-    assert "OCCUPANCY_THRESHOLD_CROSSED" in event_types
+        # 1 person / 200 capacity = 0.5% — well below threshold.
+        await zc.update("car-1", [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}])
+
+        import json
+        event_types = [json.loads(c.request.content)["event_type"] for c in route.calls]
+        assert "OCCUPANCY_THRESHOLD_CROSSED" in event_types
 
 
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_update_unknown_car_id_is_noop(
-    settings: Settings, mock_client: AsyncMock, cameras: list[dict[str, object]]
+    settings: Settings, cameras: list[dict[str, Any]], client: httpx.AsyncClient
 ) -> None:
     from inference.zone_counter import ZoneCounter
 
-    zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=mock_client)
-    await zc.update("car-999", [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}])
-    mock_client.post.assert_not_called()
+    with respx.mock(base_url="http://event-store.test", assert_all_called=False) as mock:
+        route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
+        await zc.update("car-999", [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}])
+        assert not route.called
 
 
 @pytest.mark.unit
-def test_fire_threshold_event_no_event_loop(
-    zone_counter: object,
+@pytest.mark.anyio
+async def test_none_track_id_filtered(
+    settings: Settings, cameras: list[dict[str, Any]], client: httpx.AsyncClient
 ) -> None:
-    """RuntimeError from get_event_loop must be swallowed gracefully."""
-
-    zc = zone_counter  # type: ignore[assignment]
-    with patch("asyncio.get_event_loop", side_effect=RuntimeError("no loop")):
-        # Should not raise
-        zc._fire_threshold_event("car-1", "rising", 0.80)  # type: ignore[attr-defined]
-
-
-@pytest.mark.unit
-def test_build_occupancy_payload_has_all_fields() -> None:
+    """None track_ids must not inflate the count (defence in depth — callback also filters)."""
     from inference.zone_counter import ZoneCounter
 
-    state = OccupancyState(car_id="car-1", occupancy_count=10, occupancy_pct=0.5, capacity=200)
-    payload = ZoneCounter.build_occupancy_payload(state, confidence=1.0)
-    for field in ("car_id", "zone", "occupancy_count", "occupancy_pct", "capacity", "confidence", "service_tier"):
-        assert field in payload, f"Missing: {field}"
+    with respx.mock(base_url="http://event-store.test") as mock:
+        route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
+        # Three detections, none with valid track_ids — count must be zero.
+        await zc.update(
+            "car-1",
+            [
+                {"track_id": None, "label": "person", "bbox": (0, 0, 10, 10)},
+                {"track_id": None, "label": "person", "bbox": (10, 10, 20, 20)},
+                {"track_id": None, "label": "person", "bbox": (20, 20, 30, 30)},
+            ],
+        )
+        import json
+        env = json.loads(route.calls[0].request.content)
+        assert env["payload"]["occupancy_count"] == 0
+
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_5xx_response_raises_after_retry(
+    settings: Settings, cameras: list[dict[str, Any]], client: httpx.AsyncClient
+) -> None:
+    """raise_for_status must surface server errors so DEFAULT_RETRY engages."""
+    from inference.zone_counter import ZoneCounter
+
+    with respx.mock(base_url="http://event-store.test") as mock:
+        mock.post("/api/v1/events").mock(return_value=httpx.Response(500))
+        zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
+        with pytest.raises(httpx.HTTPStatusError):
+            await zc.update("car-1", [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}])
+
+
+@pytest.mark.unit
+def test_capacity_zero_refuses_to_start(settings: Settings, client: httpx.AsyncClient) -> None:
+    """capacity <= 0 is a config error — container must refuse to start."""
+    from inference.zone_counter import ZoneCounter
+
+    bad = [{"camera_id": "C", "coach_id": "car-1", "zone": "d", "priority": "P1", "capacity": 0}]
+    with pytest.raises(ValueError, match="must be > 0"):
+        ZoneCounter(cameras=bad, settings=settings, event_store_client=client)
+
+
+@pytest.mark.unit
+def test_capacity_non_int_refuses_to_start(
+    settings: Settings, client: httpx.AsyncClient
+) -> None:
+    from inference.zone_counter import ZoneCounter
+
+    bad = [
+        {"camera_id": "C", "coach_id": "car-1", "zone": "d", "priority": "P1", "capacity": None}
+    ]
+    with pytest.raises(ValueError, match="Invalid capacity"):
+        ZoneCounter(cameras=bad, settings=settings, event_store_client=client)

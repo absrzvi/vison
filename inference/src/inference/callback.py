@@ -1,111 +1,162 @@
 """Thin GStreamer handoff callback — extracts HailoROI metadata and delegates to ZoneCounter.
 
 No GStreamer pipeline creation here (Rule 6). No os.environ.get() (Rule 8).
-hailo is imported as a late module reference so unit tests can patch it.
+hailo is imported as a module attribute so unit tests can patch
+`inference.callback.hailo` directly.
+
+The callback is SYNCHRONOUS — GStreamer's handoff signal fires from the streaming
+thread and expects a sync return. Async event-store POSTs are scheduled onto an
+asyncio loop owned by main.py via asyncio.run_coroutine_threadsafe. The loop
+reference is provided by a LoopHolder so the same object can be passed to the
+callback at construction time and rebound by main's lifespan once the real loop
+is running.
 """
 from __future__ import annotations
 
-import sys
-from typing import TYPE_CHECKING, Any
+import asyncio
+from concurrent.futures import Future
+from typing import Any
 
 import structlog
 
 from inference.budget import Budget
 from inference.config import Settings
-from inference.models import DetectionClass, ZoneMask
+from inference.models import LoopHolder, ZoneMask
 from inference.zone_counter import ZoneCounter
-
-if TYPE_CHECKING:
-    pass
 
 log = structlog.get_logger(__name__)
 
-# hailo is only available in the TAPPAS Docker image.
-# We import it lazily via sys.modules so unit tests can patch `inference.callback.hailo`.
+# hailo is only available in the TAPPAS Docker image. Imported as a module attribute
+# so unit tests can patch `inference.callback.hailo`.
 try:
     import hailo  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover
     hailo = None  # noqa: F841
 
 
-_ALLOWED_LABELS: frozenset[str] = frozenset(DetectionClass)
+def _point_in_polygon(x: float, y: float, polygon: list[list[int]]) -> bool:
+    """Ray-casting point-in-polygon. Returns True if (x,y) lies inside polygon.
+
+    Points exactly on an edge are treated as inside (deterministic for repeated frames).
+    """
+    if len(polygon) < 3:
+        return False
+    inside = False
+    n = len(polygon)
+    j = n - 1
+    for i in range(n):
+        xi, yi = polygon[i][0], polygon[i][1]
+        xj, yj = polygon[j][0], polygon[j][1]
+        if ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / ((yj - yi) or 1e-9) + xi):
+            inside = not inside
+        j = i
+    return inside
+
+
+def _bbox_in_any_zone(
+    bbox: tuple[float, float, float, float], zones: list[ZoneMask]
+) -> bool:
+    """Centroid-based zone membership test."""
+    cx = (bbox[0] + bbox[2]) / 2.0
+    cy = (bbox[1] + bbox[3]) / 2.0
+    return any(_point_in_polygon(cx, cy, z.polygon) for z in zones)
+
+
+def _on_post_done(future: Future[Any]) -> None:
+    """Log exceptions from scheduled async POSTs so failures aren't silently swallowed."""
+    exc = future.exception()
+    if exc is not None:
+        log.warning("callback.scheduled_post_failed", error=str(exc))
 
 
 class OccupancyCallback:
     """Thin GStreamer handoff callback wired to the USER_CALLBACK_PIPELINE identity element.
 
-    Responsibilities:
-    - Extract HailoROI detection metadata from each GStreamer buffer.
-    - Filter detections by class (person/suitcase/bicycle) and zone polygon.
-    - Skip processing for budget-suppressed cameras.
-    - Delegate accepted detections to ZoneCounter.update().
+    One instance per camera/pipeline. TAPPAS handoff buffers do not carry a stable
+    camera identifier through pad metadata, so we bind one callback to one source.
     """
 
     def __init__(
         self,
-        cameras: list[dict[str, Any]],
-        zone_masks: dict[str, list[ZoneMask]],
+        camera: dict[str, Any],
+        zone_masks: list[ZoneMask],
         zone_counter: ZoneCounter,
         budget: Budget,
         settings: Settings,
+        loop_holder: LoopHolder,
     ) -> None:
         self._zone_counter = zone_counter
         self._budget = budget
         self._settings = settings
         self._zone_masks = zone_masks
+        self._loop_holder = loop_holder
 
-        # Build camera lookup: camera_id → (car_id, priority)
-        self._camera_meta: dict[str, dict[str, str]] = {}
-        for cam in cameras:
-            camera_id = str(cam["camera_id"])
-            car_id = str(cam["coach_id"])
-            priority = str(cam.get("priority", "P1"))
-            self._camera_meta[camera_id] = {"car_id": car_id, "priority": priority}
+        self._camera_id = str(camera["camera_id"])
+        self._car_id = str(camera["coach_id"])
+        self._priority = str(camera.get("priority", "P1"))
 
-        # Validate zone configs exist for all coaches — ADR-16
-        car_ids = {str(cam["coach_id"]) for cam in cameras}
-        missing = car_ids - set(zone_masks.keys())
-        if missing:
-            log.critical("callback.missing_zone_config", missing=sorted(missing))
-            raise RuntimeError(f"Missing zone config for coaches: {sorted(missing)}")
+        if not zone_masks:
+            log.critical(
+                "callback.missing_zone_config",
+                camera_id=self._camera_id,
+                car_id=self._car_id,
+            )
+            raise RuntimeError(f"Missing zone config for camera {self._camera_id}")
 
-    async def __call__(self, buffer: Any, user_data: Any) -> None:
-        """Called by GStreamer handoff signal for each buffer."""
-        _hailo = hailo or sys.modules.get("inference.callback.hailo")
-        if _hailo is None:
-            log.error("callback.hailo_not_available")
+        self._allowed_labels: frozenset[str] = frozenset(settings.detection_classes)
+
+    @property
+    def camera_id(self) -> str:
+        return self._camera_id
+
+    def __call__(self, buffer: Any, user_data: Any) -> None:
+        """Sync handoff entry point. GStreamer fires this from the streaming thread."""
+        if hailo is None:
+            log.error("callback.hailo_not_available", camera_id=self._camera_id)
             return
 
-        roi = _hailo.get_roi_from_buffer(buffer)
-        detections = roi.get_objects_typed(_hailo.HAILO_DETECTION)
+        if not self._budget.should_process(self._camera_id, self._priority):
+            return
 
-        # Group by camera — in this pipeline all detections belong to one camera.
-        # Use the first camera associated with this callback context.
-        # (Multi-camera mux is handled at the pipeline level via reid_multisource)
-        for cam_id, meta in self._camera_meta.items():
-            car_id = meta["car_id"]
-            priority = meta["priority"]
+        try:
+            roi = hailo.get_roi_from_buffer(buffer)
+            detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
+        except Exception as exc:  # pragma: no cover — defensive against malformed buffers
+            log.warning("callback.roi_extract_failed", camera_id=self._camera_id, error=str(exc))
+            return
 
-            if not self._budget.should_process(cam_id, priority):
+        accepted: list[dict[str, Any]] = []
+        for det in detections:
+            try:
+                label = det.get_label()
+            except Exception:  # pragma: no cover
+                continue
+            if label not in self._allowed_labels:
                 continue
 
-            accepted: list[dict[str, Any]] = []
-            for det in detections:
-                label = det.get_label()
-                if label not in _ALLOWED_LABELS:
-                    continue
-
-                uid_list = det.get_objects_typed(_hailo.HAILO_UNIQUE_ID)
+            try:
+                uid_list = det.get_objects_typed(hailo.HAILO_UNIQUE_ID)
                 track_id = uid_list[0].get_id() if uid_list else None
-                bbox = det.get_bbox()
+                bbox_obj = det.get_bbox()
+                bbox = (bbox_obj.xmin(), bbox_obj.ymin(), bbox_obj.xmax(), bbox_obj.ymax())
+            except Exception:  # pragma: no cover
+                continue
 
-                accepted.append(
-                    {
-                        "track_id": track_id,
-                        "label": label,
-                        "bbox": (bbox.xmin(), bbox.ymin(), bbox.xmax(), bbox.ymax()),
-                    }
-                )
+            if track_id is None:
+                continue
 
-            await self._zone_counter.update(car_id, accepted)
-            break  # single-camera pipeline — one camera per callback instance
+            if not _bbox_in_any_zone(bbox, self._zone_masks):
+                continue
+
+            accepted.append({"track_id": track_id, "label": label, "bbox": bbox})
+
+        loop = self._loop_holder.loop
+        if loop is None:
+            log.warning("callback.no_loop_yet", camera_id=self._camera_id)
+            return
+
+        fut = asyncio.run_coroutine_threadsafe(
+            self._zone_counter.update(self._car_id, accepted),
+            loop,
+        )
+        fut.add_done_callback(_on_post_done)

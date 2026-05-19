@@ -19,14 +19,31 @@ class Budget:
         self._p2_throttled: bool = False
 
     def on_context_update(self, payload: dict[str, object]) -> None:
-        """Update throttle state from a context-push payload."""
-        new_state = bool(payload.get("p2_throttled", False))
-        if new_state != self._p2_throttled:
-            self._p2_throttled = new_state
-            log.info("budget.p2_throttle_state_changed", throttled=new_state)
+        """Update throttle state from a context-push payload.
+
+        Only accepts real booleans for `p2_throttled` — string "false" or non-bool
+        values are rejected (logged + ignored) so a malformed payload cannot flip
+        throttle ON via Python truthiness rules.
+        """
+        raw = payload.get("p2_throttled", False)
+        if not isinstance(raw, bool):
+            log.warning(
+                "budget.invalid_p2_throttled_type",
+                got_type=type(raw).__name__,
+                value=str(raw),
+            )
+            return
+        if raw != self._p2_throttled:
+            self._p2_throttled = raw
+            log.info("budget.p2_throttle_state_changed", throttled=raw)
 
     def should_process(self, camera_id: str, priority: str) -> bool:
-        """Return False for P2 cameras when throttled; P1 always passes."""
+        """Return False for P2 cameras when throttled; P1 always passes.
+
+        camera_id is reserved for future per-camera overrides (e.g. always-on
+        priority cameras); current implementation is class-based by priority.
+        """
+        del camera_id  # currently unused — see docstring
         if priority == "P2" and self._p2_throttled:
             return False
         return True

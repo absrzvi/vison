@@ -1,6 +1,7 @@
 """Domain models for inference container."""
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -9,8 +10,6 @@ class DetectionClass(StrEnum):
     """Classes forwarded from the GStreamer pipeline to zone_counter."""
 
     PERSON = "person"
-    SUITCASE = "suitcase"
-    BICYCLE = "bicycle"
 
 
 @dataclass
@@ -22,6 +21,23 @@ class ZoneMask:
 
 
 @dataclass
+class ReadinessHolder:
+    """Mutable readiness flag flipped by main.py after pipeline init."""
+
+    ready: bool = False
+
+
+@dataclass
+class LoopHolder:
+    """Mutable asyncio loop reference set by main.py once the uvicorn loop is running.
+
+    The GStreamer streaming thread reads `loop` synchronously to schedule async work.
+    """
+
+    loop: asyncio.AbstractEventLoop | None = None
+
+
+@dataclass
 class OccupancyState:
     """Per-car occupancy state maintained by ZoneCounter."""
 
@@ -30,6 +46,5 @@ class OccupancyState:
     occupancy_pct: float = 0.0
     capacity: int = 200
     zone: str = "interior"
-    service_tier: str = "standard"
-    # track_ids currently in the zone
+    # track_ids currently in the zone (excluding None)
     active_tracks: set[int] = field(default_factory=set)

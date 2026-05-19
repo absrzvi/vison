@@ -2,17 +2,23 @@
 
 No GStreamer or pipeline imports here — Rule 6.
 All config from injected Settings — Rule 1 (no os.environ.get).
+
+Event envelope is built via the canonical EventEnvelope Pydantic model in
+oebb_shared.events.envelope — same shape as rtsp-ingest (E4-S3) post-f6d377c.
 """
 from __future__ import annotations
 
 import time
-import uuid
-from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 import structlog
-from oebb_shared.events.types import EventType
+from oebb_shared.events import (
+    EventEnvelope,
+    EventType,
+    OccupancyThresholdCrossedPayload,
+    OccupancyUpdatePayload,
+)
 from oebb_shared.http.retry import DEFAULT_RETRY
 
 from inference.config import Settings
@@ -33,17 +39,29 @@ class ZoneCounter:
         self._settings = settings
         self._client = event_store_client
 
-        # Build per-car state from cameras config
+        # Build per-car state from cameras config. Capacity is validated at startup;
+        # capacity <= 0 is a config error and refuses to start.
         self._states: dict[str, OccupancyState] = {}
-        self._zones: dict[str, str] = {}  # car_id → zone name
         for cam in cameras:
             car_id = str(cam["coach_id"])
-            if car_id not in self._states:
-                self._states[car_id] = OccupancyState(
-                    car_id=car_id,
-                    capacity=int(cam.get("capacity", settings.occupancy_capacity_default)),
-                    zone=str(cam.get("zone", "interior")),
+            if car_id in self._states:
+                continue
+            cap_raw = cam.get("capacity", settings.occupancy_capacity_default)
+            try:
+                capacity = int(cap_raw)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Invalid capacity for car_id={car_id!r}: {cap_raw!r}"
+                ) from exc
+            if capacity <= 0:
+                raise ValueError(
+                    f"Capacity for car_id={car_id!r} must be > 0, got {capacity}"
                 )
+            self._states[car_id] = OccupancyState(
+                car_id=car_id,
+                capacity=capacity,
+                zone=str(cam.get("zone", "interior")),
+            )
 
         self._last_emit: dict[str, float] = {car_id: 0.0 for car_id in self._states}
         # (car_id, threshold) → last emitted direction ("rising"|"falling"|None)
@@ -57,99 +75,110 @@ class ZoneCounter:
         state = self._states[car_id]
         prev_pct = state.occupancy_pct
 
-        # Count unique person track IDs in zone
-        person_tracks = {
+        # Count unique person track IDs. None ids are filtered (callback already drops
+        # them; this is defence in depth).
+        person_tracks: set[int] = {
             d["track_id"]
             for d in detections
-            if d.get("label") == "person"
+            if d.get("label") == "person" and d.get("track_id") is not None
         }
         state.active_tracks = person_tracks
         state.occupancy_count = len(person_tracks)
-        state.occupancy_pct = (
-            state.occupancy_count / state.capacity if state.capacity > 0 else 0.0
-        )
+        # Capacity is guaranteed > 0 by constructor.
+        state.occupancy_pct = min(state.occupancy_count / state.capacity, 1.0)
 
-        # 1 Hz rate limit per car
+        # 1 Hz rate limit per car.
         now = time.monotonic()
         if now - self._last_emit.get(car_id, 0.0) < 1.0:
             return
         self._last_emit[car_id] = now
 
         await self._post_occupancy_update(state)
-        self._check_threshold(car_id, prev_pct, state.occupancy_pct)
+        await self._check_threshold(car_id, prev_pct, state.occupancy_pct)
 
     @DEFAULT_RETRY
     async def _post_occupancy_update(self, state: OccupancyState) -> None:
-        payload = self.build_occupancy_payload(state, confidence=1.0)
-        envelope = _build_envelope(EventType.OCCUPANCY_UPDATE, payload, self._settings)
-        await self._client.post(
-            f"{self._settings.event_store_url}/api/v1/events",
-            json=envelope,
+        """Emit OCCUPANCY_UPDATE. confidence is omitted (None) until real aggregation
+        from per-detection YOLO scores lands — schema's _drop_none serializer strips it.
+        """
+        payload = OccupancyUpdatePayload(
+            car_id=state.car_id,
+            zone=state.zone,
+            occupancy_count=state.occupancy_count,
+            occupancy_pct=state.occupancy_pct,
+            capacity=state.capacity,
+            confidence=None,
+            service_tier=self._settings.service_tier,
         )
+        envelope = self._build_envelope(
+            EventType.OCCUPANCY_UPDATE,
+            payload.model_dump(),
+            severity="info",
+        )
+        resp = await self._client.post(
+            f"{self._settings.event_store_url}/api/v1/events",
+            json=envelope.model_dump(mode="json"),
+        )
+        resp.raise_for_status()
 
-    def _check_threshold(self, car_id: str, prev_pct: float, new_pct: float) -> None:
+    async def _check_threshold(
+        self, car_id: str, prev_pct: float, new_pct: float
+    ) -> None:
         threshold = self._settings.occupancy_threshold_pct
         key: tuple[str, float] = (car_id, threshold)
         last_dir = self._threshold_state.get(key)
 
-        if prev_pct < threshold <= new_pct and last_dir != "rising":
+        # Rising: <= on left side so prev_pct == threshold still triggers when we cross.
+        if prev_pct <= threshold <= new_pct and prev_pct < new_pct and last_dir != "rising":
             self._threshold_state[key] = "rising"
-            self._fire_threshold_event(car_id, "rising", threshold)
-        elif prev_pct >= threshold > new_pct and last_dir != "falling":
+            await self._fire_threshold_event(car_id, "rising", threshold)
+        elif prev_pct >= threshold >= new_pct and prev_pct > new_pct and last_dir != "falling":
             self._threshold_state[key] = "falling"
-            self._fire_threshold_event(car_id, "falling", threshold)
+            await self._fire_threshold_event(car_id, "falling", threshold)
 
-    def _fire_threshold_event(self, car_id: str, direction: str, threshold: float) -> None:
-        import asyncio
-
+    @DEFAULT_RETRY
+    async def _fire_threshold_event(
+        self, car_id: str, direction: str, threshold: float
+    ) -> None:
+        """Emit OCCUPANCY_THRESHOLD_CROSSED. Awaited (not fire-and-forget) so
+        DEFAULT_RETRY and raise_for_status actually take effect.
+        """
         state = self._states[car_id]
-        payload = {
-            "car_id": car_id,
-            "direction": direction,
-            "threshold_pct": threshold,
-            "occupancy_pct": state.occupancy_pct,
-        }
-        envelope = _build_envelope(EventType.OCCUPANCY_THRESHOLD_CROSSED, payload, self._settings)
-        # Fire-and-forget via asyncio — threshold events are best-effort
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(
-                    self._client.post(
-                        f"{self._settings.event_store_url}/api/v1/events",
-                        json=envelope,
-                    )
-                )
-        except RuntimeError:
-            log.warning("zone_counter.no_event_loop_for_threshold", car_id=car_id)
+        payload = OccupancyThresholdCrossedPayload(
+            car_id=car_id,
+            zone=state.zone,
+            threshold_pct=threshold,
+            direction="rising" if direction == "rising" else "falling",
+            occupancy_pct=state.occupancy_pct,
+            occupancy_count=state.occupancy_count,
+            capacity=state.capacity,
+            service_tier=self._settings.service_tier,
+        )
+        envelope = self._build_envelope(
+            EventType.OCCUPANCY_THRESHOLD_CROSSED,
+            payload.model_dump(),
+            severity="warning",
+        )
+        resp = await self._client.post(
+            f"{self._settings.event_store_url}/api/v1/events",
+            json=envelope.model_dump(mode="json"),
+        )
+        resp.raise_for_status()
 
-    @staticmethod
-    def build_occupancy_payload(state: OccupancyState, confidence: float) -> dict[str, Any]:
-        """Build OCCUPANCY_UPDATE payload dict with all required schema fields."""
-        return {
-            "car_id": state.car_id,
-            "zone": state.zone,
-            "occupancy_count": state.occupancy_count,
-            "occupancy_pct": state.occupancy_pct,
-            "capacity": state.capacity,
-            "confidence": confidence,
-            "service_tier": state.service_tier,
-        }
-
-
-def _build_envelope(
-    event_type: EventType,
-    payload: dict[str, Any],
-    settings: Settings,
-) -> dict[str, Any]:
-    return {
-        "event_id": str(uuid.uuid4()),
-        "journey_id": settings.journey_id,
-        "vehicle_id": settings.vehicle_id,
-        "event_type": str(event_type),
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "severity": "info",
-        "source": "inference",
-        "schema_version": settings.schema_version,
-        "payload": payload,
-    }
+    def _build_envelope(
+        self,
+        event_type: EventType,
+        payload: dict[str, Any],
+        severity: str,
+    ) -> EventEnvelope:
+        # Cast severity to the canonical Literal at the boundary; envelope validates.
+        sev: Any = severity
+        return EventEnvelope(
+            journey_id=self._settings.journey_id,
+            vehicle_id=self._settings.vehicle_id,
+            event_type=event_type,
+            severity=sev,
+            source="inference",
+            schema_version=self._settings.schema_version,
+            payload=payload,
+        )

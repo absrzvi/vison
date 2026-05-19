@@ -65,23 +65,52 @@ def test_hailo_pipeline_not_imported_in_zone_counter() -> None:
 
 @pytest.mark.unit
 def test_occupancy_update_payload_schema_valid() -> None:
-    """OCCUPANCY_UPDATE payload must include all required schema fields."""
-    required_fields = {
-        "car_id",
-        "zone",
-        "occupancy_count",
-        "occupancy_pct",
-        "capacity",
-        "confidence",
-        "service_tier",
-    }
-    # Import ZoneCounter and inspect what it builds — done by checking the build_payload helper
-    # ZoneCounter.build_occupancy_payload must return a dict with all required keys
-    from inference.models import OccupancyState  # noqa: PLC0415
-    from inference.zone_counter import ZoneCounter  # noqa: PLC0415
+    """OCCUPANCY_UPDATE payload must validate against the canonical Pydantic model
+    in oebb_shared.events. Confidence is optional and dropped when None.
+    """
+    from oebb_shared.events import OccupancyUpdatePayload
 
-    state = OccupancyState(car_id="car-1", occupancy_count=5, occupancy_pct=0.5, capacity=200)
-    payload = ZoneCounter.build_occupancy_payload(state, confidence=1.0)
-    assert required_fields.issubset(payload.keys()), (
-        f"Missing fields: {required_fields - payload.keys()}"
+    p = OccupancyUpdatePayload(
+        car_id="car-1",
+        zone="interior",
+        occupancy_count=5,
+        occupancy_pct=0.025,
+        capacity=200,
+        confidence=None,
+        service_tier="standard",
     )
+    dumped = p.model_dump()
+    # Required fields always present.
+    for f in ("car_id", "zone", "occupancy_count", "occupancy_pct", "capacity", "service_tier"):
+        assert f in dumped, f"missing required field: {f}"
+    # confidence omitted by _drop_none when None.
+    assert "confidence" not in dumped
+
+
+@pytest.mark.unit
+def test_envelope_matches_canonical_schema() -> None:
+    """The envelope inference produces must round-trip through canonical EventEnvelope."""
+    from oebb_shared.events import EventEnvelope, EventType, OccupancyUpdatePayload
+
+    payload = OccupancyUpdatePayload(
+        car_id="car-1",
+        zone="interior",
+        occupancy_count=5,
+        occupancy_pct=0.025,
+        capacity=200,
+        confidence=None,
+        service_tier="standard",
+    )
+    env = EventEnvelope(
+        journey_id="OBB-TEST_t1_20260519",
+        vehicle_id="OBB-TEST",
+        event_type=EventType.OCCUPANCY_UPDATE,
+        severity="info",
+        source="inference",
+        schema_version=1,
+        payload=payload.model_dump(),
+    )
+    # extra: forbid means rebuilding from model_dump must succeed.
+    rebuilt = EventEnvelope.model_validate(env.model_dump(mode="json"))
+    assert rebuilt.event_type == EventType.OCCUPANCY_UPDATE
+    assert rebuilt.source == "inference"

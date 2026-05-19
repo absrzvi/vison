@@ -21,9 +21,16 @@ class Settings(BaseSettings):
     tops_total: float = 26.0
     tops_budget_pct_threshold: float = 0.90
 
-    detection_classes: list[str] = ["person", "suitcase", "bicycle"]
+    # P-D1: occupancy story tracks person only. Suitcase/bicycle/wheelchair move to E4-S5.
+    detection_classes: list[str] = ["person"]
     model_hef_path: str = "/models/yolov8m.hef"
 
-    journey_id: str = "unknown"
+    # P-D2: service_tier sourced via env INFERENCE_SERVICE_TIER, not hardcoded.
+    service_tier: str = "standard"
+
+    # journey_id must match {vehicle_id}_{trip_number}_{YYYYMMDD} per ADR-2 / EventEnvelope.
+    # Default is a syntactically-valid placeholder; production sets via vlan-pollers context push
+    # once a real trip is observed (same pattern as rtsp-ingest).
     vehicle_id: str = "OBB-TEST"
+    journey_id: str = "OBB-TEST_unknown_19700101"
     schema_version: int = 1

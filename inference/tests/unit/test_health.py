@@ -7,29 +7,24 @@ import pytest
 from fastapi.testclient import TestClient
 
 from inference.budget import Budget
+from inference.models import ReadinessHolder
 
 
 def make_budget() -> MagicMock:
     return MagicMock(spec=Budget)
 
 
-@pytest.fixture
-def ready_client() -> TestClient:
+def make_client(ready: bool, budget: MagicMock | None = None) -> TestClient:
     from inference.health import build_app
 
-    return TestClient(build_app(pipeline_ready=True, budget=make_budget()))
-
-
-@pytest.fixture
-def not_ready_client() -> TestClient:
-    from inference.health import build_app
-
-    return TestClient(build_app(pipeline_ready=False, budget=make_budget()))
+    holder = ReadinessHolder(ready=ready)
+    return TestClient(build_app(readiness=holder, budget=budget or make_budget()))
 
 
 @pytest.mark.unit
-def test_ready_returns_200(ready_client: TestClient) -> None:
-    r = ready_client.get("/health/ready")
+def test_ready_returns_200() -> None:
+    client = make_client(ready=True)
+    r = client.get("/health/ready")
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "ready"
@@ -37,8 +32,9 @@ def test_ready_returns_200(ready_client: TestClient) -> None:
 
 
 @pytest.mark.unit
-def test_not_ready_returns_503(not_ready_client: TestClient) -> None:
-    r = not_ready_client.get("/health/ready")
+def test_not_ready_returns_503() -> None:
+    client = make_client(ready=False)
+    r = client.get("/health/ready")
     assert r.status_code == 503
     body = r.json()
     assert body["status"] == "not_ready"
@@ -46,23 +42,49 @@ def test_not_ready_returns_503(not_ready_client: TestClient) -> None:
 
 
 @pytest.mark.unit
-def test_live_always_200(not_ready_client: TestClient) -> None:
-    r = not_ready_client.get("/health/live")
-    assert r.status_code == 200
-
-
-@pytest.mark.unit
-def test_context_dispatch_calls_budget(ready_client: TestClient) -> None:
+def test_readiness_reflects_holder_flip() -> None:
+    """When the holder flips, /health/ready reflects the new state — no static capture."""
     from inference.health import build_app
 
-    budget = make_budget()
-    client = TestClient(build_app(pipeline_ready=True, budget=budget))
-    r = client.post("/context", json={"p2_throttled": True})
-    assert r.status_code == 200
-    budget.on_context_update.assert_called_once_with({"p2_throttled": True})
+    holder = ReadinessHolder(ready=True)
+    client = TestClient(build_app(readiness=holder, budget=make_budget()))
+    assert client.get("/health/ready").status_code == 200
+    holder.ready = False
+    assert client.get("/health/ready").status_code == 503
 
 
 @pytest.mark.unit
-def test_context_malformed_returns_422(ready_client: TestClient) -> None:
-    r = ready_client.post("/context", content=b"not-json", headers={"content-type": "application/json"})
+def test_live_always_200() -> None:
+    client = make_client(ready=False)
+    r = client.get("/health/live")
+    assert r.status_code == 200
+
+
+@pytest.mark.unit
+def test_context_dispatch_calls_budget() -> None:
+    budget = make_budget()
+    client = make_client(ready=True, budget=budget)
+    r = client.post("/context", json={"p2_throttled": True})
+    assert r.status_code == 200
+    budget.on_context_update.assert_called_once()
+    payload = budget.on_context_update.call_args.args[0]
+    assert payload["p2_throttled"] is True
+
+
+@pytest.mark.unit
+def test_context_malformed_returns_422() -> None:
+    client = make_client(ready=True)
+    r = client.post(
+        "/context",
+        content=b"not-json",
+        headers={"content-type": "application/json"},
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.unit
+def test_context_non_bool_p2_throttled_returns_422() -> None:
+    """Pydantic strict bool — string 'false' must fail validation, not flip throttle."""
+    client = make_client(ready=True)
+    r = client.post("/context", json={"p2_throttled": "false"})
     assert r.status_code == 422

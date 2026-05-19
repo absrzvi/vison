@@ -1,12 +1,14 @@
-"""Unit tests for main.py — camera loading, zone mask building, wiring."""
+"""Unit tests for main.py — camera loading, zone mask building, wire()."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
+import httpx
 import pytest
 
 from inference.config import Settings
+from inference.models import LoopHolder, ReadinessHolder
 
 
 @pytest.fixture
@@ -31,6 +33,13 @@ def cameras_file(tmp_path: Path) -> Path:
     return p
 
 
+@pytest.fixture
+def empty_cameras_file(tmp_path: Path) -> Path:
+    p = tmp_path / "cameras.json"
+    p.write_text(json.dumps({"cameras": []}))
+    return p
+
+
 @pytest.mark.unit
 def test_load_cameras(cameras_file: Path) -> None:
     from inference.main import _load_cameras
@@ -41,42 +50,79 @@ def test_load_cameras(cameras_file: Path) -> None:
 
 
 @pytest.mark.unit
-def test_build_zone_masks(cameras_file: Path) -> None:
-    from inference.main import _build_zone_masks, _load_cameras
+def test_load_cameras_empty_exits(empty_cameras_file: Path) -> None:
+    from inference.main import _load_cameras
 
-    cameras = _load_cameras(str(cameras_file))
-    masks = _build_zone_masks(cameras)
-    assert "car-1" in masks
-    assert masks["car-1"][0].name == "zone-a"
-
-
-@pytest.mark.unit
-def test_build_zone_masks_missing_seat_zones_exits(tmp_path: Path) -> None:
-    from inference.main import _build_zone_masks
-
-    cameras = [
-        {
-            "camera_id": "C1_DOOR_01",
-            "coach_id": "car-1",
-            "seat_zones": [],
-        }
-    ]
     with pytest.raises(SystemExit):
-        _build_zone_masks(cameras)  # type: ignore[arg-type]
+        _load_cameras(str(empty_cameras_file))
 
 
 @pytest.mark.unit
-def test_wire_returns_budget_callback_app(cameras_file: Path) -> None:
-    from inference.main import _load_cameras, wire
+def test_zone_masks_missing_seat_zones_exits() -> None:
+    from inference.main import _zone_masks_for_camera
 
-    settings = Settings(cameras_json_path=str(cameras_file))
-    cameras = _load_cameras(str(cameras_file))
-    budget, callback, app = wire(settings, cameras, pipeline_ready=True)
+    cam = {"camera_id": "C1", "coach_id": "car-1", "seat_zones": []}
+    with pytest.raises(SystemExit):
+        _zone_masks_for_camera(cam)
+
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_wire_returns_budget_callbacks_app(cameras_file: Path) -> None:
     from fastapi import FastAPI
 
     from inference.budget import Budget
     from inference.callback import OccupancyCallback
+    from inference.main import _load_cameras, wire
+
+    settings = Settings(cameras_json_path=str(cameras_file))
+    cameras = _load_cameras(str(cameras_file))
+    readiness = ReadinessHolder(ready=False)
+    loop_holder = LoopHolder(loop=None)
+
+    async with httpx.AsyncClient() as client:
+        budget, callbacks, app = wire(settings, cameras, client, readiness, loop_holder)
 
     assert isinstance(budget, Budget)
-    assert isinstance(callback, OccupancyCallback)
+    assert len(callbacks) == 1
+    assert isinstance(callbacks[0], OccupancyCallback)
     assert isinstance(app, FastAPI)
+
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_wire_one_callback_per_camera(tmp_path: Path) -> None:
+    """Multi-camera config produces one OccupancyCallback per camera — no dict collapse."""
+    from inference.main import wire
+
+    data = {
+        "cameras": [
+            {
+                "camera_id": "C1",
+                "coach_id": "car-1",
+                "priority": "P1",
+                "capacity": 200,
+                "seat_zones": [{"name": "z", "polygon": [[0, 0], [10, 0], [10, 10], [0, 10]]}],
+            },
+            {
+                "camera_id": "C2",
+                "coach_id": "car-2",
+                "priority": "P1",
+                "capacity": 200,
+                "seat_zones": [{"name": "z", "polygon": [[0, 0], [10, 0], [10, 10], [0, 10]]}],
+            },
+        ]
+    }
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps(data))
+
+    settings = Settings(cameras_json_path=str(p))
+    cameras = data["cameras"]
+    readiness = ReadinessHolder(ready=False)
+    loop_holder = LoopHolder(loop=None)
+
+    async with httpx.AsyncClient() as client:
+        _, callbacks, _ = wire(settings, cameras, client, readiness, loop_holder)
+
+    assert len(callbacks) == 2
+    assert {cb.camera_id for cb in callbacks} == {"C1", "C2"}

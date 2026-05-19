@@ -40,13 +40,11 @@ def test_throttle_recovery(budget: Budget) -> None:
 
 @pytest.mark.unit
 def test_transition_only_logging(budget: Budget) -> None:
-    """Only one state change should happen for two identical updates."""
-    # Verify by inspecting internal state transitions rather than log output
+    """Identical updates must not flip state — verified through behavioural invariance."""
     budget.on_context_update({"p2_throttled": True})
     assert budget._p2_throttled is True
-    budget.on_context_update({"p2_throttled": True})  # duplicate — state unchanged
+    budget.on_context_update({"p2_throttled": True})
     assert budget._p2_throttled is True
-    # The second call should not flip state — tested via P2 suppression still active
     assert budget.should_process("C1_INT_01", "P2") is False
 
 
@@ -54,3 +52,17 @@ def test_transition_only_logging(budget: Budget) -> None:
 def test_missing_p2_throttled_key_defaults_false(budget: Budget) -> None:
     budget.on_context_update({})
     assert budget.should_process("C1_INT_01", "P2") is True
+
+
+@pytest.mark.unit
+def test_string_false_does_not_engage_throttle(budget: Budget) -> None:
+    """String 'false' must not be coerced to True via bool() truthiness."""
+    budget.on_context_update({"p2_throttled": "false"})  # type: ignore[dict-item]
+    assert budget._p2_throttled is False
+    assert budget.should_process("C1_INT_01", "P2") is True
+
+
+@pytest.mark.unit
+def test_non_bool_type_ignored(budget: Budget) -> None:
+    budget.on_context_update({"p2_throttled": 1})  # type: ignore[dict-item]
+    assert budget._p2_throttled is False

@@ -1,5 +1,14 @@
 # Deferred Work
 
+## Deferred from: code review of story 4-4 (2026-05-19)
+
+- cameras.json includes `priority="P3"` but budget only handles "P2" — priority tier system out of scope for 4-4
+- `coach_id` vs `car_id` naming inconsistency between cameras.json and event payloads — codebase-wide rename, separate concern
+- `tops_total` / `tops_budget_pct_threshold` config fields dead — read by nothing in inference; remove or wire to budget in later story
+- `door_camera_map` in cameras.json never read by inference — used by fusion (E4-S6), not inference
+- All `seat_zones` polygons are placeholders covering full frame — real polygons require ops/UX data
+- No validation for unknown `priority` values (e.g. "P4" typos) — cross-cutting config validation concern
+
 ## E4 Sprint Planning Triage (2026-05-19)
 
 Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pipeline (Python async, no React).

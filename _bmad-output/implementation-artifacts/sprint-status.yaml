@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-19  # E4-S4 create-story: inference detection tracking occupancy → ready-for-dev
+last_updated: 2026-05-19  # E4-S4 code review applied 19 patches; coverage 99%; mypy/ruff clean — stays review
 project: oebb-agent
 # code-review 2026-05-17: story 2-2 → in-progress (1 patch finding: AC1 scroll-to-top)
 # code-review 2026-05-17: story 2-3 → done (5 patches applied)
