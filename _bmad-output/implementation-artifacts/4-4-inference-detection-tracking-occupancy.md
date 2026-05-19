@@ -1,6 +1,6 @@
 # Story 4.4: inference Detection, Tracking & Occupancy Events
 
-Status: review
+Status: done
 
 ## Story
 
@@ -408,4 +408,41 @@ claude-sonnet-4-6
 - [x] [Review][Defer] `door_camera_map` in cameras.json never read by inference [cameras.json] — deferred, used by fusion (E4-S6) not inference
 - [x] [Review][Defer] All `seat_zones` polygons are placeholders covering full frame [cameras.json] — deferred, real polygons require ops/UX data
 - [x] [Review][Defer] No validation for unknown `priority` values like "P4" [callback.py:62, main.py] — deferred, config validation is a cross-cutting concern
+
+### Senior Developer Review (AI) — meta-review patch validation
+
+**Review date:** 2026-05-19  
+**Reviewer:** Opus 4.7 (3 parallel layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor)  
+**Outcome:** Changes Requested — 2 decision-needed, 6 patch, 8 defer, 3 dismissed
+
+#### Decision-Needed
+
+- [ ] [Review][Decision] **C** — Lock placement: `asyncio.Lock` currently wraps the entire POST + retry chain in `update()`, defeating M9's "skip if in-flight" suppression. Options: (a) move rate-limit + `_in_flight` check outside the lock so contending callers still drop early without waiting 30s; (b) remove `_in_flight` entirely and accept that the lock serialises callers (callers queue, then drain in order once outage clears — no pile-up but latency spikes). [zone_counter.py:104-138]
+
+- [ ] [Review][Decision] **F** — Per-camera readiness aggregation: all cameras share one `ReadinessHolder`; a single pipeline crash flips the entire service not-ready even if the other cameras are healthy. Options: (a) keep one shared holder — service is not-ready if ANY camera fails (strict, operator-safe); (b) per-camera holders — service stays ready until ALL cameras fail (resilient, but masks partial outage). [main.py:110-131, pipeline.py:130-135]
+
+#### Patch
+
+- [ ] [Review][Patch] **A** — `_rtsp_url` defaults to `""` not `None`; `pipeline.py` guard `if rtsp_url is None` never fires on missing camera url, producing `uridecodebin uri= !` pipeline string instead of a clear startup failure. Fix: change guard to `if not rtsp_url:`. [callback.py:123, pipeline.py:109]
+
+- [ ] [Review][Patch] **E** — Route swap `app.router.routes = wired_app.router.routes` only copies routes; any middleware or exception handlers added by `build_app`/`wire` to `wired_app` are silently dropped. Fix: refactor lifespan to use `app.include_router(wired_app.router)` or restructure so `wired_app` is used directly after construction. [main.py:151]
+
+- [ ] [Review][Patch] **H** — `_source_pipeline_multi` in pipeline.py is dead code with broken GStreamer funnel-linking syntax (`src{i}. ! funnel.` is invalid pad-reference syntax). Remove until multi-source topology is validated on hardware day. [pipeline.py:38-58]
+
+- [ ] [Review][Patch] **I** — No test exercises `InferencePipeline._dispatch` flipping `readiness.ready = True` on first buffer (M6/M7 positive path). The existing test only asserts the negative (readiness stays False before any buffer). Add a test that calls `_dispatch` directly and verifies `readiness.ready` becomes True. [pipeline.py:130-135]
+
+- [ ] [Review][Patch] **J** — RTSP URL injected unescaped into GStreamer pipeline string. A URL containing `!`, `"`, or other GStreamer-significant characters (e.g. credentials with special chars) will silently corrupt the pipeline. Add startup validation: reject `rtsp_url` values that are empty or contain `!` or `"`. [pipeline.py:116-117, callback.py:123]
+
+- [ ] [Review][Patch] **M** — No test guards against regression to double-wiring (M1 fix). Add a test using a mock/spy on `wire` to assert it is called exactly once per lifespan entry, not in the bootstrap path. [main.py:141-168]
+
+#### Defer
+
+- [x] [Review][Defer] **B** — `asyncio.Lock` constructed in `__init__` before event loop in pre-3.10 Python warns/errors. PoC targets Python 3.11; deferred, pre-existing Python version constraint. [zone_counter.py:88-91]
+- [x] [Review][Defer] **D** — `_in_flight` flag is now logically redundant with the per-car lock (depends on C resolution). Defer cleanup until C is resolved. [zone_counter.py:125-130]
+- [x] [Review][Defer] **G** — `_first_frame` check-then-set TOCTOU is idempotent and harmless (setting ready=True twice is fine). Multi-source extension deferred to hardware day. [pipeline.py:130-135]
+- [x] [Review][Defer] **L** — Pipeline crash keeps container alive with `/health/live` green; liveness vs. readiness separation is an ops/k8s config concern outside PoC scope. [main.py:118-128]
+- [x] [Review][Defer] **N** — AC7 (P2 suppression / P1 never-suppressed) not explicitly exercised through the new lifespan path; budget unit tests from original story cover the logic. Deferred, no regression shown in diff. [budget.py]
+- [x] [Review][Defer] **O** — `getattr(callback, "_rtsp_url", None)` accesses a private attribute; should be a public property or constructor arg. Refactor out of 4-4 scope. [pipeline.py:106]
+- [x] [Review][Defer] **P** — `threshold_count = threshold_pct * capacity` is float; non-round capacities produce off-by-fraction boundaries. PoC capacities are multiples of 10; defer int-rounding fix. [zone_counter.py:178]
+- [x] [Review][Defer] **Q** — `uridecodebin` in single-source path has no `name=` tag; clashes on multi-source upgrade when the team revisits `_source_pipeline_multi`. Deferred to hardware day. [pipeline.py:116]
 
