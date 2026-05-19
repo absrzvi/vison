@@ -54,31 +54,48 @@ def gate() -> Gate:
 
 
 def test_p3_activated_when_speed_low_and_station_set(gate: Gate) -> None:
-    """AC4: speed=15, next_station='Wien Hbf' → gate_p3(True) called."""
+    """AC4: speed=15, next_station='Wien Hbf' → gate_p3(True) called once (transition False→True)."""
     with patch.object(gate._scheduler, "gate_p3") as mock_gate:
         gate.on_context_update({"speed_kmh": 15.0, "next_station": "Wien Hbf"})
         mock_gate.assert_called_once_with(True)
 
 
 def test_p3_deactivated_when_speed_high(gate: Gate) -> None:
-    """AC4: speed=80 → gate_p3(False) called."""
+    """AC4: speed=80, default state is inactive → gate_p3 not called (False→False, no transition)."""
     with patch.object(gate._scheduler, "gate_p3") as mock_gate:
         gate.on_context_update({"speed_kmh": 80.0, "next_station": "Wien Hbf"})
-        mock_gate.assert_called_once_with(False)
+        mock_gate.assert_not_called()
+
+
+def test_p3_deactivated_on_speed_recovery(gate: Gate) -> None:
+    """AC4: activate then speed rises → gate_p3(False) called on transition."""
+    with patch.object(gate._scheduler, "gate_p3") as mock_gate:
+        gate.on_context_update({"speed_kmh": 15.0, "next_station": "Wien Hbf"})
+        gate.on_context_update({"speed_kmh": 80.0, "next_station": "Wien Hbf"})
+        assert mock_gate.call_count == 2
+        mock_gate.assert_called_with(False)
+
+
+def test_p3_idempotent_on_repeated_ticks(gate: Gate) -> None:
+    """Edge: same active condition repeated → gate_p3 called only once (no redundant calls)."""
+    with patch.object(gate._scheduler, "gate_p3") as mock_gate:
+        for _ in range(5):
+            gate.on_context_update({"speed_kmh": 15.0, "next_station": "Wien Hbf"})
+        mock_gate.assert_called_once_with(True)
 
 
 def test_p3_not_activated_when_speed_low_but_no_station(gate: Gate) -> None:
-    """AC4: speed=10, next_station=None → gate_p3(False) called."""
+    """AC4: speed=10, next_station=None → gate_p3 not called (remains inactive)."""
     with patch.object(gate._scheduler, "gate_p3") as mock_gate:
         gate.on_context_update({"speed_kmh": 10.0, "next_station": None})
-        mock_gate.assert_called_once_with(False)
+        mock_gate.assert_not_called()
 
 
 def test_p3_not_activated_when_no_speed_key(gate: Gate) -> None:
-    """Edge: missing speed_kmh key → gate_p3(False)."""
+    """Edge: missing speed_kmh key → gate_p3 not called (remains inactive)."""
     with patch.object(gate._scheduler, "gate_p3") as mock_gate:
         gate.on_context_update({"next_station": "Wien Hbf"})
-        mock_gate.assert_called_once_with(False)
+        mock_gate.assert_not_called()
 
 
 def test_door_release_overrides_camera_to_p1(gate: Gate) -> None:

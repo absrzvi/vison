@@ -21,6 +21,7 @@ class Gate:
         self._scheduler = scheduler
         self._settings = settings
         self._door_camera_map = door_camera_map
+        self._p3_was_active: bool = False
 
     def on_context_update(self, payload: dict[str, object]) -> None:
         speed = payload.get("speed_kmh")
@@ -32,13 +33,15 @@ class Gate:
             and speed < threshold
             and bool(next_station)
         )
-        self._scheduler.gate_p3(should_activate)
-        log.info(
-            "p3_gate_updated",
-            speed_kmh=speed,
-            next_station=next_station,
-            p3_active=should_activate,
-        )
+        if should_activate != self._p3_was_active:
+            self._p3_was_active = should_activate
+            self._scheduler.gate_p3(should_activate)
+            log.info(
+                "p3_gate_updated",
+                speed_kmh=speed,
+                next_station=next_station,
+                p3_active=should_activate,
+            )
 
     def on_door_release(self, car_id: str, door_id: str) -> None:
         camera_ids = self._door_camera_map.get(door_id, [])

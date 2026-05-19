@@ -46,4 +46,9 @@ def load_cameras(path: str) -> list[CameraConfig]:
                 priority=Priority(entry["priority"]),
             )
         )
+    seen_ids = {c.camera_id for c in result}
+    if len(seen_ids) != len(result):
+        from collections import Counter
+        dupes = [cid for cid, n in Counter(c.camera_id for c in result).items() if n > 1]
+        raise ValueError(f"Duplicate camera_id entries in {path}: {dupes}")
     return result

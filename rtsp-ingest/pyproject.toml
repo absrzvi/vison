@@ -42,11 +42,11 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 source = ["rtsp_ingest"]
-omit = ["*/main.py", "*/pipeline.py"]
+omit = ["*/pipeline.py"]
 
 [tool.coverage.report]
 fail_under = 90
-omit = ["*/main.py", "*/pipeline.py"]
+omit = ["*/pipeline.py"]
 
 [tool.ruff]
 line-length = 100

@@ -61,5 +61,19 @@ def test_stream_priority_not_logged_as_event() -> None:
 
 
 def test_context_post_malformed_payload_returns_422() -> None:
-    """POST /context with invalid JSON returns 422 — see test_health.py for TestClient test."""
-    assert True
+    """POST /context with invalid JSON returns 422 — validated in test_health.py::test_context_malformed_returns_422."""
+    from fastapi.testclient import TestClient
+    from unittest.mock import MagicMock
+    from rtsp_ingest.health import build_app
+    from rtsp_ingest.models import CameraConfig, Priority
+    from rtsp_ingest.scheduler import Scheduler
+    from rtsp_ingest.config import Settings
+
+    settings = Settings()  # type: ignore[call-arg]
+    cameras = [CameraConfig("C1", "car-1", "rtsp://h/s", "door", Priority.P1)]
+    sched = Scheduler(cameras, settings)
+    gate = MagicMock()
+    app = build_app(sched, gate)
+    client = TestClient(app)
+    r = client.post("/context", content=b"not-json", headers={"content-type": "application/json"})
+    assert r.status_code == 422

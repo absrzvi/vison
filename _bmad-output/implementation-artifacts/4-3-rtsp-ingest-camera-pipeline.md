@@ -1,6 +1,6 @@
 # Story 4.3: rtsp-ingest Camera Pipeline
 
-Status: review
+Status: done
 
 ## Story
 
@@ -258,6 +258,25 @@ All 7 task groups complete. Package scaffolded from scratch following E4-S2 patt
 - `cameras.json` (repo root)
 - `docker-compose.dev.yml` (modified — added rtsp-ingest service)
 
+### Review Findings
+
+- [x] [Review][Decision] P3 gate condition — resolved: keep `speed + next_station` gate (inference needs pre-door baseline for Coach Comfort Index); added `_p3_was_active` transition guard instead [gate.py] ✅
+- [x] [Review][Decision] `POST /context` auth — resolved: bind to `127.0.0.1` (loopback); defer shared-secret to hardening sprint [main.py:73] ✅
+- [x] [Review][Decision] `door_camera_map` key scheme — resolved: defer composite key; duplicate `camera_id` startup assertion added as tripwire [models.py] ✅
+- [x] [Review][Patch] `gate.py` calls `gate_p3(should_activate)` on every update with no state guard — added `_p3_was_active` transition guard; `gate_p3` now fires only on state change [gate.py:35] ✅
+- [x] [Review][Patch] `DEFAULT_RETRY` — pipeline.py already uses try/except correctly; no local redefinition present; finding dismissed after ground-truth check ✅
+- [x] [Review][Patch] `scheduler.report_tops` writes `_p2_throttled` unconditionally — added hysteresis: only logs/sets on transition, only clears+logs on recovery [scheduler.py:41-50] ✅
+- [x] [Review][Patch] `main.py` reads `cameras.json` twice — pre-existing; reads are sequential and atomic on SYS2; no change (low risk for PoC) — defer to hardening ✅
+- [x] [Review][Patch] `load_cameras` accepts duplicate `camera_id` — added post-parse dedup assertion raising ValueError [models.py] ✅
+- [x] [Review][Patch] `report_tops` divides by `tops_total` with no zero-guard — added early return on `tops_total == 0.0` [scheduler.py:42] ✅
+- [x] [Review][Patch] `apply_fps` raises KeyError on unknown camera_id — changed to `.get()` with `None` check, returns 0.0 for unknown [scheduler.py:24] ✅
+- [x] [Review][Patch] `pyproject.toml` duplicate `pytest-asyncio>=0.23` — removed duplicate entry ✅
+- [x] [Review][Patch] `coverage.run` omits `main.py` — removed `main.py` from omit lists; only `pipeline.py` excluded per AC7 ✅
+- [x] [Review][Patch] `test_context_post_malformed_payload_returns_422` no-op — replaced `assert True` with real FastAPI TestClient assertion [tests/unit/test_security.py] ✅
+- [x] [Review][Defer] `Gate` stores `self._cameras` but never reads it — dead state; safe to remove but out of scope [gate.py:21] — deferred, pre-existing
+- [x] [Review][Defer] P3 gate has no hysteresis — speed oscillation around 20 km/h causes rapid toggling; acceptable for PoC but a production concern [gate.py:30-35] — deferred, PoC scope
+
 ### Change Log
 
 - 2026-05-19: E4-S3 implemented — rtsp-ingest camera pipeline scaffolded; scheduler, gate, health, pipeline, main modules written; 41 unit tests; 100% coverage; mypy+ruff clean
+- 2026-05-19: Code review (Opus 4.7 parallel review) — 3 decision-needed, 10 patch, 2 deferred, 9 dismissed

@@ -238,6 +238,11 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - **`mock-vlans` pip install on every container start** [docker-compose.dev.yml] — slow startup; fails without network; bake a proper image or use pre-built fastapi image in hardening sprint
 - **Sequential APC fetch blocks poll cycle on one slow car; partial successes discarded** [apc_poller.py] — pre-existing all-or-nothing decision; use asyncio.gather with return_exceptions=True when partial-write semantics are decided
 
+## Deferred from: code review of 4-3-rtsp-ingest-camera-pipeline (2026-05-19)
+
+- **`Gate` stores `self._cameras` but never reads it** [gate.py:21] — dead state; safe to remove but minor; clean up in a polish pass
+- **P3 gate has no hysteresis** [gate.py:30-35] — speed oscillation around 20 km/h causes rapid on/off toggling of P3 streams; acceptable for PoC; add a ±2 km/h deadband in a hardening story before production
+
 ## Deferred from: code review of 4-2-vlan-pollers-apc-pis-reservation (2026-05-19)
 
 - **No `asyncio.Lock` on `ContextState`** [context_state.py] — pre-existing architectural decision; CPython event loop is single-threaded, coroutines only interleave at `await` points, synchronous assignments are atomic; a lock would be needed only for OS thread concurrency
