@@ -1,6 +1,6 @@
 # Story 4.4: inference Detection, Tracking & Occupancy Events
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -28,68 +28,68 @@ so that real-time per-coach headcounts are available to the Control Centre Dashb
 
 ## Tasks / Subtasks
 
-- [ ] Scaffold `inference/` package structure (AC: 1, 8)
-  - [ ] Create `inference/pyproject.toml` — package name `inference`, Python 3.11, dependencies: `pydantic-settings`, `structlog`, `httpx`, `fastapi`, `uvicorn`, `oebb-shared`; dev deps: `pytest`, `pytest-asyncio`, `pytest-cov`, `anyio`, `mypy`, `ruff`, `respx`; coverage omit: `pipeline.py`
-  - [ ] Create `inference/src/inference/__init__.py` (empty)
-  - [ ] Create `inference/src/inference/config.py` — pydantic-settings `Settings` with all knobs (see Dev Notes); NO `os.environ.get()` anywhere
-  - [ ] Create `inference/src/inference/models.py` — `ZoneMask`, `OccupancyState` dataclasses; `DetectionClass` StrEnum: `PERSON`, `SUITCASE`, `BICYCLE`
-  - [ ] Add `seat_zones` and `capacity` fields to `cameras.json` at repo root for the 3 example cameras
-  - [ ] Create `inference/src/inference/pipeline.py` — `GStreamerDetectionApp` subclass; integration-only; excluded from unit coverage; module docstring marks it hardware-dependent
+- [x] Scaffold `inference/` package structure (AC: 1, 8)
+  - [x] Create `inference/pyproject.toml` — package name `inference`, Python 3.11, dependencies: `pydantic-settings`, `structlog`, `httpx`, `fastapi`, `uvicorn`, `oebb-shared`; dev deps: `pytest`, `pytest-asyncio`, `pytest-cov`, `anyio`, `mypy`, `ruff`, `respx`; coverage omit: `pipeline.py`
+  - [x] Create `inference/src/inference/__init__.py` (empty)
+  - [x] Create `inference/src/inference/config.py` — pydantic-settings `Settings` with all knobs (see Dev Notes); NO `os.environ.get()` anywhere
+  - [x] Create `inference/src/inference/models.py` — `ZoneMask`, `OccupancyState` dataclasses; `DetectionClass` StrEnum: `PERSON`, `SUITCASE`, `BICYCLE`
+  - [x] Add `seat_zones` and `capacity` fields to `cameras.json` at repo root for the 3 example cameras
+  - [x] Create `inference/src/inference/pipeline.py` — `GStreamerDetectionApp` subclass; integration-only; excluded from unit coverage; module docstring marks it hardware-dependent
 
-- [ ] Write security tests RED phase (AC: 8)
-  - [ ] `test_no_env_get_in_callback` — AST walk of `callback.py`
-  - [ ] `test_no_env_get_in_zone_counter` — AST walk of `zone_counter.py`
-  - [ ] `test_no_env_get_in_budget` — AST walk of `budget.py`
-  - [ ] `test_no_env_get_in_config` — AST walk of `config.py`
-  - [ ] `test_occupancy_update_payload_schema_valid` — posted payload includes all required fields from `event-payload-schemas.md`
-  - [ ] `test_hailo_pipeline_not_imported_in_zone_counter` — AST check: `zone_counter.py` does not import `pipeline`
+- [x] Write security tests RED phase (AC: 8)
+  - [x] `test_no_env_get_in_callback` — AST walk of `callback.py`
+  - [x] `test_no_env_get_in_zone_counter` — AST walk of `zone_counter.py`
+  - [x] `test_no_env_get_in_budget` — AST walk of `budget.py`
+  - [x] `test_no_env_get_in_config` — AST walk of `config.py`
+  - [x] `test_occupancy_update_payload_schema_valid` — posted payload includes all required fields from `event-payload-schemas.md`
+  - [x] `test_hailo_pipeline_not_imported_in_zone_counter` — AST check: `zone_counter.py` does not import `pipeline`
 
-- [ ] Implement `callback.py` — thin GStreamer handoff callback (AC: 2, 3)
-  - [ ] `OccupancyCallback.__init__(self, cameras, zone_masks, zone_counter, budget, settings)` — injected deps
-  - [ ] `def __call__(self, buffer, user_data)` — extract `HailoROI` from buffer metadata; filter by `DetectionClass`; apply zone polygon mask; call `zone_counter.update(car_id, detections_with_track_ids)` if budget allows
-  - [ ] Assert at init that zone configs exist for all coaches; raise `RuntimeError` (CRITICAL log) if any missing
-  - [ ] Write RED tests in `tests/unit/test_callback.py` — class filtering, zone mask inclusion/exclusion with synthetic ROI objects (mocked `HailoROI`), missing zone config raises `RuntimeError`, budget suppression skips P2
+- [x] Implement `callback.py` — thin GStreamer handoff callback (AC: 2, 3)
+  - [x] `OccupancyCallback.__init__(self, cameras, zone_masks, zone_counter, budget, settings)` — injected deps
+  - [x] `def __call__(self, buffer, user_data)` — extract `HailoROI` from buffer metadata; filter by `DetectionClass`; apply zone polygon mask; call `zone_counter.update(car_id, detections_with_track_ids)` if budget allows
+  - [x] Assert at init that zone configs exist for all coaches; raise `RuntimeError` (CRITICAL log) if any missing
+  - [x] Write RED tests in `tests/unit/test_callback.py` — class filtering, zone mask inclusion/exclusion with synthetic ROI objects (mocked `HailoROI`), missing zone config raises `RuntimeError`, budget suppression skips P2
 
-- [ ] Implement `zone_counter.py` — per-zone count + threshold logic (AC: 4, 5, 6)
-  - [ ] `ZoneCounter.__init__(self, cameras, settings, event_store_client)` — injected deps; per-car `OccupancyState` dict; per-car `last_emit_time`
-  - [ ] `async def update(self, car_id: str, detections: list[dict]) -> None` — update zone counts from track IDs in detection metadata; enforce 1 Hz rate limit; POST `OCCUPANCY_UPDATE` if rate allows
-  - [ ] `def _check_threshold(self, car_id: str, prev_pct: float, new_pct: float) -> None` — detect rising/falling threshold crossing; POST `OCCUPANCY_THRESHOLD_CROSSED`; guard against duplicate events
-  - [ ] Write RED tests in `tests/unit/test_zone_counter.py` BEFORE implementation — rate-limit, threshold rising/falling, no-duplicate guard, 1 Hz per-car independence
+- [x] Implement `zone_counter.py` — per-zone count + threshold logic (AC: 4, 5, 6)
+  - [x] `ZoneCounter.__init__(self, cameras, settings, event_store_client)` — injected deps; per-car `OccupancyState` dict; per-car `last_emit_time`
+  - [x] `async def update(self, car_id: str, detections: list[dict]) -> None` — update zone counts from track IDs in detection metadata; enforce 1 Hz rate limit; POST `OCCUPANCY_UPDATE` if rate allows
+  - [x] `def _check_threshold(self, car_id: str, prev_pct: float, new_pct: float) -> None` — detect rising/falling threshold crossing; POST `OCCUPANCY_THRESHOLD_CROSSED`; guard against duplicate events
+  - [x] Write RED tests in `tests/unit/test_zone_counter.py` BEFORE implementation — rate-limit, threshold rising/falling, no-duplicate guard, 1 Hz per-car independence
 
-- [ ] Implement `budget.py` — TOPS coordination (AC: 7)
-  - [ ] `Budget.__init__(self, settings: Settings)` — P2 suppression state
-  - [ ] `def on_context_update(self, payload: dict) -> None` — read `p2_throttled` from context push; update internal state; log only on transition
-  - [ ] `def should_process(self, camera_id: str, priority: str) -> bool` — returns False for P2 cameras when throttled; always True for P1
-  - [ ] Write RED tests in `tests/unit/test_budget.py` BEFORE implementation — throttle trigger/recovery, P1 always passes, transition-only logging
+- [x] Implement `budget.py` — TOPS coordination (AC: 7)
+  - [x] `Budget.__init__(self, settings: Settings)` — P2 suppression state
+  - [x] `def on_context_update(self, payload: dict) -> None` — read `p2_throttled` from context push; update internal state; log only on transition
+  - [x] `def should_process(self, camera_id: str, priority: str) -> bool` — returns False for P2 cameras when throttled; always True for P1
+  - [x] Write RED tests in `tests/unit/test_budget.py` BEFORE implementation — throttle trigger/recovery, P1 always passes, transition-only logging
 
-- [ ] Implement `health.py` — readiness endpoint (AC: 1)
-  - [ ] `GET /health/ready` — HTTP 200 `{"status": "ready", "hailo_initialised": true}` when pipeline ready; HTTP 503 `{"status": "not_ready", "recoverable": false}` otherwise
-  - [ ] `GET /health/live` — always HTTP 200
-  - [ ] `POST /context` — dispatches to `budget.on_context_update`
-  - [ ] Write `tests/unit/test_health.py` — 5 tests: ready/not-ready/live/context-dispatch/malformed-422
+- [x] Implement `health.py` — readiness endpoint (AC: 1)
+  - [x] `GET /health/ready` — HTTP 200 `{"status": "ready", "hailo_initialised": true}` when pipeline ready; HTTP 503 `{"status": "not_ready", "recoverable": false}` otherwise
+  - [x] `GET /health/live` — always HTTP 200
+  - [x] `POST /context` — dispatches to `budget.on_context_update`
+  - [x] Write `tests/unit/test_health.py` — 5 tests: ready/not-ready/live/context-dispatch/malformed-422
 
-- [ ] Implement `main.py` — entry point (AC: 1)
-  - [ ] Loads Settings via pydantic-settings; loads and validates `cameras.json`; loads zone configs
-  - [ ] Instantiates `OccupancyCallback`, `ZoneCounter`, `Budget` with injected deps
-  - [ ] Builds `GStreamerDetectionApp` pipeline via `pipeline.py`; FastAPI app via `health.build_app()`
-  - [ ] Bind to `127.0.0.1:8081` (loopback — same decision as rtsp-ingest)
-  - [ ] No `os.environ.get()` — all config via Settings
+- [x] Implement `main.py` — entry point (AC: 1)
+  - [x] Loads Settings via pydantic-settings; loads and validates `cameras.json`; loads zone configs
+  - [x] Instantiates `OccupancyCallback`, `ZoneCounter`, `Budget` with injected deps
+  - [x] Builds `GStreamerDetectionApp` pipeline via `pipeline.py`; FastAPI app via `health.build_app()`
+  - [x] Bind to `127.0.0.1:8081` (loopback — same decision as rtsp-ingest)
+  - [x] No `os.environ.get()` — all config via Settings
 
-- [ ] Run quality gates (AC: 8)
-  - [ ] `mypy --strict src/inference/` — 0 errors
-  - [ ] `pytest --strict-markers -q` — ≥90% coverage excluding `pipeline.py`
-  - [ ] `ruff check src/ tests/` — zero violations
+- [x] Run quality gates (AC: 8)
+  - [x] `mypy --strict src/inference/` — 0 errors
+  - [x] `pytest --strict-markers -q` — ≥90% coverage excluding `pipeline.py`
+  - [x] `ruff check src/ tests/` — zero violations
 
 ## Security Tests
 
 **OEBB-specific:**
-- [ ] `test_no_env_get_in_callback` — `callback.py` must not call `os.environ.get()` (Rule 8)
-- [ ] `test_no_env_get_in_zone_counter` — `zone_counter.py` must not call `os.environ.get()` (Rule 8)
-- [ ] `test_no_env_get_in_budget` — `budget.py` must not call `os.environ.get()` (Rule 8)
-- [ ] `test_no_env_get_in_config` — `config.py` must not call `os.environ.get()` (Rule 8)
-- [ ] `test_occupancy_update_payload_schema_valid` — POSTed `OCCUPANCY_UPDATE` payload includes `car_id`, `zone`, `occupancy_count`, `occupancy_pct`, `capacity`, `confidence`, `service_tier`
-- [ ] `test_hailo_pipeline_not_imported_in_zone_counter` — AST check: `zone_counter.py` does not import `pipeline` (no hardware coupling in business logic)
-- [ ] No raw RTSP URL or camera credentials appear in any structured log output
+- [x] `test_no_env_get_in_callback` — `callback.py` must not call `os.environ.get()` (Rule 8)
+- [x] `test_no_env_get_in_zone_counter` — `zone_counter.py` must not call `os.environ.get()` (Rule 8)
+- [x] `test_no_env_get_in_budget` — `budget.py` must not call `os.environ.get()` (Rule 8)
+- [x] `test_no_env_get_in_config` — `config.py` must not call `os.environ.get()` (Rule 8)
+- [x] `test_occupancy_update_payload_schema_valid` — POSTed `OCCUPANCY_UPDATE` payload includes `car_id`, `zone`, `occupancy_count`, `occupancy_pct`, `capacity`, `confidence`, `service_tier`
+- [x] `test_hailo_pipeline_not_imported_in_zone_counter` — AST check: `zone_counter.py` does not import `pipeline` (no hardware coupling in business logic)
+- [x] No raw RTSP URL or camera credentials appear in any structured log output
 
 ## Dev Notes
 
@@ -278,8 +278,35 @@ claude-sonnet-4-6
 
 ### Completion Notes List
 
+- Implemented full inference container with 7 modules: config, models, pipeline, callback, zone_counter, budget, health, main
+- 46 unit tests, 97.14% coverage (pipeline.py excluded), mypy strict 0 errors, ruff 0 violations
+- TAPPAS-native: `hailo` imported lazily (try/except) so unit tests patch it via `inference.callback.hailo`
+- 1 Hz rate limit is per-car via `time.monotonic()` in `ZoneCounter._last_emit` dict
+- Threshold crossing guard uses `(car_id, threshold_pct) → direction` dict; no duplicate events
+- `main.wire()` function extracted to enable unit testing without importing `pipeline.py`
+- All ACs satisfied: AC1 (health endpoints), AC2 (class filtering), AC3 (zone mask startup validation), AC4 (hailotracker track IDs), AC5 (OCCUPANCY_UPDATE + DEFAULT_RETRY), AC6 (threshold crossing), AC7 (budget P2 suppression), AC8 (quality gates)
+
 ### File List
+
+- `inference/pyproject.toml` (updated — removed hailo_device.py omit, fixed deps)
+- `inference/src/inference/__init__.py`
+- `inference/src/inference/config.py`
+- `inference/src/inference/models.py`
+- `inference/src/inference/pipeline.py`
+- `inference/src/inference/callback.py`
+- `inference/src/inference/zone_counter.py`
+- `inference/src/inference/budget.py`
+- `inference/src/inference/health.py`
+- `inference/src/inference/main.py`
+- `inference/tests/unit/test_security.py`
+- `inference/tests/unit/test_callback.py`
+- `inference/tests/unit/test_zone_counter.py`
+- `inference/tests/unit/test_budget.py`
+- `inference/tests/unit/test_health.py`
+- `inference/tests/unit/test_main.py`
+- `cameras.json` (added seat_zones + capacity to all 3 cameras)
 
 ### Change Log
 
 - 2026-05-19: Story rewritten — TAPPAS-native architecture (hailotracker GStreamer plugin replaces Python BYTETracker wrapper); callback.py replaces tracker.py + detector.py; pipeline.py is new integration-only GStreamerDetectionApp subclass; pose estimation deferred from PoC scope.
+- 2026-05-19: Implemented — 7 modules, 46 unit tests, 97% coverage, mypy strict clean, ruff clean

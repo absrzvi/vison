@@ -5,21 +5,34 @@
       "coach_id": "car-1",
       "rtsp_url": "rtsp://cam-host:554/stream/C1_DOOR_01",
       "zone": "door",
-      "priority": "P1"
+      "priority": "P1",
+      "capacity": 200,
+      "seat_zones": [
+        { "name": "seating-fwd", "polygon": [[0, 0], [640, 0], [640, 300], [0, 300]] },
+        { "name": "aisle", "polygon": [[200, 300], [440, 300], [440, 480], [200, 480]] }
+      ]
     },
     {
       "camera_id": "C1_INT_01",
       "coach_id": "car-1",
       "rtsp_url": "rtsp://cam-host:554/stream/C1_INT_01",
       "zone": "interior",
-      "priority": "P2"
+      "priority": "P2",
+      "capacity": 200,
+      "seat_zones": [
+        { "name": "seating-mid", "polygon": [[0, 0], [640, 0], [640, 480], [0, 480]] }
+      ]
     },
     {
       "camera_id": "C1_EXT_01",
       "coach_id": "car-1",
       "rtsp_url": "rtsp://cam-host:554/stream/C1_EXT_01",
       "zone": "exterior",
-      "priority": "P3"
+      "priority": "P3",
+      "capacity": 200,
+      "seat_zones": [
+        { "name": "platform", "polygon": [[0, 0], [640, 0], [640, 480], [0, 480]] }
+      ]
     }
   ],
   "door_camera_map": {
