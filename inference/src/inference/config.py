@@ -21,9 +21,18 @@ class Settings(BaseSettings):
     tops_total: float = 26.0
     tops_budget_pct_threshold: float = 0.90
 
-    # P-D1: occupancy story tracks person only. Suitcase/bicycle/wheelchair move to E4-S5.
-    detection_classes: list[str] = ["person"]
+    # E4-S5: expanded to include suitcase (door obstruction) and bicycle (accessibility).
+    detection_classes: list[str] = ["person", "suitcase", "bicycle"]
     model_hef_path: str = "/models/yolov8m.hef"
+
+    fusion_url: str = "http://fusion:8090"
+    accessibility_confidence_threshold: float = 0.80
+    door_obstruction_min_frames: int = 2
+    vestibule_congestion_threshold: int = 8
+    vestibule_congestion_score_threshold: float = 0.75
+    slip_fall_height_collapse_threshold: float = 0.5
+    slip_fall_velocity_threshold: float = 50.0
+    pipeline_fps: float = 3.0
 
     # P-D2: service_tier sourced via env INFERENCE_SERVICE_TIER, not hardcoded.
     service_tier: str = "standard"

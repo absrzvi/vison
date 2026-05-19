@@ -24,19 +24,24 @@ from inference.callback import OccupancyCallback
 from inference.config import Settings
 from inference.health import build_app
 from inference.models import JourneyHolder, LoopHolder, ReadinessHolder, ZoneMask
+from inference.safety import SafetyHandler
 from inference.zone_counter import ZoneCounter
 
 log = structlog.get_logger(__name__)
 
 
 def _load_cameras(path: str) -> list[dict[str, Any]]:
+    return _load_cameras_data(path)[0]
+
+
+def _load_cameras_data(path: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     cameras = list(data["cameras"])
     if not cameras:
         log.critical("main.no_cameras_configured", path=path)
         sys.exit(1)
-    return cameras
+    return cameras, data
 
 
 def _zone_masks_for_camera(camera: dict[str, Any]) -> list[ZoneMask]:
@@ -61,6 +66,7 @@ def wire(
     readiness: list[ReadinessHolder],
     loop_holder: LoopHolder,
     journey_holder: JourneyHolder | None = None,
+    cameras_json: dict[str, Any] | None = None,
 ) -> tuple[Budget, JourneyHolder, list[OccupancyCallback], FastAPI]:
     """Wire components together. One OccupancyCallback and one ReadinessHolder per camera.
 
@@ -79,6 +85,11 @@ def wire(
         event_store_client=event_client,
         journey_holder=journey_holder,
     )
+    safety_handler = SafetyHandler(
+        settings=settings,
+        event_store_client=event_client,
+        journey_holder=journey_holder,
+    )
     budget = Budget(settings=settings)
 
     callbacks: list[OccupancyCallback] = []
@@ -93,10 +104,18 @@ def wire(
                 settings=settings,
                 loop_holder=loop_holder,
                 readiness=cam_readiness,
+                cameras_json=cameras_json,
+                event_store_client=event_client,
+                safety_handler=safety_handler,
             )
         )
 
-    app = build_app(readiness=readiness, budget=budget, journey_holder=journey_holder)
+    app = build_app(
+        readiness=readiness,
+        budget=budget,
+        journey_holder=journey_holder,
+        safety_handler=safety_handler,
+    )
     return budget, journey_holder, callbacks, app
 
 
@@ -136,7 +155,7 @@ def _make_pipeline_thread(
 
 def main() -> None:  # pragma: no cover — integration entry point
     settings = Settings()
-    cameras = _load_cameras(settings.cameras_json_path)
+    cameras, cameras_json = _load_cameras_data(settings.cameras_json_path)
     # F2 decision: one ReadinessHolder per camera; health.py aggregates.
     cam_readiness = [
         ReadinessHolder(camera_id=str(cam["camera_id"]), ready=False) for cam in cameras
@@ -150,7 +169,8 @@ def main() -> None:  # pragma: no cover — integration entry point
             # M1 fix: single wire() call here, where the running loop and real httpx
             # client both exist. Bootstrap below constructs only the app shell.
             budget, journey_holder, callbacks, wired_app = wire(
-                settings, cameras, client, cam_readiness, loop_holder
+                settings, cameras, client, cam_readiness, loop_holder,
+                cameras_json=cameras_json,
             )
             # Patch E: append routes into the already-created app so uvicorn's reference
             # stays valid. include_router only works before app startup; route list append

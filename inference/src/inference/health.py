@@ -1,6 +1,9 @@
 """FastAPI health and context-push endpoints for the inference container."""
 from __future__ import annotations
 
+import asyncio
+from typing import TYPE_CHECKING
+
 import structlog
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -8,6 +11,9 @@ from pydantic import BaseModel, ConfigDict, StrictBool
 
 from inference.budget import Budget
 from inference.models import JourneyHolder, ReadinessHolder
+
+if TYPE_CHECKING:
+    from inference.safety import SafetyHandler
 
 log = structlog.get_logger(__name__)
 
@@ -19,12 +25,16 @@ class ContextPushModel(BaseModel):
 
     p2_throttled: StrictBool = False
     journey_id: str | None = None
+    ramp_deployed: StrictBool = False
+    ramp_door_id: str | None = None
+    ramp_station_id: str | None = None
 
 
 def build_app(
     readiness: list[ReadinessHolder],
     budget: Budget,
     journey_holder: JourneyHolder,
+    safety_handler: SafetyHandler | None = None,
 ) -> FastAPI:
     """Build the FastAPI app.
 
@@ -65,6 +75,14 @@ def build_app(
         if payload.journey_id is not None:
             journey_holder.journey_id = payload.journey_id
             log.info("context_push.journey_id_updated", journey_id=payload.journey_id)
+        if payload.ramp_deployed and safety_handler is not None:
+            door_id = payload.ramp_door_id or "unknown"
+            station_id = payload.ramp_station_id or "unknown"
+            loop = asyncio.get_event_loop()
+            asyncio.ensure_future(
+                safety_handler.on_ramp_deployed(door_id, station_id), loop=loop
+            )
+            log.info("context_push.ramp_deployed", door_id=door_id, station_id=station_id)
         return {"status": "accepted"}
 
     return app

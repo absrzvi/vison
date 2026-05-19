@@ -1,5 +1,5 @@
 # generated: 2026-05-17
-# last_updated: 2026-05-19  # E3-S1–S6 done; E3-S7 done (3 review patches applied)
+# last_updated: 2026-05-19  # 4-5-inference-safety-accessibility: review
 # project: oebb-agent
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-19  # 4-4 meta-review patches applied; 17 items resolved; story → review
+last_updated: 2026-05-19  # 4-5 safety+accessibility implemented; 119 tests pass; → review
 project: oebb-agent
 # code-review 2026-05-17: story 2-2 → in-progress (1 patch finding: AC1 scroll-to-top)
 # code-review 2026-05-17: story 2-3 → done (5 patches applied)
@@ -98,7 +98,7 @@ development_status:
   4-2-vlan-pollers-apc-pis-reservation: done
   4-3-rtsp-ingest-camera-pipeline: done
   4-4-inference-detection-tracking-occupancy: done  # C1+F2+A+E+H+I+J+M patches applied 2026-05-19
-  4-5-inference-safety-accessibility: backlog
+  4-5-inference-safety-accessibility: review
   4-6-fusion-alert-correlation-suppression: backlog
   4-7-event-store-onboard-rest-api-websocket: backlog
   4-cs1-cloud-sync-container: backlog

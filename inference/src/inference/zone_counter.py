@@ -19,6 +19,7 @@ from oebb_shared.events import (
     EventType,
     OccupancyThresholdCrossedPayload,
     OccupancyUpdatePayload,
+    VestibuleCongestionPayload,
 )
 from oebb_shared.http.retry import DEFAULT_RETRY
 
@@ -90,6 +91,16 @@ class ZoneCounter:
             car_id: asyncio.Lock() for car_id in self._states
         }
 
+        # E4-S5: slip/fall detection — last 2 bboxes per (car_id, track_id)
+        self._track_bboxes: dict[str, dict[int, tuple[float, float, float, float]]] = {}
+        # E4-S5: vestibule congestion rate-limit — one emit per vestibule per 10s
+        self._vestibule_last_emit: dict[str, float] = {}
+
+        # Build camera zone lookup: car_id → zone
+        self._car_zone: dict[str, str] = {
+            str(cam["coach_id"]): str(cam.get("zone", "interior")) for cam in cameras
+        }
+
     def update_journey_id(self, journey_id: str) -> None:
         """Update the journey_id used for outbound envelopes (M13 — /context push)."""
         self._journey_holder.journey_id = journey_id
@@ -140,6 +151,8 @@ class ZoneCounter:
         try:
             await self._post_occupancy_update(state)
             await self._check_threshold(car_id, prev_count, state.occupancy_count)
+            await self._check_slip_fall(car_id, detections)
+            await self._check_vestibule_congestion(car_id, state.occupancy_count)
         finally:
             self._in_flight[car_id] = False
 
@@ -218,6 +231,94 @@ class ZoneCounter:
             payload.model_dump(),
             severity="warning",
         )
+        resp = await self._client.post(
+            f"{self._settings.event_store_url}/api/v1/events",
+            json=envelope.model_dump(mode="json"),
+        )
+        resp.raise_for_status()
+
+    async def _check_slip_fall(
+        self, car_id: str, detections: list[dict[str, Any]]
+    ) -> None:
+        """Detect slip/fall events from consecutive person bounding boxes."""
+        car_bboxes = self._track_bboxes.setdefault(car_id, {})
+        for det in detections:
+            if det.get("label") != "person":
+                continue
+            track_id = det.get("track_id")
+            bbox = det.get("bbox")
+            if track_id is None or bbox is None:
+                continue
+            prev = car_bboxes.get(track_id)
+            if prev is not None:
+                h1 = prev[3] - prev[1]
+                h2 = bbox[3] - bbox[1]
+                cy1 = (prev[1] + prev[3]) / 2.0
+                cy2 = (bbox[1] + bbox[3]) / 2.0
+                height_ratio = h2 / h1 if h1 > 0 else 1.0
+                velocity = abs(cy2 - cy1)
+                threshold = self._settings.slip_fall_height_collapse_threshold
+                if (
+                    height_ratio < (1.0 - threshold)
+                    and velocity > self._settings.slip_fall_velocity_threshold
+                ):
+                    await self._post_slip_fall_candidate(
+                        car_id=car_id,
+                        track_id=track_id,
+                        camera_id="unknown",
+                    )
+            car_bboxes[track_id] = bbox
+
+    @DEFAULT_RETRY
+    async def _post_slip_fall_candidate(
+        self, car_id: str, track_id: int, camera_id: str
+    ) -> None:
+        resp = await self._client.post(
+            f"{self._settings.fusion_url}/candidates/alert_raised",
+            json={
+                "alert_type": "slip_fall",
+                "car_id": car_id,
+                "track_id": track_id,
+                "camera_id": camera_id,
+            },
+        )
+        resp.raise_for_status()
+
+    async def _check_vestibule_congestion(self, car_id: str, person_count: int) -> None:
+        """Emit VESTIBULE_CONGESTION when door/vestibule zone exceeds threshold."""
+        zone = self._car_zone.get(car_id, "interior")
+        if zone not in ("door", "vestibule"):
+            return
+
+        threshold = self._settings.vestibule_congestion_threshold
+        score_threshold = self._settings.vestibule_congestion_score_threshold
+        score = min(person_count / threshold, 1.0) if threshold > 0 else 0.0
+        if score <= score_threshold:
+            return
+
+        vestibule_id = f"{car_id}-vestibule"
+        now = time.monotonic()
+        if now - self._vestibule_last_emit.get(vestibule_id, 0.0) < 10.0:
+            return
+
+        self._vestibule_last_emit[vestibule_id] = now
+        payload = VestibuleCongestionPayload(
+            car_id=car_id,
+            vestibule_id=vestibule_id,
+            congestion_score=round(score, 4),
+            person_count=person_count,
+            dwell_time_avg_s=0.0,
+            threshold_score=score_threshold,
+        )
+        envelope = self._build_envelope(
+            EventType.VESTIBULE_CONGESTION,
+            payload.model_dump(),
+            severity="warning",
+        )
+        await self._post_vestibule_congestion(envelope)
+
+    @DEFAULT_RETRY
+    async def _post_vestibule_congestion(self, envelope: EventEnvelope) -> None:
         resp = await self._client.post(
             f"{self._settings.event_store_url}/api/v1/events",
             json=envelope.model_dump(mode="json"),

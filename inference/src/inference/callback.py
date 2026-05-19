@@ -14,15 +14,27 @@ is running.
 from __future__ import annotations
 
 import asyncio
+import time
 from concurrent.futures import Future
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+import httpx
 import structlog
+from oebb_shared.events import (
+    AccessibilityDetectedPayload,
+    DoorObstructionPayload,
+    EventEnvelope,
+    EventType,
+)
+from oebb_shared.http.retry import DEFAULT_RETRY
 
 from inference.budget import Budget
 from inference.config import Settings
 from inference.models import LoopHolder, ReadinessHolder, ZoneMask
 from inference.zone_counter import ZoneCounter
+
+if TYPE_CHECKING:
+    from inference.safety import SafetyHandler
 
 log = structlog.get_logger(__name__)
 
@@ -111,6 +123,9 @@ class OccupancyCallback:
         settings: Settings,
         loop_holder: LoopHolder,
         readiness: ReadinessHolder | None = None,
+        cameras_json: dict[str, Any] | None = None,
+        event_store_client: httpx.AsyncClient | None = None,
+        safety_handler: SafetyHandler | None = None,
     ) -> None:
         self._zone_counter = zone_counter
         self._budget = budget
@@ -119,9 +134,12 @@ class OccupancyCallback:
         self._loop_holder = loop_holder
         # F2: per-camera readiness holder; pipeline._dispatch flips it on first frame.
         self._readiness = readiness
+        self._event_store_client = event_store_client
+        self._safety_handler = safety_handler
 
         self._camera_id = str(camera["camera_id"])
         self._car_id = str(camera["coach_id"])
+        self._camera_zone = str(camera.get("zone", "interior"))
         self._priority = str(camera.get("priority", "P1"))
         # M2/P-M16: RTSP URL stored here so InferencePipeline can pass it to GStreamer
         # without re-reading cameras.json (single source of truth).
@@ -137,6 +155,23 @@ class OccupancyCallback:
 
         self._allowed_labels: frozenset[str] = frozenset(settings.detection_classes)
 
+        # Build camera_id → door_id reverse map from cameras_json
+        door_camera_map: dict[str, list[str]] = (
+            cameras_json.get("door_camera_map", {}) if cameras_json else {}
+        )
+        self._cam_to_door: dict[str, str] = {}
+        for door_id, cam_ids in door_camera_map.items():
+            for cam_id in cam_ids:
+                self._cam_to_door[cam_id] = door_id
+
+        # E4-S5: door obstruction consecutive frame tracking
+        # Key: (camera_id, track_id_or_bbox_hash) → consecutive frame count
+        self._door_zone_hits: dict[tuple[str, int], int] = {}
+        # E4-S5: last suitcase bbox per camera for IoU-based pseudo-tracking
+        self._last_suitcase_bbox: dict[str, tuple[float, float, float, float] | None] = {}
+        # E4-S5: last accessibility track per camera (updated on every bicycle emit)
+        self._last_accessibility_track: dict[str, str] = {}
+
         # P-M20: bbox coord space verification — first-frame range check.
         # HARDWARE-VERIFY: Hailo bbox space (pixel vs normalized) confirmed on first
         # hardware day. If hardware emits normalized (0..1), this assertion fires
@@ -146,6 +181,193 @@ class OccupancyCallback:
     @property
     def camera_id(self) -> str:
         return self._camera_id
+
+    def _iou(
+        self,
+        a: tuple[float, float, float, float],
+        b: tuple[float, float, float, float],
+    ) -> float:
+        """Intersection-over-Union for two (xmin, ymin, xmax, ymax) boxes."""
+        ix1 = max(a[0], b[0])
+        iy1 = max(a[1], b[1])
+        ix2 = min(a[2], b[2])
+        iy2 = min(a[3], b[3])
+        inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+        area_a = max(0.0, a[2] - a[0]) * max(0.0, a[3] - a[1])
+        area_b = max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
+        union = area_a + area_b - inter
+        return inter / union if union > 0 else 0.0
+
+    def _handle_suitcase_door_obstruction(
+        self,
+        bboxes: list[tuple[float, float, float, float]],
+        loop: asyncio.AbstractEventLoop,
+    ) -> None:
+        """Track suitcase detections via IoU and emit candidate after min_frames."""
+        prev = self._last_suitcase_bbox.get(self._camera_id)
+        best_bbox = bboxes[0]
+        hit_key = (self._camera_id, -1)  # suitcase uses sentinel track_id -1
+
+        if prev is not None and self._iou(prev, best_bbox) > 0.5:
+            count = self._door_zone_hits.get(hit_key, 0) + 1
+        else:
+            count = 1
+        self._door_zone_hits[hit_key] = count
+        self._last_suitcase_bbox[self._camera_id] = best_bbox
+
+        if count >= self._settings.door_obstruction_min_frames:
+            door_id = self._cam_to_door.get(self._camera_id, "unknown")
+            try:
+                fut = asyncio.run_coroutine_threadsafe(
+                    self._post_door_obstruction_candidate(
+                        door_id=door_id,
+                        obstruction_type="object",
+                        track_id="suitcase-0",
+                        confidence=None,
+                    ),
+                    loop,
+                )
+                fut.add_done_callback(_on_post_done)
+            except RuntimeError as exc:
+                log.warning(
+                    "callback.schedule_during_shutdown",
+                    camera_id=self._camera_id,
+                    error=str(exc),
+                )
+
+    def _handle_person_door_obstruction(
+        self,
+        track_id: int,
+        bbox: tuple[float, float, float, float],
+        loop: asyncio.AbstractEventLoop,
+    ) -> None:
+        """Track person detections in door zone and emit candidate after min_frames."""
+        hit_key = (self._camera_id, track_id)
+        count = self._door_zone_hits.get(hit_key, 0) + 1
+        self._door_zone_hits[hit_key] = count
+
+        if count >= self._settings.door_obstruction_min_frames:
+            door_id = self._cam_to_door.get(self._camera_id, "unknown")
+            try:
+                fut = asyncio.run_coroutine_threadsafe(
+                    self._post_door_obstruction_candidate(
+                        door_id=door_id,
+                        obstruction_type="person",
+                        track_id=str(track_id),
+                        confidence=None,
+                    ),
+                    loop,
+                )
+                fut.add_done_callback(_on_post_done)
+            except RuntimeError as exc:
+                log.warning(
+                    "callback.schedule_during_shutdown",
+                    camera_id=self._camera_id,
+                    error=str(exc),
+                )
+
+    @DEFAULT_RETRY
+    async def _post_door_obstruction_candidate(
+        self,
+        door_id: str,
+        obstruction_type: str,
+        track_id: str,
+        confidence: float | None,
+    ) -> None:
+        if self._event_store_client is None:
+            return
+        log.info(
+            "callback.door_state_default_open",
+            camera_id=self._camera_id,
+            note="door_state defaults to open; fusion will cross-reference ZFR",
+        )
+        _valid_types = ("person", "object", "unknown")
+        safe_type = obstruction_type if obstruction_type in _valid_types else "unknown"
+        payload = DoorObstructionPayload(
+            car_id=self._car_id,
+            door_id=door_id,
+            obstruction_type=safe_type,  # type: ignore[arg-type]
+            track_id=track_id,
+            camera_id=self._camera_id,
+            confidence=confidence,
+            door_state="open",
+        )
+        resp = await self._event_store_client.post(
+            f"{self._settings.fusion_url}/candidates/door_obstruction",
+            json=payload.model_dump(),
+        )
+        resp.raise_for_status()
+
+    async def _dispatch_bicycle(
+        self,
+        camera_id: str,
+        confidence: float | None,
+        bbox: tuple[float, float, float, float],
+    ) -> None:
+        """Evaluate bicycle detection and emit ACCESSIBILITY_DETECTED if threshold met."""
+        threshold = self._settings.accessibility_confidence_threshold
+        if confidence is not None and confidence < threshold:
+            return
+
+        near_door_id = self._cam_to_door.get(camera_id)
+        if near_door_id is None:
+            log.critical(
+                "callback.accessibility_unmapped_camera",
+                camera_id=camera_id,
+                hint="Add camera to door_camera_map in cameras.json",
+            )
+            return
+
+        synthetic_track = f"acc-{camera_id}-{int(time.monotonic() * 1000) % 100000}"
+        self._last_accessibility_track[camera_id] = synthetic_track
+        if self._safety_handler is not None:
+            self._safety_handler.update_last_track(camera_id, synthetic_track)
+
+        await self._post_accessibility_event(
+            camera_id=camera_id,
+            track_id=synthetic_track,
+            confidence=confidence,
+            car_id=self._car_id,
+            zone=self._camera_zone,
+        )
+
+    @DEFAULT_RETRY
+    async def _post_accessibility_event(
+        self,
+        camera_id: str,
+        track_id: str,
+        confidence: float | None,
+        car_id: str,
+        zone: str,
+    ) -> None:
+        if self._event_store_client is None:
+            return
+        near_door_id = self._cam_to_door.get(camera_id)
+        if near_door_id is None:
+            return
+        payload = AccessibilityDetectedPayload(
+            car_id=car_id,
+            zone=zone,
+            track_id=track_id,
+            assistance_type=["wheelchair"],
+            camera_id=camera_id,
+            confidence=confidence,
+            near_door_id=near_door_id,
+        )
+        envelope = EventEnvelope(
+            journey_id=self._zone_counter._journey_holder.journey_id,
+            vehicle_id=self._settings.vehicle_id,
+            event_type=EventType.ACCESSIBILITY_DETECTED,
+            severity="warning",
+            source="inference",
+            schema_version=self._settings.schema_version,
+            payload=payload.model_dump(),
+        )
+        resp = await self._event_store_client.post(
+            f"{self._settings.event_store_url}/api/v1/events",
+            json=envelope.model_dump(mode="json"),
+        )
+        resp.raise_for_status()
 
     def _verify_bbox_space(self, bbox: tuple[float, float, float, float]) -> bool:
         """First-frame bbox-range check. Returns False on violation (caller drops frame).
@@ -185,6 +407,9 @@ class OccupancyCallback:
             return
 
         accepted: list[dict[str, Any]] = []
+        bicycle_detections: list[tuple[float | None, tuple[float, float, float, float]]] = []
+        suitcase_detections: list[tuple[float, float, float, float]] = []
+
         for det in detections:
             try:
                 label = det.get_label()
@@ -199,10 +424,12 @@ class OccupancyCallback:
                 bbox_obj = det.get_bbox()
                 # HARDWARE-VERIFY: bbox coord space — see _verify_bbox_space.
                 bbox = (bbox_obj.xmin(), bbox_obj.ymin(), bbox_obj.xmax(), bbox_obj.ymax())
+                try:
+                    conf_list = det.get_objects_typed(hailo.HAILO_CONFIDENCE)
+                    confidence: float | None = conf_list[0].get_confidence() if conf_list else None
+                except Exception:  # pragma: no cover
+                    confidence = None
             except Exception:  # pragma: no cover
-                continue
-
-            if track_id is None:
                 continue
 
             if not self._verify_bbox_space(bbox):
@@ -211,7 +438,14 @@ class OccupancyCallback:
             if not _bbox_in_any_zone(bbox, self._zone_masks):
                 continue
 
-            accepted.append({"track_id": track_id, "label": label, "bbox": bbox})
+            if label == "person":
+                if track_id is None:
+                    continue
+                accepted.append({"track_id": track_id, "label": label, "bbox": bbox})
+            elif label == "bicycle":
+                bicycle_detections.append((confidence, bbox))
+            elif label == "suitcase":
+                suitcase_detections.append(bbox)
 
         loop = self._loop_holder.loop
         if loop is None:
@@ -232,3 +466,27 @@ class OccupancyCallback:
                 camera_id=self._camera_id,
                 error=str(exc),
             )
+
+        # Door obstruction: suitcase detections (IoU-based pseudo-tracking)
+        if self._camera_zone == "door" and suitcase_detections:
+            self._handle_suitcase_door_obstruction(suitcase_detections, loop)
+
+        # Door obstruction: person detections in door zone via track_id
+        if self._camera_zone == "door":
+            for det in accepted:
+                self._handle_person_door_obstruction(det["track_id"], det["bbox"], loop)
+
+        # Bicycle → accessibility
+        for conf, bbox in bicycle_detections:
+            try:
+                fut2 = asyncio.run_coroutine_threadsafe(
+                    self._dispatch_bicycle(self._camera_id, conf, bbox),
+                    loop,
+                )
+                fut2.add_done_callback(_on_post_done)
+            except RuntimeError as exc:
+                log.warning(
+                    "callback.schedule_during_shutdown",
+                    camera_id=self._camera_id,
+                    error=str(exc),
+                )

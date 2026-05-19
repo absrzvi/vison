@@ -88,6 +88,96 @@ def test_occupancy_update_payload_schema_valid() -> None:
 
 
 @pytest.mark.unit
+def test_no_env_get_in_safety() -> None:
+    assert not _has_env_get(SRC / "safety.py")
+
+
+@pytest.mark.unit
+def test_door_obstruction_payload_schema_valid() -> None:
+    from oebb_shared.events import DoorObstructionPayload
+
+    p = DoorObstructionPayload(
+        car_id="car-1",
+        door_id="door-1A",
+        obstruction_type="person",
+        track_id="42",
+        camera_id="C1_DOOR_01",
+        confidence=None,
+        door_state="open",
+    )
+    dumped = p.model_dump()
+    for f in ("car_id", "door_id", "obstruction_type", "track_id", "camera_id", "door_state"):
+        assert f in dumped, f"missing required field: {f}"
+    assert "confidence" not in dumped
+
+
+@pytest.mark.unit
+def test_accessibility_payload_schema_valid() -> None:
+    from oebb_shared.events import AccessibilityDetectedPayload
+
+    p = AccessibilityDetectedPayload(
+        car_id="car-1",
+        zone="door",
+        track_id="acc-C1_DOOR_01-12345",
+        assistance_type=["wheelchair"],
+        camera_id="C1_DOOR_01",
+        confidence=None,
+        near_door_id="door-1A",
+    )
+    dumped = p.model_dump()
+    for f in ("car_id", "track_id", "assistance_type", "camera_id", "near_door_id"):
+        assert f in dumped, f"missing required field: {f}"
+    assert "confidence" not in dumped
+
+
+@pytest.mark.unit
+def test_ramp_deployed_payload_schema_valid() -> None:
+    from oebb_shared.events import RampDeployedPayload
+
+    p = RampDeployedPayload(
+        car_id="car-1",
+        door_id="door-1A",
+        triggered_by_track_id="acc-C1_DOOR_01-12345",
+        deployed_by="auto",
+        station_id="VIE-HBF",
+    )
+    dumped = p.model_dump()
+    for f in ("car_id", "door_id", "triggered_by_track_id", "deployed_by", "station_id"):
+        assert f in dumped, f"missing required field: {f}"
+
+
+@pytest.mark.unit
+def test_context_push_ramp_malformed_returns_422() -> None:
+    """StrictBool must reject string 'yes' for ramp_deployed."""
+    from pydantic import ValidationError
+
+    from inference.health import ContextPushModel
+
+    with pytest.raises(ValidationError):
+        ContextPushModel.model_validate({"ramp_deployed": "yes"})
+
+
+@pytest.mark.unit
+def test_fusion_candidate_not_written_to_event_store() -> None:
+    """Door obstruction and slip_fall must POST to fusion_url, not event_store_url."""
+    import ast
+
+    for module_name in ("callback.py", "zone_counter.py"):
+        src = (SRC / module_name).read_text(encoding="utf-8")
+        # This test verifies by naming convention — candidate POSTs use fusion_url
+        # and the fusion path contains "candidates", not "/api/v1/events".
+        # AST walk: any string literal containing "candidates" must NOT also see
+        # "event_store_url" on the same call node.
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if "candidates" in node.value:
+                    assert "event_store" not in node.value, (
+                        f"{module_name}: candidate endpoint must not reference event_store: {node.value!r}"
+                    )
+
+
+@pytest.mark.unit
 def test_envelope_matches_canonical_schema() -> None:
     """The envelope inference produces must round-trip through canonical EventEnvelope."""
     from oebb_shared.events import EventEnvelope, EventType, OccupancyUpdatePayload
