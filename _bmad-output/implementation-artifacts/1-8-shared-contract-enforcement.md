@@ -2,7 +2,7 @@
 
 **Epic:** 1 — Foundation & Shared Infrastructure (hardening)  
 **Story Key:** `1-8-shared-contract-enforcement`  
-**Status:** ready-for-dev  
+**Status:** review  
 **Agent:** Amelia  
 **Phase:** BMAD-DEV  
 **Date Created:** 2026-05-19  
@@ -263,14 +263,42 @@ Run `python -m pytest tests/ -m "unit" --cov=oebb_shared --cov-report=term-missi
 
 ## Definition of Done
 
-- [ ] `shared/tests/contract/__init__.py` created
-- [ ] `shared/tests/contract/test_envelope_contract.py` created; all tests pass under `pytest -m contract`
-- [ ] `JourneyStartedPayload` and `JourneyEndedPayload` reject naive/non-UTC timestamps via `ValidationError`
-- [ ] Existing 35 unit tests in `test_event_envelope.py` continue to pass
-- [ ] `.gitlab-ci.yml` `test:shared` job updated to `-m "unit or contract"` with NFR12 comment
-- [ ] `python -m pytest tests/ -m "unit or contract" --cov=oebb_shared --cov-fail-under=80` exits 0 in `shared/`
-- [ ] No new EventTypes added (audit confirmed 25 is complete)
-- [ ] Committed and pushed to `origin master` per CLAUDE.md
+- [x] `shared/tests/contract/__init__.py` created
+- [x] `shared/tests/contract/test_envelope_contract.py` created; all tests pass under `pytest -m contract`
+- [x] `JourneyStartedPayload` and `JourneyEndedPayload` reject naive/non-UTC timestamps via `ValidationError`
+- [x] Existing 35 unit tests in `test_event_envelope.py` continue to pass
+- [x] `.gitlab-ci.yml` `test:shared` job updated to `-m "unit or contract"` with NFR12 comment
+- [x] `python -m pytest tests/ -m "unit or contract" --cov=oebb_shared --cov-fail-under=80` exits 0 in `shared/`
+- [x] No new EventTypes added (audit confirmed 25 is complete)
+- [x] Committed and pushed to `origin master` per CLAUDE.md
+
+---
+
+## Dev Agent Record
+
+### Implementation Notes
+
+- **A1 contract test:** 50 tests in `shared/tests/contract/test_envelope_contract.py` covering: PAYLOAD_MODELS completeness, all 25 EventType roundtrips (parametrised), 7 deliberate envelope violations, container file discovery + canonical import assertion.
+- **Repo root fix:** `_REPO_ROOT = Path(__file__).parents[3]` (not 4) — the file is 3 levels below repo root (`shared/tests/contract/`).
+- **A3:** CI already had `--cov-fail-under=80`; the only gap was `-m "unit"` filtering out contract tests. Fixed to `-m "unit or contract"`. Comment added documenting NFR12.
+- **C2:** `_validate_iso_utc()` function added to `payloads.py`, importing `_TIMESTAMP_RE` from `envelope.py`. Applied via `@field_validator` to `scheduled_departure`/`actual_departure` on `JourneyStartedPayload` and `scheduled_arrival`/`actual_arrival` on `JourneyEndedPayload`. 12 parametrised bad-fixture tests confirm the validator fires at CI time.
+- **Pre-existing ruff warnings** in `envelope.py`, `mock.py`, `__init__.py` are not from this story and were not touched (surgical-change principle).
+- **Coverage result:** 86.65% total (up from unit-only baseline); `payloads.py` now at 100%.
+- **Test count:** 99 pass (35 unit + 50 contract + 14 other unit), 20 deselected (integration).
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `shared/tests/contract/__init__.py` | Created (empty package marker) |
+| `shared/tests/contract/test_envelope_contract.py` | Created (50 contract tests — AC1, AC4) |
+| `shared/src/oebb_shared/events/payloads.py` | Added `_validate_iso_utc()` + `@field_validator` on journey payloads (AC3) |
+| `.gitlab-ci.yml` | `-m "unit or contract"` + NFR12 comment on `test:shared` job (AC2) |
+| `_bmad-output/implementation-artifacts/sprint-status.yaml` | Status updated in-progress → review |
+
+### Change Log
+
+- 2026-05-19: Implemented story 1-8 — A1 envelope contract test (50 tests), A3 CI marker fix, C2 UTC timestamp validator on journey payloads. 99 tests pass, 87% coverage. Committed 545ffd9 and pushed.
 
 ---
 
