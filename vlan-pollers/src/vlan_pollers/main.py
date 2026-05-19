@@ -19,9 +19,7 @@ from .health import router as health_router
 from .health import set_snmp_ready
 from .journey_tracker import JourneyTracker
 from .pis_poller import PISPoller
-from .pis_poller import _http_client as _pis_client
 from .reservation_poller import ReservationPoller
-from .reservation_poller import _http_client as _res_client
 from .snmp_poller import SnmpPoller
 from .snmp_poller import _http_client as _poller_client
 
@@ -127,8 +125,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await asyncio.gather(*_bg_tasks, return_exceptions=True)
         await _ctx_client.aclose()
         await _poller_client.aclose()
-        await _pis_client.aclose()
-        await _res_client.aclose()
+        await _pis_poller.aclose()
+        await _res_poller.aclose()
         log.info("vlan_pollers_stopped")
 
 

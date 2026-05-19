@@ -232,6 +232,11 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - **F21: `_push_context_delta` non-atomic across fusion+inference** [context_state.py] — sequential posts may leave consumers divergent on retry failure; add sequence number + per-service error capture in hardening story
 - **F23: `snmp_speed_oid` configured but never used** [snmp_poller.py / config.py] — speed varbind polling deferred until Stadler MIB OID for speed is confirmed; wire `update_speed` in E4-S2 when APC/SNMP speed OID is known
 
+## Deferred from: code review of 4-2-vlan-pollers-apc-pis-reservation (2026-05-19)
+
+- **No `asyncio.Lock` on `ContextState`** [context_state.py] — pre-existing architectural decision; CPython event loop is single-threaded, coroutines only interleave at `await` points, synchronous assignments are atomic; a lock would be needed only for OS thread concurrency
+- **Partial APC car-id failure aborts entire `_poll_once`** [apc_poller.py] — all-or-nothing matches existing SNMP poller pattern; best-effort partial writes require a product decision on partial state validity; defer to hardening story
+
 ## Deferred from: code review of 3-7-system-health-maintenance-ticket-api (2026-05-19)
 
 - **ESC during `--loading` clears UI but doesn't abort in-flight POST** [SystemHealth.jsx] — AC4 covers pre-send confirmation only; wire AbortController from ESC to fetch in a hardening story

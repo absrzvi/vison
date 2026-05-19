@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     rtsp_ingest_url: str = "http://rtsp-ingest:8005"
     station_approach_window_s: int = 120
     snmp_poll_interval_s: float = 5.0
-    apc_url: str = "http://apc-mock:8010"
     pis_url: str = "http://pis-mock:8011"
     reservation_url: str = "http://reservation-mock:8012"
     apc_poll_interval_s: float = 5.0

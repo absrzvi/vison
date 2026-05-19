@@ -1,6 +1,6 @@
 # Story 4.2: vlan-pollers APC, PIS & Reservation Pollers
 
-Status: review
+Status: done
 
 ## Story
 
@@ -371,3 +371,10 @@ claude-sonnet-4-6
 - `docker-compose.dev.yml` (modified)
 
 ### Review Findings
+
+- [x] [Review][Patch] `update_pis` delta-check misses new PisState fields — delay/platform changes silent [context_state.py:87-94]
+- [x] [Review][Patch] `apc_url` / `APC_URL` is dead config — `apc_url` in Settings and `APC_URL` in docker-compose are never read by APCPoller [config.py, docker-compose.dev.yml]
+- [x] [Review][Patch] Module-level `httpx.AsyncClient` created at import time — moved to instance-level with `aclose()` method [pis_poller.py, reservation_poller.py]
+- [x] [Review][Patch] `str(None)` → `"None"` for missing PIS JSON fields — fixed with `or ""` / `or 0` guards [pis_poller.py:43-49]
+- [x] [Review][Defer] No `asyncio.Lock` on `ContextState` — pre-existing architectural decision; CPython event loop single-threaded, no preemption at sync assignments [context_state.py] — deferred, pre-existing
+- [x] [Review][Defer] Partial APC car-id failure aborts entire `_poll_once` — pre-existing, matches SNMP poller all-or-nothing pattern; product decision needed for best-effort vs atomic [apc_poller.py:41-48] — deferred, pre-existing

@@ -11,9 +11,6 @@ from .models import PisState
 
 log = structlog.get_logger()
 
-# Module-level client — reused across polls; closed in main.py lifespan
-_http_client = httpx.AsyncClient()
-
 
 class PISPoller:
     """Polls PIS schedule/delay state (VLAN 3) via HTTP GET.
@@ -31,22 +28,26 @@ class PISPoller:
         self._pis_url = pis_url
         self._ctx = ctx
         self._poll_interval_s = poll_interval_s
+        self._http_client = httpx.AsyncClient()
+
+    async def aclose(self) -> None:
+        await self._http_client.aclose()
 
     @DEFAULT_RETRY
     async def _fetch_schedule(self) -> dict[str, object]:
-        r = await _http_client.get(f"{self._pis_url}/schedule", timeout=5.0)
+        r = await self._http_client.get(f"{self._pis_url}/schedule", timeout=5.0)
         r.raise_for_status()
         return r.json()  # type: ignore[no-any-return]
 
     async def _poll_once(self) -> None:
         data = await self._fetch_schedule()
         pis = PisState(
-            next_station=str(data.get("next_station", "")),
-            next_station_arrival_utc=str(data.get("next_station_arrival_utc", "")),
-            scheduled_departure=str(data.get("scheduled_departure", "")),
-            actual_departure=str(data.get("actual_departure", "")),
-            platform=str(data.get("platform", "")),
-            delay_min=int(str(data.get("delay_min", 0))),
+            next_station=str(data.get("next_station") or ""),
+            next_station_arrival_utc=str(data.get("next_station_arrival_utc") or ""),
+            scheduled_departure=str(data.get("scheduled_departure") or ""),
+            actual_departure=str(data.get("actual_departure") or ""),
+            platform=str(data.get("platform") or ""),
+            delay_min=int(str(data.get("delay_min") or 0)),
         )
         await self._ctx.update_pis(pis)
 

@@ -47,7 +47,6 @@ services:
       FUSION_URL: http://fusion:8003
       INFERENCE_URL: http://inference:8004
       RTSP_INGEST_URL: http://rtsp-ingest:8005
-      APC_URL: http://mock-vlans:8010/apc
       PIS_URL: http://mock-vlans:8010/pis
       RESERVATION_URL: http://mock-vlans:8010/reservation
     depends_on:

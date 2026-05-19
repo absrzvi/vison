@@ -10,9 +10,6 @@ from .context_state import ContextStateManager
 
 log = structlog.get_logger()
 
-# Module-level client — reused across polls; closed in main.py lifespan
-_http_client = httpx.AsyncClient()
-
 
 class ReservationPoller:
     """Polls reservation data (VLAN 6) via HTTP GET.
@@ -32,10 +29,14 @@ class ReservationPoller:
         self._ctx = ctx
         self._car_ids = car_ids
         self._poll_interval_s = poll_interval_s
+        self._http_client = httpx.AsyncClient()
+
+    async def aclose(self) -> None:
+        await self._http_client.aclose()
 
     @DEFAULT_RETRY
     async def _fetch_reservations(self) -> dict[str, int]:
-        r = await _http_client.get(f"{self._reservation_url}/reservations", timeout=5.0)
+        r = await self._http_client.get(f"{self._reservation_url}/reservations", timeout=5.0)
         r.raise_for_status()
         raw: dict[str, int] = r.json()
         # Filter to only configured car IDs

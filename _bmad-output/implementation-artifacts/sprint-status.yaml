@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-19  # E4-S1 done (14 review patches applied)
+last_updated: 2026-05-19  # E4-S2 done (4 review patches applied)
 project: oebb-agent
 # code-review 2026-05-17: story 2-2 → in-progress (1 patch finding: AC1 scroll-to-top)
 # code-review 2026-05-17: story 2-3 → done (5 patches applied)
@@ -94,7 +94,7 @@ development_status:
   # ── Epic 4: Onboard Edge Pipeline ──
   epic-4: in-progress
   4-1-vlan-pollers-snmp-context-state: done
-  4-2-vlan-pollers-apc-pis-reservation: review
+  4-2-vlan-pollers-apc-pis-reservation: done
   4-3-rtsp-ingest-camera-pipeline: backlog
   4-4-inference-detection-tracking-occupancy: backlog
   4-5-inference-safety-accessibility: backlog

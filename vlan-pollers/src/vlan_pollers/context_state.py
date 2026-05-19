@@ -85,10 +85,7 @@ class ContextStateManager:
         )
 
     async def update_pis(self, pis: PisState) -> None:
-        if (
-            self._state.pis.next_station == pis.next_station
-            and self._state.pis.next_station_arrival_utc == pis.next_station_arrival_utc
-        ):
+        if dataclasses.asdict(self._state.pis) == dataclasses.asdict(pis):
             return
         self._state.pis = pis
         await self._push_context_delta()
