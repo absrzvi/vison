@@ -129,3 +129,51 @@ async def test_wire_one_callback_per_camera(tmp_path: Path) -> None:
 
     assert len(callbacks) == 2
     assert {cb.camera_id for cb in callbacks} == {"C1", "C2"}
+
+
+@pytest.mark.unit
+def test_readiness_false_before_first_buffer(cameras_file: Path) -> None:
+    """M6/M7: ReadinessHolder starts False after wire() — pipeline hasn't fired yet.
+
+    In production, InferencePipeline._dispatch sets ready=True on the first buffer.
+    This test verifies the bootstrap path doesn't pre-flip readiness.
+    """
+    import asyncio
+
+    from inference.main import _load_cameras, wire
+
+    settings = Settings(cameras_json_path=str(cameras_file))
+    cameras = _load_cameras(str(cameras_file))
+    readiness = ReadinessHolder(ready=False)
+    loop_holder = LoopHolder(loop=None)
+
+    async def _run() -> None:
+        async with httpx.AsyncClient() as client:
+            wire(settings, cameras, client, readiness, loop_holder)
+
+    asyncio.run(_run())
+    assert readiness.ready is False, (
+        "readiness must stay False until InferencePipeline._dispatch fires on first buffer"
+    )
+
+
+@pytest.mark.unit
+def test_callback_stores_rtsp_url(cameras_file: Path) -> None:
+    """M2/P-M16: OccupancyCallback stores _rtsp_url from cameras config so
+    InferencePipeline can pass the real RTSP URI to GStreamer uridecodebin."""
+    import asyncio
+
+    from inference.main import _load_cameras, wire
+
+    settings = Settings(cameras_json_path=str(cameras_file))
+    cameras = _load_cameras(str(cameras_file))
+    readiness = ReadinessHolder(ready=False)
+    loop_holder = LoopHolder(loop=None)
+
+    async def _run() -> str:
+        async with httpx.AsyncClient() as client:
+            _, _, callbacks, _ = wire(settings, cameras, client, readiness, loop_holder)
+            return callbacks[0]._rtsp_url
+
+    url = asyncio.run(_run())
+    assert url == "rtsp://test/1"

@@ -120,6 +120,9 @@ class OccupancyCallback:
         self._camera_id = str(camera["camera_id"])
         self._car_id = str(camera["coach_id"])
         self._priority = str(camera.get("priority", "P1"))
+        # M2/P-M16: RTSP URL stored here so InferencePipeline can pass it to GStreamer
+        # without re-reading cameras.json (single source of truth).
+        self._rtsp_url = str(camera.get("rtsp_url", ""))
 
         if not zone_masks:
             log.critical(

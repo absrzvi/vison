@@ -14,7 +14,7 @@
     },
     {
       "camera_id": "C1_INT_01",
-      "coach_id": "car-1",
+      "coach_id": "car-2",
       "rtsp_url": "rtsp://cam-host:554/stream/C1_INT_01",
       "zone": "interior",
       "priority": "P2",
@@ -25,7 +25,7 @@
     },
     {
       "camera_id": "C1_EXT_01",
-      "coach_id": "car-1",
+      "coach_id": "car-3",
       "rtsp_url": "rtsp://cam-host:554/stream/C1_EXT_01",
       "zone": "exterior",
       "priority": "P3",

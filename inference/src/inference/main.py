@@ -68,11 +68,10 @@ def wire(
     imported only by main(), not by wire() — so unit tests can call wire() without
     TAPPAS installed.
 
-    NOTE: P-M16 / M1 still pending hardware day — main.py currently calls wire()
-    twice (bootstrap + lifespan) which constructs two Budget/JourneyHolder/ZoneCounter
-    instances. The HTTP layer in the bootstrap app points at the bootstrap Budget;
-    streaming threads point at the lifespan one. This will be fixed when P-M16
-    rewrites the deploy topology.
+    M1/M12 fix: this is now called ONCE, inside lifespan, where the running loop and
+    real httpx client both exist. The bootstrap path (before lifespan) only creates
+    the bare FastAPI app shell and the shared holders; no ZoneCounter or httpx client
+    is built until the asyncio loop is up.
     """
     journey_holder = journey_holder or JourneyHolder(journey_id=settings.journey_id)
     zone_counter = ZoneCounter(
@@ -101,6 +100,37 @@ def wire(
     return budget, journey_holder, callbacks, app
 
 
+def _make_pipeline_thread(
+    callback: OccupancyCallback,
+    settings: Settings,
+    readiness: ReadinessHolder,
+) -> threading.Thread:
+    """Return a daemon thread that runs one InferencePipeline.
+
+    M6/M7 fix: readiness is set True only when the pipeline thread signals it on first
+    successful buffer (via the ReadinessHolder), NOT immediately after t.start(). On
+    pipeline crash the thread wraps pipeline.run() in try/except and flips ready→False.
+    """
+    from inference.pipeline import InferencePipeline  # noqa: PLC0415
+
+    pipeline = InferencePipeline(callback=callback, settings=settings, readiness=readiness)
+
+    def _run() -> None:
+        try:
+            pipeline.run()
+        except Exception as exc:
+            log.critical(
+                "main.pipeline_crashed",
+                camera_id=callback.camera_id,
+                error=str(exc),
+            )
+        finally:
+            readiness.ready = False
+            log.warning("main.pipeline_exited", camera_id=callback.camera_id)
+
+    return threading.Thread(target=_run, name=f"gst-{callback.camera_id}", daemon=True)
+
+
 def main() -> None:  # pragma: no cover — integration entry point
     settings = Settings()
     cameras = _load_cameras(settings.cameras_json_path)
@@ -111,38 +141,40 @@ def main() -> None:  # pragma: no cover — integration entry point
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         loop_holder.loop = asyncio.get_running_loop()
         async with httpx.AsyncClient(timeout=5.0) as client:
-            # Rewire with the real client now that the loop is up.
-            _, _, callbacks, _ = wire(settings, cameras, client, readiness, loop_holder)
+            # M1 fix: single wire() call here, where the running loop and real httpx
+            # client both exist. Bootstrap below constructs only the app shell.
+            budget, journey_holder, callbacks, wired_app = wire(
+                settings, cameras, client, readiness, loop_holder
+            )
+            # Swap the health/context routes into the already-created app object so
+            # uvicorn's reference stays valid.
+            app.router.routes = wired_app.router.routes
             app.state.event_client = client
             app.state.callbacks = callbacks
 
-            from inference.pipeline import InferencePipeline  # noqa: PLC0415
-
-            for cb in callbacks:
-                pipeline = InferencePipeline(callback=cb, settings=settings)
-                t = threading.Thread(
-                    target=pipeline.run, name=f"gst-{cb.camera_id}", daemon=True
-                )
+            threads = [
+                _make_pipeline_thread(cb, settings, readiness) for cb in callbacks
+            ]
+            for t in threads:
                 t.start()
 
-            readiness.ready = True
-            log.info("main.pipelines_started", count=len(callbacks))
+            log.info("main.pipeline_threads_started", count=len(threads))
             try:
                 yield
             finally:
                 readiness.ready = False
                 loop_holder.loop = None
 
-    # FastAPI needs an app object before the loop runs. The httpx client and callbacks
-    # built here are throwaway — lifespan rebuilds them with the real loop. We discard
-    # the app produced by this wire() call and build a clean one wired only with the
-    # readiness/budget the lifespan needs to expose health endpoints.
-    bootstrap_client = httpx.AsyncClient(timeout=5.0)
-    try:
-        _, _, _, app = wire(settings, cameras, bootstrap_client, readiness, loop_holder)
-    finally:
-        asyncio.run(bootstrap_client.aclose())
-
+    # M12 fix: bootstrap builds only the bare app shell (ReadinessHolder + placeholder
+    # budget/journey). No ZoneCounter or httpx.AsyncClient is constructed here.
+    # lifespan replaces the routes once the real loop is running.
+    _bootstrap_budget = Budget(settings=settings)
+    _bootstrap_journey = JourneyHolder(journey_id=settings.journey_id)
+    app = build_app(
+        readiness=readiness,
+        budget=_bootstrap_budget,
+        journey_holder=_bootstrap_journey,
+    )
     app.router.lifespan_context = lifespan
     uvicorn.run(app, host="127.0.0.1", port=settings.context_push_port)
 

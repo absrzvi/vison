@@ -8,6 +8,7 @@ oebb_shared.events.envelope — same shape as rtsp-ingest (E4-S3) post-f6d377c.
 """
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
@@ -82,6 +83,12 @@ class ZoneCounter:
         # POST chain (retries included) is still draining. Prevents POST pile-up
         # and out-of-order envelopes during event-store outages.
         self._in_flight: dict[str, bool] = {car_id: False for car_id in self._states}
+        # M4: per-car asyncio.Lock guards the state-mutation→POST critical section.
+        # Without this, a second update() for the same car arriving during an await
+        # can clobber occupancy_count/pct before _check_threshold reads prev_count.
+        self._locks: dict[str, asyncio.Lock] = {
+            car_id: asyncio.Lock() for car_id in self._states
+        }
 
     def update_journey_id(self, journey_id: str) -> None:
         """Update the journey_id used for outbound envelopes (M13 — /context push)."""
@@ -92,40 +99,43 @@ class ZoneCounter:
         if car_id not in self._states:
             return
 
-        state = self._states[car_id]
-        prev_count = state.occupancy_count
+        # M4: per-car lock prevents a second update() arriving during an await from
+        # clobbering occupancy_count/pct before _check_threshold reads prev_count.
+        async with self._locks[car_id]:
+            state = self._states[car_id]
+            prev_count = state.occupancy_count
 
-        # Count unique person track IDs. None ids are filtered (callback already drops
-        # them; this is defence in depth).
-        person_tracks: set[int] = {
-            d["track_id"]
-            for d in detections
-            if d.get("label") == "person" and d.get("track_id") is not None
-        }
-        state.active_tracks = person_tracks
-        state.occupancy_count = len(person_tracks)
-        # Capacity is guaranteed > 0 by constructor.
-        state.occupancy_pct = min(state.occupancy_count / state.capacity, 1.0)
+            # Count unique person track IDs. None ids are filtered (callback already drops
+            # them; this is defence in depth).
+            person_tracks: set[int] = {
+                d["track_id"]
+                for d in detections
+                if d.get("label") == "person" and d.get("track_id") is not None
+            }
+            state.active_tracks = person_tracks
+            state.occupancy_count = len(person_tracks)
+            # Capacity is guaranteed > 0 by constructor.
+            state.occupancy_pct = min(state.occupancy_count / state.capacity, 1.0)
 
-        # 1 Hz rate limit per car.
-        now = time.monotonic()
-        if now - self._last_emit.get(car_id, 0.0) < 1.0:
-            return
+            # 1 Hz rate limit per car.
+            now = time.monotonic()
+            if now - self._last_emit.get(car_id, 0.0) < 1.0:
+                return
 
-        # M9: skip new emit if previous POST chain for this car is still in flight
-        # (event-store outage retries can run for ~30s; without this guard, next
-        # 1 Hz window would launch a parallel POST and out-of-order envelopes).
-        if self._in_flight.get(car_id, False):
-            log.warning("zone_counter.skip_in_flight", car_id=car_id)
-            return
+            # M9: skip new emit if previous POST chain for this car is still in flight
+            # (event-store outage retries can run for ~30s; without this guard, next
+            # 1 Hz window would launch a parallel POST and out-of-order envelopes).
+            if self._in_flight.get(car_id, False):
+                log.warning("zone_counter.skip_in_flight", car_id=car_id)
+                return
 
-        self._last_emit[car_id] = now
-        self._in_flight[car_id] = True
-        try:
-            await self._post_occupancy_update(state)
-            await self._check_threshold(car_id, prev_count, state.occupancy_count)
-        finally:
-            self._in_flight[car_id] = False
+            self._last_emit[car_id] = now
+            self._in_flight[car_id] = True
+            try:
+                await self._post_occupancy_update(state)
+                await self._check_threshold(car_id, prev_count, state.occupancy_count)
+            finally:
+                self._in_flight[car_id] = False
 
     @DEFAULT_RETRY
     async def _post_occupancy_update(self, state: OccupancyState) -> None:

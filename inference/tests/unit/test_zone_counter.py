@@ -372,3 +372,57 @@ async def test_in_flight_skip_during_retries(
         zc._last_emit["car-1"] = 0.0
         await zc.update("car-1", [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}])
         assert not route.called  # skipped, no parallel POST
+
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_per_car_lock_exists(
+    settings: Settings, cameras: list[dict[str, Any]], client: httpx.AsyncClient
+) -> None:
+    """M4: ZoneCounter must create one asyncio.Lock per car_id at construction."""
+    import asyncio
+
+    from inference.zone_counter import ZoneCounter
+
+    zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
+    assert "car-1" in zc._locks
+    assert isinstance(zc._locks["car-1"], asyncio.Lock)
+
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_multi_coach_each_tracked(settings: Settings, client: httpx.AsyncClient) -> None:
+    """M3: cameras with distinct coach_ids each create their own OccupancyState.
+
+    Previously all 3 cameras in cameras.json had coach_id='car-1', causing ZoneCounter
+    to silently drop cameras 2 and 3.
+    """
+    from inference.zone_counter import ZoneCounter
+
+    multi_cameras = [
+        {
+            "camera_id": "C1",
+            "coach_id": "car-1",
+            "zone": "door",
+            "priority": "P1",
+            "capacity": 200,
+        },
+        {
+            "camera_id": "C2",
+            "coach_id": "car-2",
+            "zone": "interior",
+            "priority": "P2",
+            "capacity": 180,
+        },
+        {
+            "camera_id": "C3",
+            "coach_id": "car-3",
+            "zone": "exterior",
+            "priority": "P3",
+            "capacity": 50,
+        },
+    ]
+    zc = ZoneCounter(cameras=multi_cameras, settings=settings, event_store_client=client)
+    assert set(zc._states.keys()) == {"car-1", "car-2", "car-3"}
+    assert zc._states["car-2"].capacity == 180
+    assert zc._states["car-3"].capacity == 50
