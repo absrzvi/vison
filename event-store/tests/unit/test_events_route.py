@@ -11,7 +11,7 @@ from event_store.database import get_connection, init_db
 from event_store.main import app
 
 _VALID_ENVELOPE = {
-    "event_id": "evt-test-001",
+    "event_id": "a1b2c3d4-e5f6-4789-abcd-ef1234567890",
     "journey_id": "V001_RJ-0001_20260517",
     "vehicle_id": "V001",
     "timestamp": "2026-05-17T10:00:00Z",
@@ -19,7 +19,14 @@ _VALID_ENVELOPE = {
     "severity": "info",
     "source": "inference",
     "schema_version": 1,
-    "payload": {"car_id": "car-1", "occupancy_pct": 0.72},
+    "payload": {
+        "car_id": "car-1",
+        "zone": None,
+        "occupancy_count": 144,
+        "occupancy_pct": 0.72,
+        "capacity": 200,
+        "service_tier": "standard",
+    },
 }
 
 
@@ -43,7 +50,7 @@ def test_post_event_returns_201(client: TestClient) -> None:
     r = client.post("/api/v1/events", json=_VALID_ENVELOPE)
     assert r.status_code == 201
     body = r.json()
-    assert body["event_id"] == "evt-test-001"
+    assert body["event_id"] == "a1b2c3d4-e5f6-4789-abcd-ef1234567890"
     assert body["stored"] is True
 
 

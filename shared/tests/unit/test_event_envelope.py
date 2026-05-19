@@ -54,7 +54,7 @@ def _make_envelope(**overrides: object) -> EventEnvelope:
 
 
 @pytest.mark.unit
-def test_event_type_has_17_members() -> None:
+def test_event_type_has_23_members() -> None:
     expected = {
         "OCCUPANCY_UPDATE",
         "OCCUPANCY_THRESHOLD_CROSSED",
@@ -73,9 +73,18 @@ def test_event_type_has_17_members() -> None:
         "CAMERA_DEGRADED",
         "CAMERA_RECOVERED",
         "SYNC_COMPLETED",
+        # ADR-17
+        "WAGON_EXIT",
+        "WAGON_ENTRY",
+        "LEDGER_DRIFT_ALERT",
+        # ADR-15
+        "CALIBRATION_DRIFT",
+        # ADR-18
+        "COACH_COMFORT_INDEX",
+        "STREAM_PRIORITY",
     }
     assert {e.value for e in EventType} == expected
-    assert len(EventType) == 17
+    assert len(EventType) == 23
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +153,7 @@ def test_envelope_invalid_source_raises() -> None:
 @pytest.mark.unit
 def test_payload_models_registry_complete() -> None:
     assert set(PAYLOAD_MODELS.keys()) == set(EventType)
-    assert len(PAYLOAD_MODELS) == 17
+    assert len(PAYLOAD_MODELS) == 23
 
 
 # ---------------------------------------------------------------------------

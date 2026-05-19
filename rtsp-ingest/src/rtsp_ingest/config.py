@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     cameras_json_path: str = "cameras.json"
+    vehicle_id: str = "OBB-TEST"
     tops_budget_pct_threshold: float = 0.90
     tops_total: float = 26.0
     p1_fps: float = 10.0

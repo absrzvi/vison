@@ -44,7 +44,10 @@ async def test_degraded_posts_camera_degraded_event() -> None:
     settings = make_settings()
     scheduler = Scheduler(cameras, settings)
     pipeline = Pipeline(
-        cameras=cameras, scheduler=scheduler, event_store_url="http://event-store:8000"
+        cameras=cameras,
+        scheduler=scheduler,
+        event_store_url="http://event-store:8000",
+        vehicle_id="OBB-TEST",
     )
 
     with respx.mock:
@@ -56,6 +59,9 @@ async def test_degraded_posts_camera_degraded_event() -> None:
     assert route.called
     payload = json.loads(route.calls[0].request.content)
     assert payload["event_type"] == "CAMERA_DEGRADED"
+    assert payload["vehicle_id"] == "OBB-TEST"
+    assert payload["severity"] == "warning"
+    assert "journey_id" in payload
     assert payload["payload"]["camera_id"] == "C1_DOOR_01"
     assert payload["payload"]["coach_id"] == "car-1"
     assert "reason" in payload["payload"]
@@ -68,7 +74,10 @@ async def test_recovered_posts_camera_recovered_event() -> None:
     settings = make_settings()
     scheduler = Scheduler(cameras, settings)
     pipeline = Pipeline(
-        cameras=cameras, scheduler=scheduler, event_store_url="http://event-store:8000"
+        cameras=cameras,
+        scheduler=scheduler,
+        event_store_url="http://event-store:8000",
+        vehicle_id="OBB-TEST",
     )
 
     with respx.mock:
@@ -80,6 +89,8 @@ async def test_recovered_posts_camera_recovered_event() -> None:
     assert route.called
     payload = json.loads(route.calls[0].request.content)
     assert payload["event_type"] == "CAMERA_RECOVERED"
+    assert payload["vehicle_id"] == "OBB-TEST"
+    assert payload["severity"] == "info"
     assert payload["payload"]["camera_id"] == "C1_DOOR_01"
 
 

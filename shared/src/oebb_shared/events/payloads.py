@@ -1,4 +1,4 @@
-"""Pydantic payload models for all 17 OEBB event types.
+"""Pydantic payload models for all 23 OEBB event types.
 
 Field names and types match event-payload-schemas.md exactly.
 Optional fields (e.g. confidence) are excluded from serialisation when not set.
@@ -306,6 +306,84 @@ class SyncCompletedPayload(_BasePayload):
 
 
 # ---------------------------------------------------------------------------
+# ADR-17 — Inter-wagon movement payloads
+# ---------------------------------------------------------------------------
+
+DirectionStr = Literal["forward", "backward"]
+
+
+class WagonExitPayload(_BasePayload):
+    """WAGON_EXIT — person tracked crossing from one coach to the next."""
+
+    track_id: int
+    coach_from: _NonEmptyStr
+    coach_to: _NonEmptyStr
+    camera_id: _NonEmptyStr
+    direction: DirectionStr
+    confidence: Annotated[float, Field(ge=0.0, le=1.0)]
+
+
+class WagonEntryPayload(_BasePayload):
+    """WAGON_ENTRY — same track_id confirmed entering adjacent coach."""
+
+    track_id: int
+    coach_from: _NonEmptyStr
+    coach_to: _NonEmptyStr
+    camera_id: _NonEmptyStr
+    direction: DirectionStr
+    confidence: Annotated[float, Field(ge=0.0, le=1.0)]
+
+
+class LedgerDriftAlertPayload(_BasePayload):
+    """LEDGER_DRIFT_ALERT — closed-ledger reconciliation variance exceeded."""
+
+    car_id: _NonEmptyStr
+    camera_count: int
+    ledger_count: int
+    delta: int
+    threshold: int
+
+
+# ---------------------------------------------------------------------------
+# ADR-15 — APC calibration drift payload
+# ---------------------------------------------------------------------------
+
+
+class CalibrationDriftPayload(_BasePayload):
+    """CALIBRATION_DRIFT — camera vs APC delta exceeds threshold."""
+
+    car_id: _NonEmptyStr
+    camera_count: int
+    apc_count: int
+    delta: int
+    threshold: int
+
+
+# ---------------------------------------------------------------------------
+# ADR-18 — Comfort scoring and stream priority payloads
+# ---------------------------------------------------------------------------
+
+
+class CoachComfortIndexPayload(_BasePayload):
+    """COACH_COMFORT_INDEX — composite comfort score for a coach."""
+
+    car_id: _NonEmptyStr
+    comfort_score: Annotated[float, Field(ge=0.0, le=1.0)]
+    occupancy_pct: Annotated[float, Field(ge=0.0, le=1.0)]
+    temperature_c: float | None = None
+    noise_db: float | None = None
+
+
+class StreamPriorityPayload(_BasePayload):
+    """STREAM_PRIORITY — internal signal only; never written to event-store."""
+
+    camera_ids: list[str]
+    priority: Literal["P1", "P2", "P3"]
+    duration_s: float
+    reason: _NonEmptyStr
+
+
+# ---------------------------------------------------------------------------
 # Registry: EventType → payload model class
 # ---------------------------------------------------------------------------
 
@@ -327,4 +405,13 @@ PAYLOAD_MODELS: dict[EventType, type[_BasePayload]] = {
     EventType.CAMERA_DEGRADED: CameraDegradedPayload,
     EventType.CAMERA_RECOVERED: CameraRecoveredPayload,
     EventType.SYNC_COMPLETED: SyncCompletedPayload,
+    # ADR-17
+    EventType.WAGON_EXIT: WagonExitPayload,
+    EventType.WAGON_ENTRY: WagonEntryPayload,
+    EventType.LEDGER_DRIFT_ALERT: LedgerDriftAlertPayload,
+    # ADR-15
+    EventType.CALIBRATION_DRIFT: CalibrationDriftPayload,
+    # ADR-18
+    EventType.COACH_COMFORT_INDEX: CoachComfortIndexPayload,
+    EventType.STREAM_PRIORITY: StreamPriorityPayload,
 }

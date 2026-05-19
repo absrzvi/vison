@@ -27,3 +27,13 @@ class EventType(StrEnum):
     CAMERA_DEGRADED = "CAMERA_DEGRADED"
     CAMERA_RECOVERED = "CAMERA_RECOVERED"
     SYNC_COMPLETED = "SYNC_COMPLETED"
+    # Inter-wagon movement (ADR-17)
+    WAGON_EXIT = "WAGON_EXIT"
+    WAGON_ENTRY = "WAGON_ENTRY"
+    LEDGER_DRIFT_ALERT = "LEDGER_DRIFT_ALERT"
+    # APC calibration drift (ADR-15)
+    CALIBRATION_DRIFT = "CALIBRATION_DRIFT"
+    # Comfort scoring (ADR-18)
+    COACH_COMFORT_INDEX = "COACH_COMFORT_INDEX"
+    # Internal stream priority signal (ADR-18; never written to event-store)
+    STREAM_PRIORITY = "STREAM_PRIORITY"

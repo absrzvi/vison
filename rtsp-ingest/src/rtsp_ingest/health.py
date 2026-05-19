@@ -6,10 +6,11 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from .gate import Gate
+from .pipeline import Pipeline
 from .scheduler import Scheduler
 
 
-def build_app(scheduler: Scheduler, gate: Gate) -> FastAPI:
+def build_app(scheduler: Scheduler, gate: Gate, pipeline: Pipeline) -> FastAPI:
     app = FastAPI(title="rtsp-ingest", version="0.1.0")
 
     @app.get("/health/ready")
@@ -35,6 +36,9 @@ def build_app(scheduler: Scheduler, gate: Gate) -> FastAPI:
             )
         else:
             gate.on_context_update(payload)
+        # Keep pipeline journey_id in sync with vlan-pollers context pushes
+        if journey_id := payload.get("journey_id"):
+            pipeline.set_journey_id(str(journey_id))
         return JSONResponse(content={"status": "ok"})
 
     return app

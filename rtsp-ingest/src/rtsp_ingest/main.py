@@ -47,11 +47,12 @@ _pipeline = Pipeline(
     cameras=_cameras,
     scheduler=_scheduler,
     event_store_url=settings.event_store_url,
+    vehicle_id=settings.vehicle_id,
 )
 
 _bg_tasks: list[asyncio.Task[None]] = []
 
-app: FastAPI = build_app(scheduler=_scheduler, gate=_gate)
+app: FastAPI = build_app(scheduler=_scheduler, gate=_gate, pipeline=_pipeline)
 
 
 @asynccontextmanager

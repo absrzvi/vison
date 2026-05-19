@@ -1424,7 +1424,7 @@ oebb-smart-rail/
 | 03 — Capacity flag form | `conductor-app/js/capacity-flag.js`, `event-store/routes/events.py` |
 | 04 — Control Centre analytics | `cloud-backend/routes/analytics.py`, `control-centre/src/components/analytics/CapacityPanel.tsx` |
 | 05 — Passenger portal load guidance | `passenger-portal/js/train-diagram.js`, `fusion/occupancy.py` |
-| 06 — Accessibility boarding | `fusion/accessibility.py`, `inference/pose.py`, `conductor-app/js/accessibility.js`, `passenger-portal/js/accessibility-guidance.js` |
+| 06 — Accessibility boarding | `fusion/accessibility.py`, `inference/callback.py` (bounding box heuristic; pose deferred post-PoC), `conductor-app/js/accessibility.js`, `passenger-portal/js/accessibility-guidance.js` |
 | 10 — Station dwell | `vlan-pollers/context_state.py`, `pis-templates/exterior/dwell-states.html`, `pis-templates/interior/dwell-states.html` |
 
 ---

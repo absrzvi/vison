@@ -73,7 +73,8 @@ def test_context_post_malformed_payload_returns_422() -> None:
     cameras = [CameraConfig("C1", "car-1", "rtsp://h/s", "door", Priority.P1)]
     sched = Scheduler(cameras, settings)
     gate = MagicMock()
-    app = build_app(sched, gate)
+    pipeline = MagicMock()
+    app = build_app(sched, gate, pipeline)
     client = TestClient(app)
     r = client.post("/context", content=b"not-json", headers={"content-type": "application/json"})
     assert r.status_code == 422

@@ -1,7 +1,7 @@
 """Tests for health.py — readiness endpoint and context dispatch."""
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -9,6 +9,7 @@ from rtsp_ingest import health
 from rtsp_ingest.config import Settings
 from rtsp_ingest.gate import Gate
 from rtsp_ingest.models import CameraConfig, Priority
+from rtsp_ingest.pipeline import Pipeline
 from rtsp_ingest.scheduler import Scheduler
 
 
@@ -52,10 +53,14 @@ def make_gate(cameras: list[CameraConfig]) -> Gate:
     )
 
 
+def make_pipeline() -> Pipeline:
+    return MagicMock(spec=Pipeline)
+
+
 def make_client(cameras: list[CameraConfig]) -> TestClient:
     gate = make_gate(cameras)
     scheduler = gate._scheduler
-    app = health.build_app(scheduler=scheduler, gate=gate)
+    app = health.build_app(scheduler=scheduler, gate=gate, pipeline=make_pipeline())
     return TestClient(app)
 
 
@@ -83,7 +88,7 @@ def test_context_post_dispatches_to_gate() -> None:
     scheduler = gate._scheduler
 
     with patch.object(gate, "on_context_update") as mock_update:
-        app = health.build_app(scheduler=scheduler, gate=gate)
+        app = health.build_app(scheduler=scheduler, gate=gate, pipeline=make_pipeline())
         client = TestClient(app)
         resp = client.post("/context", json={"speed_kmh": 15.0, "next_station": "Wien Hbf"})
         assert resp.status_code == 200
@@ -96,7 +101,7 @@ def test_context_post_door_release_dispatches_to_gate() -> None:
     scheduler = gate._scheduler
 
     with patch.object(gate, "on_door_release") as mock_release:
-        app = health.build_app(scheduler=scheduler, gate=gate)
+        app = health.build_app(scheduler=scheduler, gate=gate, pipeline=make_pipeline())
         client = TestClient(app)
         resp = client.post(
             "/context",
@@ -111,7 +116,7 @@ def test_context_post_malformed_payload_returns_422() -> None:
     cameras = make_cameras()
     gate = make_gate(cameras)
     scheduler = gate._scheduler
-    app = health.build_app(scheduler=scheduler, gate=gate)
+    app = health.build_app(scheduler=scheduler, gate=gate, pipeline=make_pipeline())
     client = TestClient(app)
     resp = client.post(
         "/context",

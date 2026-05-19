@@ -4,7 +4,7 @@ import sqlite3
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from oebb_shared.events.envelope import EventEnvelope
+from oebb_shared.events.envelope import EventEnvelope, EventModel
 
 from ..database import get_events_page, insert_event
 from ..deps import get_db
