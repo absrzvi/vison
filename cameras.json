@@ -1,0 +1,29 @@
+{
+  "cameras": [
+    {
+      "camera_id": "C1_DOOR_01",
+      "coach_id": "car-1",
+      "rtsp_url": "rtsp://cam-host:554/stream/C1_DOOR_01",
+      "zone": "door",
+      "priority": "P1"
+    },
+    {
+      "camera_id": "C1_INT_01",
+      "coach_id": "car-1",
+      "rtsp_url": "rtsp://cam-host:554/stream/C1_INT_01",
+      "zone": "interior",
+      "priority": "P2"
+    },
+    {
+      "camera_id": "C1_EXT_01",
+      "coach_id": "car-1",
+      "rtsp_url": "rtsp://cam-host:554/stream/C1_EXT_01",
+      "zone": "exterior",
+      "priority": "P3"
+    }
+  ],
+  "door_camera_map": {
+    "door-1A": ["C1_DOOR_01"],
+    "door-1B": ["C1_EXT_01"]
+  }
+}

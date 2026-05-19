@@ -1,0 +1,7 @@
+pyproject.toml
+src/rtsp_ingest/__init__.py
+src/rtsp_ingest.egg-info/PKG-INFO
+src/rtsp_ingest.egg-info/SOURCES.txt
+src/rtsp_ingest.egg-info/dependency_links.txt
+src/rtsp_ingest.egg-info/requires.txt
+src/rtsp_ingest.egg-info/top_level.txt
