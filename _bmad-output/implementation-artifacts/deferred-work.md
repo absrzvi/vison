@@ -1,5 +1,19 @@
 # Deferred Work
 
+## Deferred to E4-S6 (fusion) from story 4-4 party mode (2026-05-19)
+
+- **Coach-level "occupancy signal lost" health indicator.** Trigger: coach is in scheduled service AND zero detections for >5 minutes. Visualisation: amber badge on Control Centre map; "?" instead of occupancy bar on Conductor App. Promote to red when correlated with APC door-cycle events (APC says boarding happened, camera says zero → confirmed fault). Owns cross-VLAN correlation: APC + camera + scheduled service window. Per ADR-18 this lives in fusion, not inference.
+
+## Deferred from: META code review of story 4-4 — commit d861d45 (2026-05-19)
+
+- M18 capacity `int()` truncates floats and accepts strings — minor type-strictness cleanup
+- M19 Polygon shape validation (concave / self-intersecting / collinear / negative coords) at startup — config validation cross-cut
+- M21 OccupancyState restart resets to 0.0 — false rising fire on already-crowded restart; state persistence is out of 4-4 scope
+- M23 pipeline.py is coverage-omitted; integration boundary untested. Requires a TAPPAS test fixture / hardware-in-loop — E4 hardware bring-up
+- M24 test_threshold_falling_emits_event drives via private-state mutation rather than real update() chain — test refactor
+- M25 test_no_loop_yet_skips_dispatch indistinguishable outcome from budget-suppress / hailo-None tests — test sharpening
+- M26 AST `os.environ.get` checks not extended to main.py/health.py — currently only required for business-logic modules per Rule 8
+
 ## Deferred from: code review of story 4-4 (2026-05-19)
 
 - cameras.json includes `priority="P3"` but budget only handles "P2" — priority tier system out of scope for 4-4

@@ -1,6 +1,6 @@
 # Story 4.4: inference Detection, Tracking & Occupancy Events
 
-Status: review
+Status: in-progress
 
 ## Story
 
@@ -12,7 +12,7 @@ so that real-time per-coach headcounts are available to the Control Centre Dashb
 
 1. **Pipeline readiness gate:** Given `pipeline.py` initialises, when the `GStreamerDetectionApp` subclass starts and `yolov8m.hef` is loaded, then `GET /health/ready` returns HTTP 200 with `{"status": "ready", "hailo_initialised": true}`; if GStreamer pipeline fails to start or model is absent it returns HTTP 503 with `recoverable: false`.
 
-2. **Detection filtering in callback:** Given a GStreamer buffer is received in the Python `handoff` callback, when `callback.py` processes the `HailoROI` metadata, then only detections of class `person`, `suitcase`, `bicycle` are forwarded to `zone_counter.py`; detections outside the camera's configured `seat_zones` polygon are discarded.
+2. **Detection filtering in callback:** Given a GStreamer buffer is received in the Python `handoff` callback, when `callback.py` processes the `HailoROI` metadata, then only detections of class `person` are forwarded to `zone_counter.py` (D1 verdict — suitcase/bicycle/wheelchair move to E4-S5); detections outside the camera's configured `seat_zones` polygon are discarded.
 
 3. **Static zone masks loaded at startup:** Given `pipeline.py` loads zone masks for a coach, when `cameras.json` is parsed at startup, then each camera entry includes a `seat_zones` array of static polygon masks; these masks are loaded once and never updated per-frame; `zone_counter.py` uses them to classify persons as seated or standing (ADR-16); if zone configs are missing for any configured coach the container refuses to start (logged at CRITICAL).
 
@@ -140,7 +140,7 @@ from hailo_apps_infra.hailo_rpi_common import get_numpy_from_buffer
 roi = hailo.get_roi_from_buffer(buffer)
 for det in roi.get_objects_typed(hailo.HAILO_DETECTION):
     track_id = det.get_objects_typed(hailo.HAILO_UNIQUE_ID)[0].get_id()
-    label = det.get_label()   # "person", "suitcase", "bicycle"
+    label = det.get_label()   # "person" only in 4-4; other classes are E4-S5 scope
     bbox = det.get_bbox()
 ```
 
@@ -155,8 +155,12 @@ class Settings(BaseSettings):
     occupancy_capacity_default: int = 200
     tops_total: float = 26.0
     tops_budget_pct_threshold: float = 0.90
-    detection_classes: list[str] = ["person", "suitcase", "bicycle"]
+    detection_classes: list[str] = ["person"]   # D1: person-only in 4-4
     model_hef_path: str = "/models/yolov8m.hef"
+    service_tier: str = "standard"               # D2: sourced from env, not hardcoded
+    occupancy_deadband_count: int = 3            # P-M10: symmetric count-based deadband
+    frame_width: int = 640                       # P-M20: pixel-space bbox verification
+    frame_height: int = 480
 ```
 
 ### cameras.json Extension
@@ -178,15 +182,28 @@ class Settings(BaseSettings):
 
 ### Event Envelope Pattern
 
+The canonical envelope is the Pydantic `EventEnvelope` model in
+`shared/src/oebb_shared/events/envelope.py` (9 fields, `extra: "forbid"`). All
+edge producers (rtsp-ingest, inference, vlan-pollers) MUST construct events via
+this model — no hand-built dicts. Built and serialised as:
+
 ```python
-envelope = {
-    "event_id": str(uuid.uuid4()),
-    "event_type": event_type,
-    "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    "source": "inference",
-    "payload": payload,
-}
-await client.post(f"{settings.event_store_url}/api/v1/events", json=envelope)
+from oebb_shared.events import EventEnvelope, EventType
+
+envelope = EventEnvelope(
+    journey_id=journey_holder.journey_id,   # mutable; updated via POST /context
+    vehicle_id=settings.vehicle_id,
+    event_type=EventType.OCCUPANCY_UPDATE,
+    severity="info",                         # Literal["critical","warning","info"]
+    source="inference",                      # Literal[...]
+    schema_version=1,
+    payload=payload.model_dump(),            # canonical payload model from oebb_shared.events
+)
+resp = await client.post(
+    f"{settings.event_store_url}/api/v1/events",
+    json=envelope.model_dump(mode="json"),
+)
+resp.raise_for_status()                      # surface 5xx so DEFAULT_RETRY engages
 ```
 
 ### Module Responsibilities
@@ -312,6 +329,50 @@ claude-sonnet-4-6
 - 2026-05-19: Implemented — 7 modules, 46 unit tests, 97% coverage, mypy strict clean, ruff clean
 - 2026-05-19: Code review (Opus 4.7, 3 parallel layers — Blind Hunter, Edge Case Hunter, Acceptance Auditor). 3 decision-needed, 16 patch, 6 defer. Quality gates pass numerically but reviewers found 4 critical architectural breaks: pipeline never starts, async callback signature mismatch with GStreamer sync handoff, multi-camera support collapses to one, polygon hit-test absent.
 - 2026-05-19: Decisions resolved via party-mode (Winston/Amelia/Freya). D1: person-only in 4-4; D2: omit confidence (canonical _drop_none) + service_tier via Settings; D3: align to canonical 9-field EventEnvelope. All 19 patches applied: sync callback dispatching via `asyncio.run_coroutine_threadsafe(loop_holder.loop)`; one OccupancyCallback per camera; ray-casting polygon hit-test; DEFAULT_RETRY + raise_for_status on both POSTs; mutable ReadinessHolder; FastAPI lifespan owns httpx; StrictBool ContextPushModel; respx.mock for all HTTP tests. Re-run: 59 unit tests, 99.29% coverage (pipeline.py excluded), mypy strict 0 errors, ruff 0 violations.
+- 2026-05-19: META code review on commit d861d45 (Opus 4.7, 3 parallel layers). Quality gates pass numerically but **4 new critical bugs surfaced in the rewrite itself**: dual Budget instance in main.py (P2 throttle silently dead); SOURCE_PIPELINE(cameras_json_path) passes JSON path where TAPPAS expects video URI (integration broken by construction); cameras.json has 3 cameras sharing coach_id="car-1" → ZoneCounter silently drops 2 of 3; OccupancyState mutation race without lock. Plus polygon edge-test bug, false readiness gate, retry pile-up, spec drift. 3 decision-needed, 13 patch, 7 defer, 2 dismissed. Story moved back to in-progress.
+
+### Meta-Review Findings (commit d861d45)
+
+**Critical**
+- [ ] [Review][Patch] **M1** Dual `Budget` instance — bootstrap `wire()` in main.py:126-133 builds Budget#1 wired into FastAPI `/context`; lifespan rewire builds Budget#2 wired into callbacks. `POST /context` updates the dead one; streaming threads consult the live one. P2 throttling silently broken. Fix: single bootstrap that constructs Budget + ReadinessHolder + LoopHolder once, lifespan only fills in httpx client and starts pipeline threads. [main.py:101, main.py:126-133]
+- [ ] [Review][Patch] **M2** `SOURCE_PIPELINE(settings.cameras_json_path)` — passes the JSON file path as a video URI. GStreamer builds an invalid `filesrc location=cameras.json ! decodebin ! ...`. Each per-camera `InferencePipeline` also gets the same path, no per-camera RTSP URL plumbing. Fix: extract `rtsp_url` per camera from the parsed cameras list and pass that. [pipeline.py:54, main.py:107-109]
+- [ ] [Review][Patch] **M3** `cameras.json` has 3 cameras all with `coach_id="car-1"`. `ZoneCounter.__init__` does `if car_id in self._states: continue` → silently drops cameras 2 and 3 (their `capacity`, `zone`, etc.). `active_tracks` is overwritten not unioned. Either: (a) split coaches across the 3 cameras (fix cameras.json data), or (b) change `OccupancyState` to be per-camera or fuse multi-camera per-coach with union semantics. [zone_counter.py:47-67, cameras.json]
+- [ ] [Review][Patch] **M4** `OccupancyState` mutation race — `update()` mutates `state.occupancy_count/pct`, then awaits POST. If a second `update()` for same `car_id` arrives during the await (guaranteed given M3), `state.occupancy_pct` is clobbered before `_check_threshold` reads it. Add `asyncio.Lock` per `car_id` or restructure so state mutation and POST share an atomic critical section. [zone_counter.py:79-97]
+
+**Important**
+- [ ] [Review][Patch] **M5** `_point_in_polygon` excludes edge and vertex hits despite docstring claiming "Points exactly on an edge are treated as inside". Standard ray-cast `(yi > y) != (yj > y)` with strict `>` fails for points with `y == yi`. All polygons in `cameras.json` are axis-aligned rectangles, so any centroid landing exactly on a horizontal edge is wrongly excluded. Fix: either update the docstring to "edge behaviour is implementation-defined and may exclude" OR implement true edge inclusion. [callback.py:37-53]
+- [ ] [Review][Patch] **M6/M7** `readiness.ready = True` set immediately after `t.start()` — does not wait for hailonet load. Daemon thread has no exception hook; pipeline.run() crash leaves `/health/ready` reporting 200 forever. Fix: have the pipeline thread set readiness True on first successful buffer (via a `pipeline_thread_started` event); wrap `pipeline.run()` in try/except that flips readiness False on exit and logs CRITICAL. [main.py:107-115]
+- [ ] [Review][Patch] **M8** Spec drift after D1/D3 — story file AC2 (line 15) still says "person, suitcase, bicycle"; Dev Notes §Event Envelope (lines 179-189) still shows the 5-field hand-built dict; Dev Notes line 158 still has `detection_classes: list[str] = ["person", "suitcase", "bicycle"]`. P-D3 patch description claimed spec would be updated; the rewrite missed it. [4-4 spec AC2, Dev Notes 143/158/179-189]
+- [ ] [Review][Patch] **M9** `@DEFAULT_RETRY` pile-up — `_last_emit[car_id] = now` is set BEFORE the awaited POST. Under event-store outage, retries run for seconds; next `update()` (1s later) is admitted and starts another POST while the previous retry chain is still in flight. Adds out-of-order envelopes. Fix: track in-flight POST per car_id, skip new emits while previous is retrying. [zone_counter.py:94-97]
+- [ ] [Review][Patch] **M11** `run_coroutine_threadsafe` during shutdown — `finally: loop_holder.loop = None` while daemon GStreamer thread still firing. Between holder-None and process exit, a frame can hit `RuntimeError("Event loop is closed")` if it reads non-None just before clear. Wrap the schedule call in try/except RuntimeError. [callback.py:158-160, main.py:117-120]
+- [ ] [Review][Patch] **M12** Bootstrap `httpx.AsyncClient` constructed without a running loop, then closed via `asyncio.run(client.aclose())`. DeprecationWarning + wasted work + bootstrap ZoneCounter holds a closed client (currently unreached but landmine for any future refactor). Replace with: don't build a real ZoneCounter in bootstrap; just construct Budget + ReadinessHolder and return a minimal app. [main.py:126-130]
+- [ ] [Review][Patch] **M13** `ContextPushModel.journey_id` is accepted but ignored — `budget.on_context_update` only reads `p2_throttled`. Trip starts arrive from vlan-pollers but never flow to `settings.journey_id`; events keep emitting placeholder `OBB-TEST_unknown_19700101`. Wire `journey_id` to a `JourneyHolder` and re-thread through ZoneCounter envelope building. [health.py:48-50]
+- [ ] [Review][Patch] **M14** `_wait_for_call` test helper has dead code (`deadline` computed via `get_event_loop()` then `del`'d), uses deprecated `get_event_loop()` outside coroutine (DeprecationWarning), falls through silently on timeout. Replace with a synchronous busy-wait that ASSERTS on timeout, not just falls through. [test_callback.py:126-135]
+- [ ] [Review][Patch] **M15** `test_5xx_response_raises_after_retry` asserts the exception escapes but never verifies retries actually ran — `route.call_count` not checked. Removing `@DEFAULT_RETRY` would still pass. Assert `route.call_count >= 2`. [test_zone_counter.py:222-233]
+- [ ] [Review][Patch] **M17** Capacity validation accepts `True` (bool subclass of int → `int(True)=1`). A misconfigured `capacity: true` becomes capacity=1, every detected person trips threshold. Add `isinstance(cap_raw, bool)` rejection before `int()`. [zone_counter.py:51-57]
+
+**Decision-needed**
+- [x] [Review][Decision-resolved] **M10** Deadband chosen. **Verdict:** symmetric, count-based, default **±3 people** (operator-trust width per Freya), configurable via `INFERENCE_OCCUPANCY_DEADBAND_COUNT`. **Internal state only** — no change to canonical `OccupancyThresholdCrossedPayload` (keeps the shared contract clean; engineering metadata flows through structured logs not the public schema). Becomes Patch P-M10 below.
+- [x] [Review][Decision-resolved] **M16** Deploy posture. **Verdict:** one TAPPAS pipeline with **N RTSP sources multiplexed** via `uridecodebin × N` → `videorate` (per-camera-class fps, default **3 fps**, configurable per camera) → `hailoroundrobin` (or `funnel` with stream-id) → single `hailonet` yolov8m.hef `batch_size=8` → `hailotracker` (stream-id aware, per-source state) → per-stream Python callback. Mirror `rtsp-ingest/src/rtsp_ingest/pipeline.py` decode topology. ONE VDevice context per process — N separate `InferencePipeline` instances is not supported on a single Hailo-8. Hardware verification of `hailotracker` stream-id semantics deferred to first hardware day. Becomes Patch P-M16 below (architectural — rewrites pipeline.py and main.py).
+- [x] [Review][Decision-resolved] **M20** Bbox coordinate space — **Verdict:** pixel-only with first-frame startup assertion (`0 ≤ x ≤ frame_width and 0 ≤ y ≤ frame_height`); `# HARDWARE-VERIFY: bbox coord space` comment at parse site. No config flag, no auto-detect (Karpathy §2 — no speculative flexibility). If hardware comes back normalized, one multiplication switches it. Becomes Patch P-M20 below.
+- [x] [Review][Decision-resolved] **Freya's coach-level health indicator** ("occupancy signal lost when zero detections during scheduled service" with door-cycle correlation) — **out of 4-4 scope**, logged to deferred-work for E4-S6 (fusion) which already owns cross-VLAN correlation per ADR-18.
+
+- [ ] [Review][Patch] **P-M10** Add `Settings.occupancy_deadband_count: int = 3`. In `zone_counter._check_threshold`, change comparison to count-based with deadband: rising fires when `prev_count <= threshold_count - deadband AND new_count >= threshold_count + deadband`; symmetric for falling. Track raw counts not just pct. Internal state only — no schema field. Update unit tests with the boundary cases. [zone_counter.py:128-145, config.py]
+- [ ] [Review][Patch] **P-M16** Rewrite `pipeline.py` + `main.py` for single-pipeline multi-source topology. Read `rtsp-ingest/src/rtsp_ingest/pipeline.py` for the canonical fanout pattern and mirror it. ONE `InferencePipeline` instance regardless of camera count. Pass per-camera RTSP URLs (not the JSON path) into the pipeline construction. Each callback dispatch keyed by `stream-id` from `hailotracker` metadata. Default `videorate=3 fps` per camera, overridable via per-camera config. Resolves M1 (dual Budget — only one wire() call), M2 (SOURCE_PIPELINE was being passed JSON path), and the "30 pipelines on 1 chip" question simultaneously. [pipeline.py, main.py]
+- [ ] [Review][Patch] **P-M20** Pixel-only bboxes. Add first-frame assertion in `OccupancyCallback.__call__` that x/y are within `[0, frame_width|height]` for the first batch; on violation, log CRITICAL with offending bbox + frame dims and flip readiness False. Add `# HARDWARE-VERIFY: bbox coord space` comment at the bbox extraction site. No config flag. [callback.py:135-150]
+
+**Deferred**
+- [x] [Review][Defer] M18 `int(cap_raw)` truncates `200.5` and accepts `"200"` — inconsistent typing — deferred, minor cleanup
+- [x] [Review][Defer] M19 Concave / self-intersecting / collinear polygon validation at startup — deferred, config validation cross-cut
+- [x] [Review][Defer] M21 OccupancyState starts at 0.0 — false rising fire on restart with crowded coach — deferred, state persistence out of 4-4 scope
+- [x] [Review][Defer] M23 pipeline.py is coverage-omitted; integration boundary untested — deferred, requires TAPPAS test fixture (E4 hardware bring-up scope)
+- [x] [Review][Defer] M24 test_threshold_falling_emits_event drives via private-state mutation — deferred, test refactor
+- [x] [Review][Defer] M25 test_no_loop_yet_skips_dispatch doesn't differentiate no-loop vs other early returns — deferred, test sharpening
+- [x] [Review][Defer] M26 AST os.environ.get checks not extended to main.py/health.py — deferred, only required for business modules per Rule 8
+
+**Dismissed**
+- M22 `sys.exit(1)` from within wire() — currently safe ordering, caught by uvicorn
+- M27 pipeline.py validator over-strict on whitespace-in-env-var — caller error, not a code issue
 
 ### Review Findings
 

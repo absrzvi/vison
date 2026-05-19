@@ -34,15 +34,41 @@ except ImportError:  # pragma: no cover
     hailo = None  # noqa: F841
 
 
-def _point_in_polygon(x: float, y: float, polygon: list[list[int]]) -> bool:
-    """Ray-casting point-in-polygon. Returns True if (x,y) lies inside polygon.
+def _on_segment(
+    x: float, y: float, x1: float, y1: float, x2: float, y2: float
+) -> bool:
+    """Return True if (x,y) lies on the line segment (x1,y1)-(x2,y2) (inclusive)."""
+    # Collinear check via cross product == 0 with a small tolerance.
+    cross = (y - y1) * (x2 - x1) - (x - x1) * (y2 - y1)
+    if abs(cross) > 1e-9:
+        return False
+    # Within bounding box of the segment (inclusive).
+    return (
+        min(x1, x2) - 1e-9 <= x <= max(x1, x2) + 1e-9
+        and min(y1, y2) - 1e-9 <= y <= max(y1, y2) + 1e-9
+    )
 
-    Points exactly on an edge are treated as inside (deterministic for repeated frames).
+
+def _point_in_polygon(x: float, y: float, polygon: list[list[int]]) -> bool:
+    """Ray-casting point-in-polygon.
+
+    Points exactly on an edge or vertex are treated as inside (M5 fix — the
+    previous ray-cast formula used strict ``>`` comparisons and silently
+    excluded points sitting on horizontal edges or vertices).
     """
     if len(polygon) < 3:
         return False
-    inside = False
+
+    # Explicit edge-inclusion check first — guarantees boundary points are inside
+    # regardless of ray-cast parity behaviour on horizontal edges / vertex hits.
     n = len(polygon)
+    for i in range(n):
+        x1, y1 = polygon[i][0], polygon[i][1]
+        x2, y2 = polygon[(i + 1) % n][0], polygon[(i + 1) % n][1]
+        if _on_segment(x, y, x1, y1, x2, y2):
+            return True
+
+    inside = False
     j = n - 1
     for i in range(n):
         xi, yi = polygon[i][0], polygon[i][1]
@@ -105,9 +131,36 @@ class OccupancyCallback:
 
         self._allowed_labels: frozenset[str] = frozenset(settings.detection_classes)
 
+        # P-M20: bbox coord space verification — first-frame range check.
+        # HARDWARE-VERIFY: Hailo bbox space (pixel vs normalized) confirmed on first
+        # hardware day. If hardware emits normalized (0..1), this assertion fires
+        # loudly so we know to switch.
+        self._bbox_space_verified: bool = False
+
     @property
     def camera_id(self) -> str:
         return self._camera_id
+
+    def _verify_bbox_space(self, bbox: tuple[float, float, float, float]) -> bool:
+        """First-frame bbox-range check. Returns False on violation (caller drops frame).
+
+        Pixel space expected: 0 <= x <= frame_width, 0 <= y <= frame_height.
+        Logs CRITICAL on first violation, sets a sticky flag so we don't log per frame.
+        """
+        x_min, y_min, x_max, y_max = bbox
+        w, h = self._settings.frame_width, self._settings.frame_height
+        if not (0 <= x_min <= w and 0 <= x_max <= w and 0 <= y_min <= h and 0 <= y_max <= h):
+            if not self._bbox_space_verified:  # log once, not per frame
+                log.critical(
+                    "callback.bbox_out_of_pixel_range",
+                    camera_id=self._camera_id,
+                    bbox=bbox,
+                    expected_max=(w, h),
+                    hint="bboxes may be normalized (0..1) — switch coord space",
+                )
+                self._bbox_space_verified = True
+            return False
+        return True
 
     def __call__(self, buffer: Any, user_data: Any) -> None:
         """Sync handoff entry point. GStreamer fires this from the streaming thread."""
@@ -138,11 +191,15 @@ class OccupancyCallback:
                 uid_list = det.get_objects_typed(hailo.HAILO_UNIQUE_ID)
                 track_id = uid_list[0].get_id() if uid_list else None
                 bbox_obj = det.get_bbox()
+                # HARDWARE-VERIFY: bbox coord space — see _verify_bbox_space.
                 bbox = (bbox_obj.xmin(), bbox_obj.ymin(), bbox_obj.xmax(), bbox_obj.ymax())
             except Exception:  # pragma: no cover
                 continue
 
             if track_id is None:
+                continue
+
+            if not self._verify_bbox_space(bbox):
                 continue
 
             if not _bbox_in_any_zone(bbox, self._zone_masks):
@@ -155,8 +212,17 @@ class OccupancyCallback:
             log.warning("callback.no_loop_yet", camera_id=self._camera_id)
             return
 
-        fut = asyncio.run_coroutine_threadsafe(
-            self._zone_counter.update(self._car_id, accepted),
-            loop,
-        )
-        fut.add_done_callback(_on_post_done)
+        # M11: loop may be closing between the None check and the schedule call
+        # (shutdown TOCTOU). Catch RuntimeError so the streaming thread doesn't crash.
+        try:
+            fut = asyncio.run_coroutine_threadsafe(
+                self._zone_counter.update(self._car_id, accepted),
+                loop,
+            )
+            fut.add_done_callback(_on_post_done)
+        except RuntimeError as exc:
+            log.warning(
+                "callback.schedule_during_shutdown",
+                camera_id=self._camera_id,
+                error=str(exc),
+            )

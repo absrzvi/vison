@@ -7,18 +7,28 @@ import pytest
 from fastapi.testclient import TestClient
 
 from inference.budget import Budget
-from inference.models import ReadinessHolder
+from inference.models import JourneyHolder, ReadinessHolder
 
 
 def make_budget() -> MagicMock:
     return MagicMock(spec=Budget)
 
 
-def make_client(ready: bool, budget: MagicMock | None = None) -> TestClient:
+def make_client(
+    ready: bool,
+    budget: MagicMock | None = None,
+    journey_holder: JourneyHolder | None = None,
+) -> TestClient:
     from inference.health import build_app
 
-    holder = ReadinessHolder(ready=ready)
-    return TestClient(build_app(readiness=holder, budget=budget or make_budget()))
+    readiness = ReadinessHolder(ready=ready)
+    return TestClient(
+        build_app(
+            readiness=readiness,
+            budget=budget or make_budget(),
+            journey_holder=journey_holder or JourneyHolder(journey_id="OBB-TEST_t1_20260519"),
+        )
+    )
 
 
 @pytest.mark.unit
@@ -47,10 +57,30 @@ def test_readiness_reflects_holder_flip() -> None:
     from inference.health import build_app
 
     holder = ReadinessHolder(ready=True)
-    client = TestClient(build_app(readiness=holder, budget=make_budget()))
+    client = TestClient(
+        build_app(
+            readiness=holder,
+            budget=make_budget(),
+            journey_holder=JourneyHolder(journey_id="OBB-TEST_t1_20260519"),
+        )
+    )
     assert client.get("/health/ready").status_code == 200
     holder.ready = False
     assert client.get("/health/ready").status_code == 503
+
+
+@pytest.mark.unit
+def test_context_push_updates_journey_holder() -> None:
+    """M13: POST /context with a journey_id mutates the shared holder so subsequent
+    envelopes pick up the new trip."""
+    journey = JourneyHolder(journey_id="OBB-TEST_t1_20260519")
+    client = make_client(ready=True, journey_holder=journey)
+    r = client.post(
+        "/context",
+        json={"p2_throttled": False, "journey_id": "OBB-TEST_t2_20260520"},
+    )
+    assert r.status_code == 200
+    assert journey.journey_id == "OBB-TEST_t2_20260520"
 
 
 @pytest.mark.unit

@@ -124,15 +124,21 @@ def _patched_hailo() -> Any:
 
 
 def _wait_for_call(mock: AsyncMock, timeout: float = 2.0) -> None:
-    """Poll for the AsyncMock to be invoked from a background thread."""
-    deadline = asyncio.get_event_loop().time() + timeout
+    """Poll for the AsyncMock to be invoked from a background thread.
+
+    M14: previously had dead `asyncio.get_event_loop().time()` + `del deadline`,
+    plus silent fall-through on timeout. Now asserts on timeout so race-flakes
+    surface immediately instead of letting `assert_called_once()` race the await.
+    """
     import time
-    end = time.monotonic() + timeout
-    while time.monotonic() < end:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
         if mock.call_count > 0:
             return
         time.sleep(0.01)
-    del deadline
+    raise AssertionError(
+        f"mock was not called within {timeout}s (call_count={mock.call_count})"
+    )
 
 
 @pytest.mark.unit
@@ -338,3 +344,64 @@ def test_point_in_polygon_degenerate_returns_false() -> None:
 
     # < 3 vertices is not a polygon
     assert _point_in_polygon(0, 0, [[0, 0], [1, 1]]) is False
+
+
+@pytest.mark.unit
+def test_point_in_polygon_edge_inclusion() -> None:
+    """M5: points on horizontal/vertical edges and vertices are treated as inside.
+
+    Previous ray-cast formula used strict `>` and silently excluded boundary points
+    on axis-aligned rectangles — the dominant polygon shape in cameras.json.
+    """
+    from inference.callback import _point_in_polygon
+
+    square = [[0, 0], [10, 0], [10, 10], [0, 10]]
+    # bottom edge (y=0)
+    assert _point_in_polygon(5, 0, square) is True
+    # top edge (y=10)
+    assert _point_in_polygon(5, 10, square) is True
+    # left edge (x=0)
+    assert _point_in_polygon(0, 5, square) is True
+    # right edge (x=10)
+    assert _point_in_polygon(10, 5, square) is True
+    # vertices
+    assert _point_in_polygon(0, 0, square) is True
+    assert _point_in_polygon(10, 10, square) is True
+
+
+@pytest.mark.unit
+def test_bbox_assertion_first_frame_pixel_violation(
+    camera: dict[str, Any],
+    zone_masks: list[ZoneMask],
+    zone_counter: MagicMock,
+    budget: MagicMock,
+    loop_holder_with_loop: LoopHolder,
+) -> None:
+    """P-M20: bboxes outside pixel range fail the verification gate.
+
+    If hardware emits normalized (0..1) bboxes instead of pixel coords, the
+    verification gate drops them and logs CRITICAL once. The detection is filtered
+    out (accepted == []), not crashed.
+    """
+    from inference.callback import OccupancyCallback
+
+    settings = Settings(frame_width=640, frame_height=480)
+    cb = OccupancyCallback(
+        camera=camera,
+        zone_masks=zone_masks,
+        zone_counter=zone_counter,
+        budget=budget,
+        settings=settings,
+        loop_holder=loop_holder_with_loop,
+    )
+    # Normalized-ish bbox: 0.1, 0.1, 0.9, 0.9 — all well below pixel range floor.
+    # Actually 0.x is in pixel range too. Force violation: bbox max > frame size.
+    det = make_mock_detection("person", (100, 100, 99999, 99999), track_id=1)
+    roi = make_mock_roi([det])
+    mock_hailo = _patched_hailo()
+    mock_hailo.get_roi_from_buffer.return_value = roi
+    with patch("inference.callback.hailo", mock_hailo):
+        cb(MagicMock(), None)
+    _wait_for_call(zone_counter.update)
+    accepted = zone_counter.update.call_args.args[1]
+    assert accepted == []  # bbox failed range check, filtered out

@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, StrictBool
 
 from inference.budget import Budget
-from inference.models import ReadinessHolder
+from inference.models import JourneyHolder, ReadinessHolder
 
 log = structlog.get_logger(__name__)
 
@@ -21,11 +21,17 @@ class ContextPushModel(BaseModel):
     journey_id: str | None = None
 
 
-def build_app(readiness: ReadinessHolder, budget: Budget) -> FastAPI:
+def build_app(
+    readiness: ReadinessHolder,
+    budget: Budget,
+    journey_holder: JourneyHolder,
+) -> FastAPI:
     """Build the FastAPI app.
 
     readiness is a mutable holder so main.py can flip pipeline_ready from True→False
-    if the GStreamer pipeline crashes after startup.
+    if the GStreamer pipeline crashes after startup. journey_holder is mutated when
+    /context push carries a new journey_id (M13 — keeps outbound envelopes tied to
+    the live trip without container restart).
     """
     app = FastAPI(title="inference-health")
 
@@ -47,6 +53,9 @@ def build_app(readiness: ReadinessHolder, budget: Budget) -> FastAPI:
     @app.post("/context")
     def context_push(payload: ContextPushModel) -> dict[str, str]:
         budget.on_context_update(payload.model_dump(exclude_none=True))
+        if payload.journey_id is not None:
+            journey_holder.journey_id = payload.journey_id
+            log.info("context_push.journey_id_updated", journey_id=payload.journey_id)
         return {"status": "accepted"}
 
     return app

@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from inference.config import Settings
-from inference.models import LoopHolder, ReadinessHolder
+from inference.models import JourneyHolder, LoopHolder, ReadinessHolder
 
 
 @pytest.fixture
@@ -81,9 +81,12 @@ async def test_wire_returns_budget_callbacks_app(cameras_file: Path) -> None:
     loop_holder = LoopHolder(loop=None)
 
     async with httpx.AsyncClient() as client:
-        budget, callbacks, app = wire(settings, cameras, client, readiness, loop_holder)
+        budget, journey_holder, callbacks, app = wire(
+            settings, cameras, client, readiness, loop_holder
+        )
 
     assert isinstance(budget, Budget)
+    assert isinstance(journey_holder, JourneyHolder)
     assert len(callbacks) == 1
     assert isinstance(callbacks[0], OccupancyCallback)
     assert isinstance(app, FastAPI)
@@ -122,7 +125,7 @@ async def test_wire_one_callback_per_camera(tmp_path: Path) -> None:
     loop_holder = LoopHolder(loop=None)
 
     async with httpx.AsyncClient() as client:
-        _, callbacks, _ = wire(settings, cameras, client, readiness, loop_holder)
+        _, _, callbacks, _ = wire(settings, cameras, client, readiness, loop_holder)
 
     assert len(callbacks) == 2
     assert {cb.camera_id for cb in callbacks} == {"C1", "C2"}

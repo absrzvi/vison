@@ -23,7 +23,7 @@ from inference.budget import Budget
 from inference.callback import OccupancyCallback
 from inference.config import Settings
 from inference.health import build_app
-from inference.models import LoopHolder, ReadinessHolder, ZoneMask
+from inference.models import JourneyHolder, LoopHolder, ReadinessHolder, ZoneMask
 from inference.zone_counter import ZoneCounter
 
 log = structlog.get_logger(__name__)
@@ -60,13 +60,27 @@ def wire(
     event_client: httpx.AsyncClient,
     readiness: ReadinessHolder,
     loop_holder: LoopHolder,
-) -> tuple[Budget, list[OccupancyCallback], FastAPI]:
+    journey_holder: JourneyHolder | None = None,
+) -> tuple[Budget, JourneyHolder, list[OccupancyCallback], FastAPI]:
     """Wire components together. One OccupancyCallback per camera.
 
-    Returns (budget, [callbacks...], FastAPI app). pipeline.py is imported only by main(),
-    not by wire() — so unit tests can call wire() without TAPPAS installed.
+    Returns (budget, journey_holder, [callbacks...], FastAPI app). pipeline.py is
+    imported only by main(), not by wire() — so unit tests can call wire() without
+    TAPPAS installed.
+
+    NOTE: P-M16 / M1 still pending hardware day — main.py currently calls wire()
+    twice (bootstrap + lifespan) which constructs two Budget/JourneyHolder/ZoneCounter
+    instances. The HTTP layer in the bootstrap app points at the bootstrap Budget;
+    streaming threads point at the lifespan one. This will be fixed when P-M16
+    rewrites the deploy topology.
     """
-    zone_counter = ZoneCounter(cameras=cameras, settings=settings, event_store_client=event_client)
+    journey_holder = journey_holder or JourneyHolder(journey_id=settings.journey_id)
+    zone_counter = ZoneCounter(
+        cameras=cameras,
+        settings=settings,
+        event_store_client=event_client,
+        journey_holder=journey_holder,
+    )
     budget = Budget(settings=settings)
 
     callbacks: list[OccupancyCallback] = []
@@ -83,8 +97,8 @@ def wire(
             )
         )
 
-    app = build_app(readiness=readiness, budget=budget)
-    return budget, callbacks, app
+    app = build_app(readiness=readiness, budget=budget, journey_holder=journey_holder)
+    return budget, journey_holder, callbacks, app
 
 
 def main() -> None:  # pragma: no cover — integration entry point
@@ -98,7 +112,7 @@ def main() -> None:  # pragma: no cover — integration entry point
         loop_holder.loop = asyncio.get_running_loop()
         async with httpx.AsyncClient(timeout=5.0) as client:
             # Rewire with the real client now that the loop is up.
-            _, callbacks, _ = wire(settings, cameras, client, readiness, loop_holder)
+            _, _, callbacks, _ = wire(settings, cameras, client, readiness, loop_holder)
             app.state.event_client = client
             app.state.callbacks = callbacks
 
@@ -125,7 +139,7 @@ def main() -> None:  # pragma: no cover — integration entry point
     # readiness/budget the lifespan needs to expose health endpoints.
     bootstrap_client = httpx.AsyncClient(timeout=5.0)
     try:
-        _, _, app = wire(settings, cameras, bootstrap_client, readiness, loop_holder)
+        _, _, _, app = wire(settings, cameras, bootstrap_client, readiness, loop_holder)
     finally:
         asyncio.run(bootstrap_client.aclose())
 

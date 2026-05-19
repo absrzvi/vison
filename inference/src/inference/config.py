@@ -28,6 +28,16 @@ class Settings(BaseSettings):
     # P-D2: service_tier sourced via env INFERENCE_SERVICE_TIER, not hardcoded.
     service_tier: str = "standard"
 
+    # P-M10: symmetric count-based deadband on threshold crossings (party-mode verdict).
+    # rising fires when count crosses threshold+deadband; falling at threshold-deadband.
+    occupancy_deadband_count: int = 3
+
+    # P-M20: bbox coordinate space — pixel-only with first-frame range assertion.
+    # If hardware turns out to emit normalized bboxes, flip these to 1.0 and add
+    # a multiplication. HARDWARE-VERIFY on first Hailo-8 day.
+    frame_width: int = 640
+    frame_height: int = 480
+
     # journey_id must match {vehicle_id}_{trip_number}_{YYYYMMDD} per ADR-2 / EventEnvelope.
     # Default is a syntactically-valid placeholder; production sets via vlan-pollers context push
     # once a real trip is observed (same pattern as rtsp-ingest).

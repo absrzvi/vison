@@ -38,6 +38,19 @@ class LoopHolder:
 
 
 @dataclass
+class JourneyHolder:
+    """Mutable journey_id reference updated by POST /context.
+
+    Production trip changes arrive from vlan-pollers as context pushes; the
+    holder lets the running ZoneCounter pick up new journey_ids without a
+    container restart. journey_id must satisfy the canonical EventEnvelope
+    validator (``{vehicle_id}_{trip_number}_{YYYYMMDD}``).
+    """
+
+    journey_id: str
+
+
+@dataclass
 class OccupancyState:
     """Per-car occupancy state maintained by ZoneCounter."""
 

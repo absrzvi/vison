@@ -22,7 +22,7 @@ from oebb_shared.events import (
 from oebb_shared.http.retry import DEFAULT_RETRY
 
 from inference.config import Settings
-from inference.models import OccupancyState
+from inference.models import JourneyHolder, OccupancyState
 
 log = structlog.get_logger(__name__)
 
@@ -35,9 +35,15 @@ class ZoneCounter:
         cameras: list[dict[str, Any]],
         settings: Settings,
         event_store_client: httpx.AsyncClient,
+        journey_holder: JourneyHolder | None = None,
     ) -> None:
         self._settings = settings
         self._client = event_store_client
+        # M13: journey_id may be updated at runtime by POST /context. Holder ties
+        # outbound envelopes to the live trip without a container restart.
+        self._journey_holder = journey_holder or JourneyHolder(
+            journey_id=settings.journey_id
+        )
 
         # Build per-car state from cameras config. Capacity is validated at startup;
         # capacity <= 0 is a config error and refuses to start.
@@ -47,6 +53,12 @@ class ZoneCounter:
             if car_id in self._states:
                 continue
             cap_raw = cam.get("capacity", settings.occupancy_capacity_default)
+            # M17: bool is a subclass of int — int(True)=1 would silently produce
+            # capacity=1 and trip thresholds on a single person. Reject explicitly.
+            if isinstance(cap_raw, bool):
+                raise ValueError(
+                    f"Invalid capacity for car_id={car_id!r}: bool {cap_raw!r}"
+                )
             try:
                 capacity = int(cap_raw)
             except (TypeError, ValueError) as exc:
@@ -66,6 +78,14 @@ class ZoneCounter:
         self._last_emit: dict[str, float] = {car_id: 0.0 for car_id in self._states}
         # (car_id, threshold) → last emitted direction ("rising"|"falling"|None)
         self._threshold_state: dict[tuple[str, float], str | None] = {}
+        # M9: per-car in-flight flag — suppresses new emits while a previous
+        # POST chain (retries included) is still draining. Prevents POST pile-up
+        # and out-of-order envelopes during event-store outages.
+        self._in_flight: dict[str, bool] = {car_id: False for car_id in self._states}
+
+    def update_journey_id(self, journey_id: str) -> None:
+        """Update the journey_id used for outbound envelopes (M13 — /context push)."""
+        self._journey_holder.journey_id = journey_id
 
     async def update(self, car_id: str, detections: list[dict[str, Any]]) -> None:
         """Update zone counts from track IDs and emit events if rate allows."""
@@ -73,7 +93,7 @@ class ZoneCounter:
             return
 
         state = self._states[car_id]
-        prev_pct = state.occupancy_pct
+        prev_count = state.occupancy_count
 
         # Count unique person track IDs. None ids are filtered (callback already drops
         # them; this is defence in depth).
@@ -91,10 +111,21 @@ class ZoneCounter:
         now = time.monotonic()
         if now - self._last_emit.get(car_id, 0.0) < 1.0:
             return
-        self._last_emit[car_id] = now
 
-        await self._post_occupancy_update(state)
-        await self._check_threshold(car_id, prev_pct, state.occupancy_pct)
+        # M9: skip new emit if previous POST chain for this car is still in flight
+        # (event-store outage retries can run for ~30s; without this guard, next
+        # 1 Hz window would launch a parallel POST and out-of-order envelopes).
+        if self._in_flight.get(car_id, False):
+            log.warning("zone_counter.skip_in_flight", car_id=car_id)
+            return
+
+        self._last_emit[car_id] = now
+        self._in_flight[car_id] = True
+        try:
+            await self._post_occupancy_update(state)
+            await self._check_threshold(car_id, prev_count, state.occupancy_count)
+        finally:
+            self._in_flight[car_id] = False
 
     @DEFAULT_RETRY
     async def _post_occupancy_update(self, state: OccupancyState) -> None:
@@ -122,19 +153,31 @@ class ZoneCounter:
         resp.raise_for_status()
 
     async def _check_threshold(
-        self, car_id: str, prev_pct: float, new_pct: float
+        self, car_id: str, prev_count: int, new_count: int
     ) -> None:
-        threshold = self._settings.occupancy_threshold_pct
-        key: tuple[str, float] = (car_id, threshold)
+        """Count-based threshold crossing with symmetric deadband (P-M10).
+
+        Threshold is converted to absolute people count using the car's capacity.
+        Rising fires when count crosses ``threshold_count + deadband`` from below.
+        Falling fires when count crosses ``threshold_count - deadband`` from above.
+        The ±deadband zone in the middle is a stable region that does NOT emit.
+        """
+        state = self._states[car_id]
+        threshold_pct = self._settings.occupancy_threshold_pct
+        deadband = self._settings.occupancy_deadband_count
+        threshold_count = threshold_pct * state.capacity
+        rising_at = threshold_count + deadband
+        falling_at = threshold_count - deadband
+
+        key: tuple[str, float] = (car_id, threshold_pct)
         last_dir = self._threshold_state.get(key)
 
-        # Rising: <= on left side so prev_pct == threshold still triggers when we cross.
-        if prev_pct <= threshold <= new_pct and prev_pct < new_pct and last_dir != "rising":
+        if prev_count < rising_at <= new_count and last_dir != "rising":
             self._threshold_state[key] = "rising"
-            await self._fire_threshold_event(car_id, "rising", threshold)
-        elif prev_pct >= threshold >= new_pct and prev_pct > new_pct and last_dir != "falling":
+            await self._fire_threshold_event(car_id, "rising", threshold_pct)
+        elif prev_count > falling_at >= new_count and last_dir != "falling":
             self._threshold_state[key] = "falling"
-            await self._fire_threshold_event(car_id, "falling", threshold)
+            await self._fire_threshold_event(car_id, "falling", threshold_pct)
 
     @DEFAULT_RETRY
     async def _fire_threshold_event(
@@ -174,7 +217,7 @@ class ZoneCounter:
         # Cast severity to the canonical Literal at the boundary; envelope validates.
         sev: Any = severity
         return EventEnvelope(
-            journey_id=self._settings.journey_id,
+            journey_id=self._journey_holder.journey_id,
             vehicle_id=self._settings.vehicle_id,
             event_type=event_type,
             severity=sev,
