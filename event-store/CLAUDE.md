@@ -63,3 +63,5 @@ schema.sql    — authoritative schema; database.py executes this on startup
 **Authentication** (story 4-7): All `/api/v1/*` routes require `X-API-Key`. Health endpoints and `/ws` are open. Configure via `EVENT_STORE_API_KEY` env var. When unset, auth is bypassed and a startup WARN is logged (dev convenience).
 
 **WebSocket fan-out** (story 4-7): `/ws` accepts a `SubscriptionRequest` JSON as the first frame; replays the last `reconnect_replay_depth` events matching the filter; then streams live events as they are written via POST. The broadcaster uses a per-subscriber `asyncio.Queue(maxsize=256)` — slow consumers have events dropped (logged + counter) rather than blocking the writer path.
+
+**Sync cursor endpoint** (story 4-CS1): `POST /api/v1/sync/cursor` advances `sync_state.last_synced_event_id` and triggers `truncate_old_journeys(retain=3)`. Used ONLY by the cloud-sync container. Body `{"last_event_id": "<uuid4>"}`. Auth-gated by `X-API-Key`. Idempotent: re-submitting the same id returns 200 with `truncated_journeys=0`. Unknown event_id → 400 `INVALID_CURSOR` (same ADR-10 envelope shape as the `?after=<unknown>` path).

@@ -15,6 +15,7 @@ from .routes.events import router as events_router
 from .routes.health import router as health_router
 from .routes.health import set_db_ready
 from .routes.journeys import router as journeys_router
+from .routes.sync import router as sync_router
 from .websocket.broadcaster import Broadcaster
 from .websocket.handler import websocket_endpoint
 
@@ -108,6 +109,7 @@ async def _schema_version_adr10_handler(
 app.include_router(health_router)
 app.include_router(events_router)
 app.include_router(journeys_router)
+app.include_router(sync_router)
 
 
 @app.websocket("/ws")
