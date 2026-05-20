@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: post-followup code review on 4-5-inference-safety-accessibility (2026-05-20, opus-4.7)
+
+- **S2** — `cameras.json:14` `vestibule_zone` polygon is identical to the `aisle` `seat_zones` polygon `[[200,300],[440,300],[440,480],[200,480]]`. Every person standing in the aisle is double-counted as in_vestibule, so VESTIBULE_CONGESTION will fire on aisle crowding rather than near-door clustering. Tolerable in the single-camera PoC (only one door camera, fixed simulator stream); real deployments need a near-door rectangle. Needs ops/UX polygon data — out of PoC scope. [cameras.json:14]
+- **S3** — Test hygiene: 5 `RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited` in `test_door_obstruction.py` and `test_vestibule_congestion.py`. Tests bind `resp.raise_for_status` as `AsyncMock` but production calls it synchronously (`resp.raise_for_status()` on httpx.Response). Fix is mechanical: bind as `MagicMock`. No production impact.
+
 ## Deferred from: code review follow-up on 4-5-inference-safety-accessibility (2026-05-20)
 
 - **R3 (PoC)** — `RampDeployedPayload.car_id` is sourced from `settings.vehicle_id` (whole train), not a coach-level identifier. vlan-pollers `POST /context` carries no per-coach signal. Resolution requires either (a) adding `ramp_car_id` to `ContextPushModel` with vlan-pollers cooperation or (b) injecting a `door_id → car_id` reverse map from `cameras.json` into `SafetyHandler`. Decision: ship as-is for PoC; revisit with E4-S6 (fusion) when ZFR per-coach signals are available. [safety.py module docstring; safety.py:55]

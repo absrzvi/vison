@@ -308,6 +308,45 @@ def test_invalid_event_type_raises() -> None:
 
 
 @pytest.mark.contract
+@pytest.mark.parametrize("door_state", ["open", "closing", "closed", "unknown"])
+def test_door_obstruction_door_state_literal_accepts_all_values(door_state: str) -> None:
+    """Contract guard for the DoorObstructionPayload.door_state Literal.
+
+    Story 4-5 (2026-05-20) extended the Literal from ["open","closing","closed"] to
+    include "unknown" because inference posts candidates to fusion before ZFR has
+    cross-referenced the door state. Pin all 4 valid values so a future contraction
+    breaks CI loudly (cloud-backend and event-store both deserialise this payload).
+    """
+    from oebb_shared.events.payloads import DoorObstructionPayload
+
+    p = DoorObstructionPayload(
+        car_id="car-1",
+        door_id="car-1-door-L-2",
+        obstruction_type="person",
+        track_id="person-0117",
+        camera_id="cam-1-door-L2",
+        door_state=door_state,  # type: ignore[arg-type]
+    )
+    assert p.model_dump()["door_state"] == door_state
+
+
+@pytest.mark.contract
+def test_door_obstruction_door_state_rejects_unknown_literal() -> None:
+    """door_state outside the Literal set must ValidationError, not silently coerce."""
+    from oebb_shared.events.payloads import DoorObstructionPayload
+
+    with pytest.raises(ValidationError, match="door_state"):
+        DoorObstructionPayload(
+            car_id="car-1",
+            door_id="car-1-door-L-2",
+            obstruction_type="person",
+            track_id="person-0117",
+            camera_id="cam-1-door-L2",
+            door_state="ajar",  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.contract
 def test_missing_severity_raises() -> None:
     with pytest.raises(ValidationError, match="severity"):
         EventEnvelope(

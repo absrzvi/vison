@@ -1,6 +1,6 @@
 # Story 4.5: `inference` Safety & Accessibility Detection
 
-Status: review
+Status: done
 
 ## Story
 
@@ -358,12 +358,15 @@ inference/tests/unit/test_door_obstruction.py
 inference/tests/unit/test_health.py
 cameras.json
 shared/src/oebb_shared/events/payloads.py
+shared/tests/contract/test_envelope_contract.py
 _bmad-output/implementation-artifacts/deferred-work.md
+_bmad-output/implementation-artifacts/4-5-code-review-2026-05-20-followup.md
 
 ### Change Log
 
 - 2026-05-19: Story 4-5 implemented — safety & accessibility detection: door obstruction (AC1), accessibility detected (AC2), ramp deployed (AC3), slip/fall (AC4), vestibule congestion (AC5), detection class expansion (AC6), quality gates (AC7)
 - 2026-05-20: Addressed code review findings — 20 items resolved (R1–R13/R19 + F1–F13/F-decision-merged). Key changes: dropped `_last_track_ids` correlation (R4), threaded `camera_id` through `ZoneCounter.update()` for multi-camera-per-car (R7), added optional `vestibule_zone` polygon to cameras.json schema (R5), `door_state="unknown"` per AC1 (R6), unique per-emit suitcase track_id (R12), strict `confidence is None` skip (R2), `loop_holder` threaded through `build_app()` (R9). 119 tests pass, coverage 91.03%, mypy/ruff clean.
+- 2026-05-20: Post-followup code review (Opus 4.7) — **APPROVED**. Added S1 contract tests for `DoorObstructionPayload.door_state` Literal in `shared/tests/contract/test_envelope_contract.py` (4 parametrized + 1 rejection). S2 (vestibule_zone polygon = aisle polygon in PoC cameras.json) and S3 (AsyncMock test-hygiene warnings) deferred to `deferred-work.md`. Story flipped `review → done`.
 
 ## Senior Developer Review (AI)
 
@@ -478,3 +481,54 @@ All R1-R13/R19 items addressed (see ticks above). Quality gates re-run on the sa
 | Shared regression (`oebb-shared`) | All pass | 125 PASS | PASS |
 
 R3 (car_id), R11, R15, R16, R17, R18, R20, R22 carry forward as deferred items in `deferred-work.md` under the 2026-05-20 heading. Status flipped `in-progress` → `review`.
+
+### Code Review (post-followup) — 2026-05-20
+
+**Reviewer:** Claude Opus 4.7 (1M context), fresh session, BMad `bmad-code-review` skill
+**Target:** commit `020e0cd` (20-patch series)
+**Outcome:** **APPROVE — recommend `review` → `done`** with two non-blocking should-fix follow-ups.
+**Full report:** [`4-5-code-review-2026-05-20-followup.md`](./4-5-code-review-2026-05-20-followup.md)
+
+Quality gates re-run cold this session (independent of dev agent claims):
+
+| Gate                                                | Required | Actual                | Status |
+|-----------------------------------------------------|----------|-----------------------|--------|
+| `mypy --strict src/` (inference)                    | 0 errors | 0 errors (10 files)   | PASS   |
+| `ruff check src/ tests/` (inference)                | 0        | 0                     | PASS   |
+| `pytest --strict-markers -q` (inference)            | All pass | 119 pass / 0 fail     | PASS   |
+| Coverage of `src/inference/` excl. `pipeline.py`    | ≥ 90 %   | 91.03 %               | PASS   |
+| `pytest -q` (shared)                                | All pass | 125 pass              | PASS   |
+
+All 7 ACs verified at file:line locations. All prior F1–F14 and R1–R13/R19 findings independently re-verified resolved. Adversarial layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor) raised:
+
+- **S1 (should-fix):** Schema `door_state` Literal extended (`"unknown"` added) without a contract test — `shared/CLAUDE.md` requires one. Add a 1-liner to `shared/tests/unit/test_event_envelope.py`.
+- **S2 (should-fix):** `cameras.json:14` `vestibule_zone` polygon is identical to the `aisle` seat-zone — every aisle person double-counted as in-vestibule. Replace with a near-door rectangle or document the demo configuration.
+- **S3–S5 (nice-to-have):** `RuntimeWarning` on un-awaited `AsyncMock.raise_for_status` (5 tests); legacy `camera_id=None` fallback in `_check_vestibule_congestion`; silent no-client return in `_post_door_obstruction_candidate`.
+
+No must-fix items. Project-rule compliance (Rule 8, fusion-vs-event-store routing, `DEFAULT_RETRY`, no raw-video leakage) all clean.
+
+**Recommendation:** PM/dev agent flips `sprint-status.yaml` 4-5 → `done` and proceeds to `bmad-create-story` for 4-6 (fusion container). S1+S2 can either be folded into the 4-6 prep commit or carried as known-acceptable PoC scope.
+
+### Closed — `done` (2026-05-20)
+
+**Action taken:** S1 fixed inline (cheap, rule-required). S2 + S3 deferred to `deferred-work.md` under the 2026-05-20 post-followup heading.
+
+- **S1 fixed:** Added `contract` marker tests in `shared/tests/contract/test_envelope_contract.py`:
+  - `test_door_obstruction_door_state_literal_accepts_all_values` — parametrized over all 4 valid values (`open`, `closing`, `closed`, `unknown`). Pins the contract so a future contraction breaks CI.
+  - `test_door_obstruction_door_state_rejects_unknown_literal` — guards against silent coercion of invalid values like `"ajar"`.
+- **S2 deferred:** `cameras.json:14` `vestibule_zone` polygon equals the `aisle` polygon. Tolerated in single-camera PoC; needs ops/UX polygon data to fix properly.
+- **S3 deferred:** 5 `RuntimeWarning` on un-awaited `AsyncMock.raise_for_status`. Test hygiene only; no production impact.
+
+Final gates (post-S1):
+
+| Gate | Required | Actual | Status |
+|---|---|---|---|
+| `mypy --strict src/` (shared) | 0 errors | 0 errors (17 files) | PASS |
+| `pytest -m contract -q` (shared) | All pass | 61 pass (+5 new) | PASS |
+| `pytest -q` (shared, full) | All pass | 130 pass | PASS |
+| `mypy --strict src/` (inference) | 0 errors | 0 errors | PASS |
+| `ruff check src/ tests/` (inference) | 0 | 0 | PASS |
+| `pytest --strict-markers -q` (inference) | All pass | 119 pass | PASS |
+| Coverage (inference) | ≥ 90 % | 91.03 % | PASS |
+
+Story `Status: review → done`. Sprint-status updated. Next: `bmad-create-story` for 4-6.
