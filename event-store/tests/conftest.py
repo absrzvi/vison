@@ -23,7 +23,8 @@ def pytest_collection_finish(session: object) -> None:
         import re
         # Match only sqlite3.connect(":memory:") or get_connection(":memory:") calls,
         # not comments or docstrings that mention the string for explanatory purposes.
-        if re.search(r"""(?:connect|get_connection)\s*\(\s*['"][^'"]*:memory:[^'"]*['"]\s*\)""", content):
+        pattern = r"""(?:connect|get_connection)\s*\(\s*['"][^'"]*:memory:[^'"]*['"]\s*\)"""
+        if re.search(pattern, content):
             raise AssertionError(
                 f"{path}: forbidden ':memory:' SQLite path — use tmp_path per ADR-4. "
                 "WAL mode does not work with :memory: and will silently pass without WAL semantics."

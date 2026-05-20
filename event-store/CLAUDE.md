@@ -23,7 +23,7 @@ python -m mypy src/
 uvicorn event_store.main:app --reload  # dev server on :8001
 ```
 
-Coverage threshold: 80%.
+Coverage threshold: 90% (raised in story 4-7).
 
 ## Module Layout
 
@@ -54,6 +54,12 @@ schema.sql    — authoritative schema; database.py executes this on startup
 
 ## Key Patterns
 
-Idempotent ingest: `POST /events` accepts a `event_id` (UUID from the train). Duplicate `event_id` returns 409 without re-inserting. This is the primary deduplication mechanism across reconnects.
+**Idempotent ingest** (story 4-7): `POST /api/v1/events` is idempotent on the natural key `(journey_id, event_type, timestamp)`. A first insert returns **201** with `{"data": {"event_id": "...", "stored": true}}`; a duplicate returns **200** with `{"data": {"event_id": "...", "stored": false}}` — NOT 409. The change from 409 → 200 means producers (inference, fusion) with `@DEFAULT_RETRY` don't backoff-retry on legitimate dupes. Dedup is enforced by the SQLite `UNIQUE (journey_id, event_type, timestamp)` constraint via `INSERT OR IGNORE`.
 
-Sync cursor: `GET /events?since_id=<n>` returns all events with `rowid > since_id`. The cloud-backend polls this endpoint and advances its cursor. Do not change the response shape without updating the cloud-backend sync client.
+**Cursor pagination**: `GET /api/v1/events?after=<event_id>&limit=N` returns events with `(timestamp, event_id) > (ref.timestamp, ref.event_id)` in ascending order. `next_cursor` is the `event_id` of the last item on a full page. The cloud-backend polls this endpoint and advances its cursor. Do not change the `EventPage` response shape (`{data, count, journey_id, next_cursor}`) without updating the cloud-backend sync client.
+
+**Filters** (story 4-7): `GET /api/v1/events` also accepts `event_type` (repeatable) and `min_severity` (one of `info|warning|critical`, ordered).
+
+**Authentication** (story 4-7): All `/api/v1/*` routes require `X-API-Key`. Health endpoints and `/ws` are open. Configure via `EVENT_STORE_API_KEY` env var. When unset, auth is bypassed and a startup WARN is logged (dev convenience).
+
+**WebSocket fan-out** (story 4-7): `/ws` accepts a `SubscriptionRequest` JSON as the first frame; replays the last `reconnect_replay_depth` events matching the filter; then streams live events as they are written via POST. The broadcaster uses a per-subscriber `asyncio.Queue(maxsize=256)` — slow consumers have events dropped (logged + counter) rather than blocking the writer path.

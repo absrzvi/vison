@@ -108,13 +108,13 @@ def test_truncation_retains_last_3_journeys(tmp_path: Path) -> None:
             ev["timestamp"] = f"2026-05-17T{idx:02d}:{n:02d}:00Z"
             insert_event(conn, ev)
 
-    # Verify 15 events total (5 journeys × 3 events)
+    # Verify 15 events total (5 journeys x 3 events)
     total_before = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
     assert total_before == 15
 
     deleted = truncate_old_journeys(conn, retain=3)
 
-    # 2 oldest journeys deleted × 3 events each = 6 rows removed
+    # 2 oldest journeys deleted x 3 events each = 6 rows removed
     assert deleted == 6
 
     total_after = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]

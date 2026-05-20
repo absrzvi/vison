@@ -16,6 +16,16 @@ SUPPORTED_SCHEMA_VERSIONS: frozenset[int] = frozenset({1})
 
 _SCHEMA_FILE = Path(__file__).parent / "schema.sql"
 
+# Severity ordering — info < warning < critical. Used to bind the
+# min_severity filter as an integer score in SQL.
+_SEVERITY_SCORE: dict[str, int] = {"info": 0, "warning": 1, "critical": 2}
+
+
+def _severity_score(value: str | None) -> int:
+    if value is None:
+        return -1
+    return _SEVERITY_SCORE.get(value, -1)
+
 
 def get_connection(db_path: str | None = None) -> sqlite3.Connection:
     path = db_path or settings.db_path
@@ -70,13 +80,66 @@ def get_journey(conn: sqlite3.Connection, journey_id: str) -> dict[str, Any]:
     return dict(row)
 
 
+def _build_filter_clauses(
+    *,
+    event_types: list[str] | None,
+    min_severity: str | None,
+    journey_id: str | None,
+    after_event_id: str | None,
+    conn: sqlite3.Connection,
+) -> tuple[list[str], list[Any]]:
+    """Build the dynamic WHERE clauses + parameters for filtered event reads.
+
+    Returns (clauses, params) — caller assembles the final SQL. All values are
+    parameterised — no string interpolation of user input.
+    """
+    clauses: list[str] = []
+    params: list[Any] = []
+
+    if after_event_id:
+        ref = conn.execute(
+            "SELECT timestamp FROM events WHERE event_id = ?", (after_event_id,)
+        ).fetchone()
+        if ref:
+            clauses.append("(timestamp, event_id) > (?, ?)")
+            params.extend([ref["timestamp"], after_event_id])
+
+    if journey_id:
+        clauses.append("journey_id = ?")
+        params.append(journey_id)
+
+    if event_types:
+        placeholders = ",".join(["?"] * len(event_types))
+        clauses.append(f"event_type IN ({placeholders})")
+        params.extend(event_types)
+
+    if min_severity:
+        threshold = _severity_score(min_severity)
+        clauses.append(
+            "(CASE severity "
+            "WHEN 'critical' THEN 2 "
+            "WHEN 'warning' THEN 1 "
+            "WHEN 'info' THEN 0 "
+            "ELSE -1 END) >= ?"
+        )
+        params.append(threshold)
+
+    return clauses, params
+
+
 def get_events_page(
     conn: sqlite3.Connection,
     *,
     journey_id: str | None = None,
     after_event_id: str | None = None,
     limit: int | None = None,
+    event_types: list[str] | None = None,
+    min_severity: str | None = None,
 ) -> list[dict[str, Any]]:
+    """Cursor-paginated, filterable event read.
+
+    AC4: filters by event_type (list, IN clause) and min_severity (ordered).
+    """
     page_size = limit or settings.cursor_page_size
 
     if journey_id is not None:
@@ -86,29 +149,21 @@ def get_events_page(
         if row is None:
             raise JourneyNotFoundError(journey_id)
 
-    cursor_clause = ""
-    params: list[Any] = []
-
-    if after_event_id:
-        ref = conn.execute(
-            "SELECT timestamp FROM events WHERE event_id = ?", (after_event_id,)
-        ).fetchone()
-        if ref:
-            cursor_clause = "AND (timestamp, event_id) > (?, ?)"
-            params.extend([ref["timestamp"], after_event_id])
-
-    journey_clause = "AND journey_id = ?" if journey_id else ""
-    if journey_id:
-        params.append(journey_id)
+    clauses, params = _build_filter_clauses(
+        event_types=event_types,
+        min_severity=min_severity,
+        journey_id=journey_id,
+        after_event_id=after_event_id,
+        conn=conn,
+    )
+    where_sql = (" WHERE " + " AND ".join(clauses)) if clauses else ""
 
     rows = conn.execute(
         f"""
         SELECT event_id, journey_id, vehicle_id, timestamp, event_type,
                severity, source, schema_version, payload
         FROM events
-        WHERE 1=1
-          {cursor_clause}
-          {journey_clause}
+        {where_sql}
         ORDER BY timestamp ASC, event_id ASC
         LIMIT ?
         """,
@@ -116,6 +171,55 @@ def get_events_page(
     ).fetchall()
 
     return [{**dict(r), "payload": json.loads(r["payload"])} for r in rows]
+
+
+def get_filtered_events_for_replay(
+    conn: sqlite3.Connection,
+    *,
+    event_types: list[str] | None,
+    min_severity: str | None,
+    coach_ids: list[str] | None,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Return the LAST ``limit`` events matching the subscription filter,
+    in chronological order (timestamp ASC, event_id ASC) — AC7.
+
+    The SQL strategy: ORDER BY DESC + LIMIT to grab the tail, then reverse in
+    Python. This is O(n log n) on the index, not on the whole table.
+
+    ``coach_ids`` filters by ``json_extract(payload, '$.car_id')`` — SQLite
+    supports JSON1 by default in 3.38+. Defensive when not present (returns
+    all rows since coach can't be checked at the DB layer).
+    """
+    clauses, params = _build_filter_clauses(
+        event_types=event_types,
+        min_severity=min_severity,
+        journey_id=None,
+        after_event_id=None,
+        conn=conn,
+    )
+    if coach_ids:
+        placeholders = ",".join(["?"] * len(coach_ids))
+        clauses.append(f"json_extract(payload, '$.car_id') IN ({placeholders})")
+        params.extend(coach_ids)
+    where_sql = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+
+    rows = conn.execute(
+        f"""
+        SELECT event_id, journey_id, vehicle_id, timestamp, event_type,
+               severity, source, schema_version, payload
+        FROM events
+        {where_sql}
+        ORDER BY timestamp DESC, event_id DESC
+        LIMIT ?
+        """,
+        [*params, limit],
+    ).fetchall()
+
+    # Reverse so callers receive chronological order.
+    return [
+        {**dict(r), "payload": json.loads(r["payload"])} for r in reversed(rows)
+    ]
 
 
 def get_sync_cursor(conn: sqlite3.Connection) -> str:

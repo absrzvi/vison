@@ -53,4 +53,4 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 
 [tool.coverage.report]
-fail_under = 80
+fail_under = 90

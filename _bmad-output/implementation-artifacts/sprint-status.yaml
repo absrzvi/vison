@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-20  # create-story 2026-05-20: story 4-7 → ready-for-dev (event-store REST + WS fan-out; extends existing container)
+last_updated: 2026-05-20  # dev-story 2026-05-20: story 4-7 → review (event-store REST + WS fan-out; 60 tests, 91.76% coverage, all gates green)
 # code-review 2026-05-20: story 4-5 → in-progress (BLOCKER: 2 tests fail; 6 patches + 7 decisions)
 # dev-followup 2026-05-20: story 4-5 → review (all 20 R/F items addressed; 119 tests pass, coverage 91.03%)
 # code-review 2026-05-20 (post-followup, opus-4.7): story 4-5 → done (APPROVED; S1 contract test added; S2/S3 deferred)
@@ -103,7 +103,7 @@ development_status:
   4-4-inference-detection-tracking-occupancy: done  # C1+F2+A+E+H+I+J+M patches applied 2026-05-19
   4-5-inference-safety-accessibility: done  # code-review 2026-05-20 (opus-4.7): APPROVED + S1 contract test
   4-6-fusion-alert-correlation-suppression: done
-  4-7-event-store-onboard-rest-api-websocket: ready-for-dev
+  4-7-event-store-onboard-rest-api-websocket: review
   4-cs1-cloud-sync-container: backlog
   4-8-gangway-tripwire-ingest: backlog
   4-9-closed-ledger-reconciliation: backlog

@@ -74,7 +74,11 @@ def test_journey_not_found_raises(db: sqlite3.Connection) -> None:
 
 @pytest.mark.integration
 def test_unsupported_schema_version_raises(db: sqlite3.Connection) -> None:
-    bad_event = {**_BASE_EVENT, "event_id": "b2c3d4e5-f6a7-4890-bcde-f12345678901", "schema_version": 99}
+    bad_event = {
+        **_BASE_EVENT,
+        "event_id": "b2c3d4e5-f6a7-4890-bcde-f12345678901",
+        "schema_version": 99,
+    }
     with pytest.raises(UnsupportedSchemaVersionError):
         insert_event(db, bad_event)
 
