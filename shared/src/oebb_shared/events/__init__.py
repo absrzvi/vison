@@ -19,6 +19,8 @@ from .payloads import (
     SyncCompletedPayload,
     UnattendedBagPayload,
     VestibuleCongestionPayload,
+    WagonExitPayload,
+    WagonEntryPayload,
 )
 from .types import EventType
 
@@ -47,4 +49,6 @@ __all__ = [
     "CameraDegradedPayload",
     "CameraRecoveredPayload",
     "SyncCompletedPayload",
+    "WagonExitPayload",
+    "WagonEntryPayload",
 ]

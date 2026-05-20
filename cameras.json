@@ -34,6 +34,40 @@
       "seat_zones": [
         { "name": "platform", "polygon": [[0, 0], [640, 0], [640, 480], [0, 480]] }
       ]
+    },
+    {
+      "camera_id": "C3_GANGWAY_FWD",
+      "coach_id": "car-3",
+      "rtsp_url": "rtsp://cam-host:554/stream/C3_GANGWAY_FWD",
+      "zone": "gangway-fwd",
+      "priority": "P1",
+      "capacity": 200,
+      "coach_from": "car-3",
+      "coach_to": "car-4",
+      "direction_axis": "x",
+      "tripwire": {
+        "tripwire_polygon": [[320, 0], [320, 480]]
+      },
+      "seat_zones": [
+        { "name": "gangway-area", "polygon": [[0, 0], [640, 0], [640, 480], [0, 480]] }
+      ]
+    },
+    {
+      "camera_id": "C4_GANGWAY_AFT",
+      "coach_id": "car-4",
+      "rtsp_url": "rtsp://cam-host:554/stream/C4_GANGWAY_AFT",
+      "zone": "gangway-aft",
+      "priority": "P1",
+      "capacity": 200,
+      "coach_from": "car-3",
+      "coach_to": "car-4",
+      "direction_axis": "x",
+      "tripwire": {
+        "tripwire_polygon": [[320, 0], [320, 480]]
+      },
+      "seat_zones": [
+        { "name": "gangway-area", "polygon": [[0, 0], [640, 0], [640, 480], [0, 480]] }
+      ]
     }
   ],
   "door_camera_map": {

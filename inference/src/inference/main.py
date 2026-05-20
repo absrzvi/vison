@@ -25,6 +25,7 @@ from inference.config import Settings
 from inference.health import build_app
 from inference.models import JourneyHolder, LoopHolder, ReadinessHolder, ZoneMask
 from inference.safety import SafetyHandler
+from inference.tripwire import TripwireHandler
 from inference.zone_counter import ZoneCounter
 
 log = structlog.get_logger(__name__)
@@ -92,9 +93,31 @@ def wire(
     )
     budget = Budget(settings=settings)
 
+    _GANGWAY_ZONES = ("gangway-fwd", "gangway-aft")
+
     callbacks: list[OccupancyCallback] = []
     for cam, cam_readiness in zip(cameras, readiness, strict=True):
         zone_masks = _zone_masks_for_camera(cam)
+
+        # E4-S8: construct TripwireHandler for gangway cameras; validate tripwire field.
+        tripwire_handler: TripwireHandler | None = None
+        cam_zone = str(cam.get("zone", ""))
+        if cam_zone in _GANGWAY_ZONES:
+            if not cam.get("tripwire") or "tripwire_polygon" not in cam.get("tripwire", {}):
+                log.critical(
+                    "main.missing_tripwire_config",
+                    camera_id=cam.get("camera_id"),
+                    zone=cam_zone,
+                )
+                sys.exit(1)
+            tripwire_handler = TripwireHandler(
+                camera=cam,
+                settings=settings,
+                event_store_client=event_client,
+                loop_holder=loop_holder,
+                journey_holder=journey_holder,
+            )
+
         callbacks.append(
             OccupancyCallback(
                 camera=cam,
@@ -107,6 +130,7 @@ def wire(
                 cameras_json=cameras_json,
                 event_store_client=event_client,
                 safety_handler=safety_handler,
+                tripwire_handler=tripwire_handler,
             )
         )
 

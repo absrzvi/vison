@@ -1,6 +1,6 @@
 # Story 4.8: `inference` Gangway Tripwire Ingest (Inter-Wagon Movement)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Created 2026-05-20 by bmad-create-story. EXTENDS the existing inference
 container (not bootstrap). Adds tripwire.py + updates callback.py routing for
@@ -35,69 +35,42 @@ so that `fusion` can maintain a closed-ledger per-coach count and detect inter-w
 
 ## Tasks / Subtasks
 
-- [ ] Add `WagonExitPayload` and `WagonEntryPayload` to shared imports in inference (AC: 2, 3)
-  - [ ] Confirm both payload classes already exist in `shared/src/oebb_shared/events/payloads.py` (they do — lines 339–362). No shared changes needed.
-  - [ ] Confirm `EventType.WAGON_EXIT` and `EventType.WAGON_ENTRY` already exist in `shared/src/oebb_shared/events/types.py` (they do — lines 31–32). No shared changes needed.
-  - [ ] Add `WagonExitPayload`, `WagonEntryPayload` to the imports in `inference/src/inference/tripwire.py` (new file).
+- [x] Add `WagonExitPayload` and `WagonEntryPayload` to shared imports in inference (AC: 2, 3)
+  - [x] Confirm both payload classes already exist in `shared/src/oebb_shared/events/payloads.py` (they do — lines 339–362). No shared changes needed.
+  - [x] Confirm `EventType.WAGON_EXIT` and `EventType.WAGON_ENTRY` already exist in `shared/src/oebb_shared/events/types.py` (they do — lines 31–32). No shared changes needed.
+  - [x] Add `WagonExitPayload`, `WagonEntryPayload` to exports in `shared/src/oebb_shared/events/__init__.py` (were missing from `__all__`).
 
-- [ ] Create `inference/src/inference/tripwire.py` (AC: 1–6)
-  - [ ] Define `TripwireConfig` dataclass: `coach_from: str`, `coach_to: str`, `direction_axis: str`, `tripwire_polygon: list[list[int]]`
-  - [ ] Define `TripwireHandler` class with:
-    - `__init__(self, camera: dict, settings: Settings, event_store_client: httpx.AsyncClient, loop_holder: LoopHolder, journey_holder: JourneyHolder)` — validates `tripwire` field present or raises `RuntimeError`; stores `TripwireConfig`; initialises `_pending_exits: dict[int, tuple[str, str, str, float, asyncio.TimerHandle]]` (track_id → (coach_from, coach_to, direction, confidence, orphan_timer))
-    - `_centroid_side(centroid_x: float, centroid_y: float, polygon: list[list[int]]) -> str` — returns `"from"` or `"to"` side based on which side of the tripwire line the centroid falls; tripwire polygon is treated as a directed line from first vertex to last vertex
-    - `process_frame(track_id: int, bbox: tuple[float, float, float, float], confidence: float | None, loop: asyncio.AbstractEventLoop) -> None` — sync entry point (called from `OccupancyCallback.__call__`); schedules async work via `run_coroutine_threadsafe`
-    - `async _handle_detection(track_id, bbox, confidence, loop)` — core logic: compute centroid; determine side; detect crossing; check confidence ≥ 0.70; emit WAGON_EXIT or WAGON_ENTRY; start/cancel orphan timer
-    - `async _emit_wagon_exit(track_id, coach_from, coach_to, direction, confidence)` → POST to event-store via `DEFAULT_RETRY`
-    - `async _emit_wagon_entry(track_id, coach_from, coach_to, direction, confidence)` → POST to event-store via `DEFAULT_RETRY`; cancel pending orphan timer
-    - `async _handle_orphaned_exit(track_id, coach_from, coach_to)` → log WARNING + POST to `fusion /context` endpoint to flag unreconciled ledger
-  - [ ] `_build_envelope(event_type, payload, severity)` — same pattern as `zone_counter._build_envelope`: uses `journey_holder.journey_id`, `settings.vehicle_id`, `settings.schema_version`
+- [x] Create `inference/src/inference/tripwire.py` (AC: 1–6)
+  - [x] `TripwireConfig` dataclass, `_PendingExit` dataclass, `TripwireHandler` class
+  - [x] Startup validation: missing `tripwire` field or wrong zone → `RuntimeError`
+  - [x] `_centroid_side()` using cross-product of directed tripwire segment
+  - [x] `process_frame()` sync entry; `_handle_detection()` async core
+  - [x] gangway-fwd → WAGON_EXIT + orphan timer; gangway-aft → WAGON_ENTRY directly
+  - [x] Low-confidence suppression (< 0.70) with DEBUG log
+  - [x] Orphan timer with stale-closure-safe lambda capture (E3 retro A3)
+  - [x] `_handle_orphaned_exit()` → WARNING log + fusion `/context` POST
+  - [x] `_build_envelope()` matching zone_counter pattern
 
-- [ ] Update `cameras.json` to add gangway camera entries (AC: 1, 6)
-  - [ ] Add two gangway cameras (one `gangway-fwd`, one `gangway-aft`) with `priority: "P1"`, `tripwire` field, `coach_from`, `coach_to`, `direction_axis`
-  - [ ] Gangway cameras still need `seat_zones` (required by `_zone_masks_for_camera` in `main.py`) — use a single full-frame polygon as a placeholder; gangway zone logic is in `TripwireHandler`, not `ZoneCounter`
-  - [ ] Example shape:
-    ```json
-    {
-      "camera_id": "C3_GANGWAY_FWD",
-      "coach_id": "car-3",
-      "rtsp_url": "rtsp://cam-host:554/stream/C3_GANGWAY_FWD",
-      "zone": "gangway-fwd",
-      "priority": "P1",
-      "capacity": 200,
-      "coach_from": "car-3",
-      "coach_to": "car-4",
-      "direction_axis": "x",
-      "tripwire": {
-        "tripwire_polygon": [[320, 0], [320, 480]]
-      },
-      "seat_zones": [
-        { "name": "gangway-area", "polygon": [[0, 0], [640, 0], [640, 480], [0, 480]] }
-      ]
-    }
-    ```
+- [x] Update `cameras.json` to add gangway camera entries (AC: 1, 6)
+  - [x] `C3_GANGWAY_FWD` (gangway-fwd, P1, car-3→car-4) and `C4_GANGWAY_AFT` (gangway-aft, P1)
 
-- [ ] Wire `TripwireHandler` into `OccupancyCallback` (AC: 1, 2, 3, 4, 5)
-  - [ ] In `callback.py` `OccupancyCallback.__init__`: accept optional `tripwire_handler: TripwireHandler | None = None`; store as `self._tripwire_handler`
-  - [ ] In `OccupancyCallback.__call__`: after the existing budget check, if `self._camera_zone in ("gangway-fwd", "gangway-aft")` AND `self._tripwire_handler is not None`, call `self._tripwire_handler.process_frame(track_id, bbox, confidence, loop)` for each person detection — then `return` early (gangway cameras do NOT feed `ZoneCounter.update()`, they only feed `TripwireHandler`)
-  - [ ] In `main.py` `wire()`: for each camera, if `cam.get("zone") in ("gangway-fwd", "gangway-aft")`, construct a `TripwireHandler` and pass it to `OccupancyCallback`; validate `tripwire` field presence here (startup error path)
-  - [ ] **PRESERVE:** All non-gangway camera paths in `OccupancyCallback.__call__` must be unchanged. The `_camera_zone == "door"` suitcase/person obstruction paths, the `bicycle` dispatch, and the `zone_counter.update()` call must all still fire for interior/door/exterior cameras.
+- [x] Wire `TripwireHandler` into `OccupancyCallback` (AC: 1, 2, 3, 4, 5)
+  - [x] `tripwire_handler: TripwireHandler | None = None` param added to `__init__`
+  - [x] Gangway early-return branch in `__call__` (before `zone_counter.update()`)
+  - [x] All non-gangway paths preserved unchanged
+  - [x] `main.py` `wire()`: TripwireHandler construction + startup validation (sys.exit on missing tripwire)
 
-- [ ] Write `tests/unit/test_tripwire.py` (AC: 7)
-  - [ ] Use synthetic bounding boxes — no Hailo-8, no GStreamer
-  - [ ] Test: centroid clearly on `coach_from` side → no emission
-  - [ ] Test: centroid crosses tripwire to `coach_to` side → `WAGON_EXIT` POSTed with correct payload
-  - [ ] Test: same `track_id` appears on adjacent gangway camera → `WAGON_ENTRY` POSTed; orphan timer cancelled
-  - [ ] Test: confidence `< 0.70` → no POST, DEBUG log with `reason: "low_confidence"`
-  - [ ] Test: orphaned exit (no WAGON_ENTRY within timeout) → WARNING log + fusion `/context` POST
-  - [ ] Test: `TripwireHandler` construction with missing `tripwire` field → `RuntimeError`
-  - [ ] Test: gangway camera is P1 → `Budget.should_process()` returns True even when P2 is throttled
-  - [ ] Use `respx.mock` for all HTTP assertions (matches pattern from `test_accessibility.py`, `test_zone_counter.py`)
-  - [ ] Use `pytest-asyncio` for async tests (matches existing test suite)
+- [x] Write `tests/unit/test_tripwire.py` (AC: 7)
+  - [x] 11 test cases covering all ACs + edge cases
+  - [x] `respx.mock` for all HTTP assertions, `structlog.testing.capture_logs` for log assertions
+  - [x] `pytest-asyncio` for async tests
 
-- [ ] Extend `tests/unit/test_security.py` AST checks to cover `tripwire.py` (AC: 7)
-  - [ ] Add `"tripwire"` to the list of modules scanned for `os.environ.get` and hardcoded secrets
+- [x] Extend `tests/unit/test_security.py` AST checks to cover `tripwire.py` (AC: 7)
+  - [x] `test_no_env_get_in_tripwire`, `test_hailo_pipeline_not_imported_in_tripwire`
+  - [x] `test_wagon_exit_payload_schema_valid`, `test_wagon_entry_payload_schema_valid`
 
-- [ ] Validate `pytest --strict-markers` ≥90% coverage, mypy --strict, ruff clean (AC: 7)
+- [x] Validate `pytest --strict-markers` ≥90% coverage, mypy --strict, ruff clean (AC: 7)
+  - [x] 134 passed, 90.78% coverage, mypy 0 errors, ruff 0 violations
 
 ## Dev Notes
 

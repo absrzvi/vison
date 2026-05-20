@@ -93,6 +93,54 @@ def test_no_env_get_in_safety() -> None:
 
 
 @pytest.mark.unit
+def test_no_env_get_in_tripwire() -> None:
+    assert not _has_env_get(SRC / "tripwire.py")
+
+
+@pytest.mark.unit
+def test_hailo_pipeline_not_imported_in_tripwire() -> None:
+    assert not _imports_module(SRC / "tripwire.py", "pipeline")
+
+
+@pytest.mark.unit
+def test_wagon_exit_payload_schema_valid() -> None:
+    """WAGON_EXIT payload must validate against WagonExitPayload."""
+    from oebb_shared.events import WagonExitPayload
+
+    p = WagonExitPayload(
+        track_id=42,
+        coach_from="car-3",
+        coach_to="car-4",
+        camera_id="C3_GANGWAY_FWD",
+        direction="forward",
+        confidence=0.88,
+    )
+    dumped = p.model_dump()
+    for f in ("track_id", "coach_from", "coach_to", "camera_id", "direction", "confidence"):
+        assert f in dumped, f"missing required field: {f}"
+    assert dumped["direction"] == "forward"
+    assert dumped["track_id"] == 42
+
+
+@pytest.mark.unit
+def test_wagon_entry_payload_schema_valid() -> None:
+    """WAGON_ENTRY payload must validate against WagonEntryPayload."""
+    from oebb_shared.events import WagonEntryPayload
+
+    p = WagonEntryPayload(
+        track_id=42,
+        coach_from="car-3",
+        coach_to="car-4",
+        camera_id="C4_GANGWAY_AFT",
+        direction="forward",
+        confidence=0.91,
+    )
+    dumped = p.model_dump()
+    for f in ("track_id", "coach_from", "coach_to", "camera_id", "direction", "confidence"):
+        assert f in dumped, f"missing required field: {f}"
+
+
+@pytest.mark.unit
 def test_door_obstruction_payload_schema_valid() -> None:
     from oebb_shared.events import DoorObstructionPayload
 

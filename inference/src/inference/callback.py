@@ -35,6 +35,7 @@ from inference.zone_counter import ZoneCounter
 
 if TYPE_CHECKING:
     from inference.safety import SafetyHandler
+    from inference.tripwire import TripwireHandler
 
 log = structlog.get_logger(__name__)
 
@@ -126,6 +127,7 @@ class OccupancyCallback:
         cameras_json: dict[str, Any] | None = None,
         event_store_client: httpx.AsyncClient | None = None,
         safety_handler: SafetyHandler | None = None,
+        tripwire_handler: TripwireHandler | None = None,
     ) -> None:
         self._zone_counter = zone_counter
         self._budget = budget
@@ -136,6 +138,8 @@ class OccupancyCallback:
         self._readiness = readiness
         self._event_store_client = event_store_client
         self._safety_handler = safety_handler
+        # E4-S8: gangway tripwire handler; set for gangway-fwd/aft zones only.
+        self._tripwire_handler = tripwire_handler
 
         self._camera_id = str(camera["camera_id"])
         self._car_id = str(camera["coach_id"])
@@ -481,6 +485,21 @@ class OccupancyCallback:
         loop = self._loop_holder.loop
         if loop is None:
             log.warning("callback.no_loop_yet", camera_id=self._camera_id)
+            return
+
+        # E4-S8: gangway cameras feed TripwireHandler only — they bypass ZoneCounter.
+        # Per-coach occupancy for gangway coaches is managed by fusion's closed ledger.
+        is_gangway = self._camera_zone in ("gangway-fwd", "gangway-aft")
+        if is_gangway and self._tripwire_handler is not None:
+            for det in accepted:
+                if det.get("label") == "person" and det.get("track_id") is not None:
+                    conf = det.get("confidence")
+                    self._tripwire_handler.process_frame(
+                        track_id=det["track_id"],
+                        bbox=det["bbox"],
+                        confidence=conf,
+                        loop=loop,
+                    )
             return
 
         # M11: loop may be closing between the None check and the schedule call
