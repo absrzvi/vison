@@ -35,7 +35,8 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-20  # bmad-code-review 2026-05-20 (opus-4.7): story 4-cs1 → done (2 BLOCKERs + 22 patches applied; 98 + 79 tests, 92.11% / 92.01% coverage; gates green)
+last_updated: 2026-05-20  # create-story 2026-05-20: story 4-8 → ready-for-dev (gangway tripwire ingest); epic-5 → done
+# bmad-code-review 2026-05-20 (opus-4.7): story 4-cs1 → done (2 BLOCKERs + 24 patches applied; 98 tests, 92.11% coverage; gates green)
 # code-review 2026-05-20: story 4-5 → in-progress (BLOCKER: 2 tests fail; 6 patches + 7 decisions)
 # dev-followup 2026-05-20: story 4-5 → review (all 20 R/F items addressed; 119 tests pass, coverage 91.03%)
 # code-review 2026-05-20 (post-followup, opus-4.7): story 4-5 → done (APPROVED; S1 contract test added; S2/S3 deferred)
@@ -105,13 +106,13 @@ development_status:
   4-6-fusion-alert-correlation-suppression: done
   4-7-event-store-onboard-rest-api-websocket: done
   4-cs1-cloud-sync-container: done
-  4-8-gangway-tripwire-ingest: backlog
+  4-8-gangway-tripwire-ingest: ready-for-dev
   4-9-closed-ledger-reconciliation: backlog
   4-10-coach-comfort-index: backlog
   epic-4-retrospective: optional
 
   # ── Epic 5: Luggage Monitoring — Live Data ──
-  epic-5: in-progress
+  epic-5: done
   5-1-luggage-ws-live-feed: done
   5-2-luggage-monitoring-live-ui: done
   5-3-luggage-kpi-live-monitoring: done
