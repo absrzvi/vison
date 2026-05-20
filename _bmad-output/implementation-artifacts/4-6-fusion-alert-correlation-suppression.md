@@ -1,6 +1,6 @@
 # Story 4.6: `fusion` Alert Correlation & Suppression State Machine
 
-Status: ready-for-dev
+Status: review
 
 <!-- Created 2026-05-20 by bmad-create-story. Consumes contracts locked in story 4-5 (inference safety & accessibility). -->
 
@@ -51,96 +51,96 @@ so that the false-positive alert rate stays below 5% and alerts are suppressed c
 
 ## Tasks / Subtasks
 
-- [ ] Bootstrap `fusion/` package (AC: 1)
-  - [ ] Create `fusion/pyproject.toml` mirroring `inference/pyproject.toml`: deps `fastapi`, `uvicorn`, `httpx`, `pydantic`, `pydantic-settings`, `tenacity`, `oebb-shared` (local path); dev deps `pytest`, `pytest-cov`, `pytest-asyncio` (or `anyio[trio]`), `respx`, `mypy`, `ruff`. Coverage `fail_under = 90`. mypy strict. ruff `line-length=100`, `select=["E","F","B","I"]`. Markers: `unit`, `integration`, `contract`. `asyncio_mode = "auto"`.
-  - [ ] Create `fusion/Dockerfile` (`FROM python:3.11-slim-bookworm`, copy shared as editable, install, `CMD uvicorn fusion.main:app ...`)
-  - [ ] Create `fusion/.env.example` with all `FUSION_*` vars (see config below)
-  - [ ] Create `fusion/src/fusion/__init__.py` (empty) and `fusion/tests/__init__.py`
+- [x] Bootstrap `fusion/` package (AC: 1)
+  - [x] Create `fusion/pyproject.toml` mirroring `inference/pyproject.toml`: deps `fastapi`, `uvicorn`, `httpx`, `pydantic`, `pydantic-settings`, `tenacity`, `oebb-shared` (local path); dev deps `pytest`, `pytest-cov`, `pytest-asyncio` (or `anyio[trio]`), `respx`, `mypy`, `ruff`. Coverage `fail_under = 90`. mypy strict. ruff `line-length=100`, `select=["E","F","B","I"]`. Markers: `unit`, `integration`, `contract`. `asyncio_mode = "auto"`.
+  - [x] Create `fusion/Dockerfile` (`FROM python:3.11-slim-bookworm`, copy shared as editable, install, `CMD uvicorn fusion.main:app ...`)
+  - [x] Create `fusion/.env.example` with all `FUSION_*` vars (see config below)
+  - [x] Create `fusion/src/fusion/__init__.py` (empty) and `fusion/tests/__init__.py`
 
-- [ ] Implement `config.py` (AC: 1, 11)
-  - [ ] `class Settings(BaseSettings)` with `model_config = SettingsConfigDict(env_prefix="FUSION_", env_file=".env", extra="ignore")`
-  - [ ] Fields: `event_store_url: str = "http://event-store:8000"`, `vehicle_id: str = "TEST-VEHICLE-01"`, `schema_version: int = 1`, `context_ttl_seconds: float = 60.0`, `accessibility_recent_window_s: float = 60.0`, `calibration_drift_threshold: float = 0.10`, `host: str = "0.0.0.0"`, `port: int = 8090`
-  - [ ] **NO** `weight_camera` / `weight_apc` (ADR-15)
+- [x] Implement `config.py` (AC: 1, 11)
+  - [x] `class Settings(BaseSettings)` with `model_config = SettingsConfigDict(env_prefix="FUSION_", env_file=".env", extra="ignore")`
+  - [x] Fields: `event_store_url: str = "http://event-store:8000"`, `vehicle_id: str = "TEST-VEHICLE-01"`, `schema_version: int = 1`, `context_ttl_seconds: float = 60.0`, `accessibility_recent_window_s: float = 60.0`, `calibration_drift_threshold: float = 0.10`, `host: str = "0.0.0.0"`, `port: int = 8090`
+  - [x] **NO** `weight_camera` / `weight_apc` (ADR-15)
 
-- [ ] Implement `models.py` (AC: 2, 3)
-  - [ ] `ContextPushModel(BaseModel, ConfigDict(strict=True, extra="forbid"))` — exact fields per AC3 + AC8 (`ramp_deployed`, `ramp_door_id`, `ramp_station_id`)
-  - [ ] `SlipFallCandidate(BaseModel)` — `alert_type: Literal["slip_fall"]`, `car_id: str`, `track_id: str`, `camera_id: str`; `extra="forbid"`
-  - [ ] Internal `AlertCandidate` dataclass for the suppression queue (not exposed)
+- [x] Implement `models.py` (AC: 2, 3)
+  - [x] `ContextPushModel(BaseModel, ConfigDict(strict=True, extra="forbid"))` — exact fields per AC3 + AC8 (`ramp_deployed`, `ramp_door_id`, `ramp_station_id`)
+  - [x] `SlipFallCandidate(BaseModel)` — `alert_type: Literal["slip_fall"]`, `car_id: str`, `track_id: str`, `camera_id: str`; `extra="forbid"`
+  - [x] Internal `AlertCandidate` dataclass for the suppression queue (not exposed)
 
-- [ ] Implement `context_state.py` (AC: 3, 8, 9)
-  - [ ] In-memory dataclass `ContextState` mirroring the model fields plus `_recent_accessibility: dict[str, dict[str, tuple[str, float]]]` (car_id → door_id_or_zone → (track_id, monotonic_timestamp))
-  - [ ] `update_from_push(model: ContextPushModel) -> None` — overwrites fields; emits log if any suppression-relevant field changed
-  - [ ] `resolve_car_id(idx: str | int) -> str` — consist lookup with passthrough fallback
-  - [ ] `note_accessibility(car_id, door_id_or_zone, track_id) -> None` — stamps monotonic time
-  - [ ] `find_recent_accessibility(car_id, door_id, window_s) -> str | None` — returns track_id within TTL or None
-  - [ ] `door_state_for(car_id, door_id) -> str` — returns `"open"|"closing"|"closed"|"unknown"`
+- [x] Implement `context_state.py` (AC: 3, 8, 9)
+  - [x] In-memory dataclass `ContextState` mirroring the model fields plus `_recent_accessibility: dict[str, dict[str, tuple[str, float]]]` (car_id → door_id_or_zone → (track_id, monotonic_timestamp))
+  - [x] `update_from_push(model: ContextPushModel) -> None` — overwrites fields; emits log if any suppression-relevant field changed
+  - [x] `resolve_car_id(idx: str | int) -> str` — consist lookup with passthrough fallback
+  - [x] `note_accessibility(car_id, door_id_or_zone, track_id) -> None` — stamps monotonic time
+  - [x] `find_recent_accessibility(car_id, door_id, window_s) -> str | None` — returns track_id within TTL or None
+  - [x] `door_state_for(car_id, door_id) -> str` — returns `"open"|"closing"|"closed"|"unknown"`
 
-- [ ] Implement `suppression.py` (AC: 4)
-  - [ ] `class SuppressionState(StrEnum): NORMAL, MAINTENANCE, DEPOT, GPS_INVALID`
-  - [ ] `def evaluate(ctx: ContextState) -> SuppressionState` — priority DEPOT > MAINTENANCE > GPS_INVALID > NORMAL
-  - [ ] `class SuppressionGate` — holds previous state; `should_emit(candidate, ctx) -> bool`; emits one-shot `JOURNEY_ENDED` envelope POST on `NORMAL/MAINTENANCE → DEPOT`; logs INFO on every state change
+- [x] Implement `suppression.py` (AC: 4)
+  - [x] `class SuppressionState(StrEnum): NORMAL, MAINTENANCE, DEPOT, GPS_INVALID`
+  - [x] `def evaluate(ctx: ContextState) -> SuppressionState` — priority DEPOT > MAINTENANCE > GPS_INVALID > NORMAL
+  - [x] `class SuppressionGate` — holds previous state; `should_emit(candidate, ctx) -> bool`; emits one-shot `JOURNEY_ENDED` envelope POST on `NORMAL/MAINTENANCE → DEPOT`; logs INFO on every state change
 
-- [ ] Implement `door_obstruction.py` (AC: 5, 6)
-  - [ ] `async def handle(payload: DoorObstructionPayload, ctx: ContextState, gate: SuppressionGate, enricher: Enrichment) -> None`
-  - [ ] Look up ZFR door_state; discard with DEBUG if `open`/`unknown`
-  - [ ] Pass to `enricher.emit_alert(alert_code="door_obstruction", car_id=..., severity=_door_severity(ctx))`
-  - [ ] `_door_severity(ctx)` — `"critical"` if `(ctx.speed_kmh or 0.0) > 0` else `"warning"`
+- [x] Implement `door_obstruction.py` (AC: 5, 6)
+  - [x] `async def handle(payload: DoorObstructionPayload, ctx: ContextState, gate: SuppressionGate, enricher: Enrichment) -> None`
+  - [x] Look up ZFR door_state; discard with DEBUG if `open`/`unknown`
+  - [x] Pass to `enricher.emit_alert(alert_code="door_obstruction", car_id=..., severity=_door_severity(ctx))`
+  - [x] `_door_severity(ctx)` — `"critical"` if `(ctx.speed_kmh or 0.0) > 0` else `"warning"`
 
-- [ ] Implement `occupancy.py` (AC: 10)
-  - [ ] `async def process_occupancy_update(payload: OccupancyUpdatePayload, ctx, enricher) -> None` — passthrough emit
-  - [ ] Compare against `ctx.occupancy.get(car_id)` (APC) if present → log WARNING if drift > threshold; do NOT mutate count
+- [x] Implement `occupancy.py` (AC: 10)
+  - [x] `async def process_occupancy_update(payload: OccupancyUpdatePayload, ctx, enricher) -> None` — passthrough emit
+  - [x] Compare against `ctx.occupancy.get(car_id)` (APC) if present → log WARNING if drift > threshold; do NOT mutate count
 
-- [ ] Implement `accessibility.py` (AC: 8)
-  - [ ] `async def handle_ramp_deployed(door_id, station_id, ctx, enricher)` — finds recent track via `ctx.find_recent_accessibility`; emits `RAMP_DEPLOYED` with `triggered_by_track_id` or `"unknown"`
-  - [ ] Optional `async def handle_accessibility_candidate(payload: AccessibilityDetectedPayload, ctx)` — only updates `ctx.note_accessibility`; does NOT re-emit (event-store already has it via inference direct path)
+- [x] Implement `accessibility.py` (AC: 8)
+  - [x] `async def handle_ramp_deployed(door_id, station_id, ctx, enricher)` — finds recent track via `ctx.find_recent_accessibility`; emits `RAMP_DEPLOYED` with `triggered_by_track_id` or `"unknown"`
+  - [x] Optional `async def handle_accessibility_candidate(payload: AccessibilityDetectedPayload, ctx)` — only updates `ctx.note_accessibility`; does NOT re-emit (event-store already has it via inference direct path)
 
-- [ ] Implement `enrichment.py` (AC: 7, 11)
-  - [ ] `class Enrichment` holds `httpx.AsyncClient`, `Settings`, `ContextState`
-  - [ ] `async def emit_alert(alert_code, car_id, severity, *, description=None, zone=None) -> None` — builds `AlertRaisedPayload` (new UUID4 alert_id), wraps in `EventEnvelope(source="fusion", ...)`, applies `priority="escalated"` when `ctx.station_approach`, POSTs with `@DEFAULT_RETRY`
-  - [ ] `async def emit_envelope(event_type, payload_dict, severity) -> None` — generic POST helper used by suppression's `JOURNEY_ENDED` and accessibility's `RAMP_DEPLOYED`
-  - [ ] `_severity_for(alert_code, ctx)` — single decision point (FR9 lives here)
+- [x] Implement `enrichment.py` (AC: 7, 11)
+  - [x] `class Enrichment` holds `httpx.AsyncClient`, `Settings`, `ContextState`
+  - [x] `async def emit_alert(alert_code, car_id, severity, *, description=None, zone=None) -> None` — builds `AlertRaisedPayload` (new UUID4 alert_id), wraps in `EventEnvelope(source="fusion", ...)`, applies `priority="escalated"` when `ctx.station_approach`, POSTs with `@DEFAULT_RETRY`
+  - [x] `async def emit_envelope(event_type, payload_dict, severity) -> None` — generic POST helper used by suppression's `JOURNEY_ENDED` and accessibility's `RAMP_DEPLOYED`
+  - [x] `_severity_for(alert_code, ctx)` — single decision point (FR9 lives here)
 
-- [ ] Implement `health.py` (AC: 1, 2, 3)
-  - [ ] `build_app(ctx, gate, enricher, settings) -> FastAPI`
-  - [ ] Routes: `GET /health/live`, `GET /health/ready` (checks event-store `/health/live` reachable via the shared client, cached for 1s), `POST /context`, `POST /candidates/door_obstruction`, `POST /candidates/alert_raised`, `POST /candidates/accessibility_detected` (optional; updates ctx only)
-  - [ ] All `POST` handlers `async`; FastAPI validation produces 422 on schema mismatch automatically
+- [x] Implement `health.py` (AC: 1, 2, 3)
+  - [x] `build_app(ctx, gate, enricher, settings) -> FastAPI`
+  - [x] Routes: `GET /health/live`, `GET /health/ready` (checks event-store `/health/live` reachable via the shared client, cached for 1s), `POST /context`, `POST /candidates/door_obstruction`, `POST /candidates/alert_raised`, `POST /candidates/accessibility_detected` (optional; updates ctx only)
+  - [x] All `POST` handlers `async`; FastAPI validation produces 422 on schema mismatch automatically
 
-- [ ] Implement `main.py` (AC: 1)
-  - [ ] `Settings()` instance
-  - [ ] `@asynccontextmanager async def lifespan(app)` — opens `httpx.AsyncClient(timeout=5.0)`, builds `ContextState`, `SuppressionGate`, `Enrichment`, then `yield`; closes client on shutdown
-  - [ ] `app = build_app(...)` with lifespan attached; uvicorn entry point
+- [x] Implement `main.py` (AC: 1)
+  - [x] `Settings()` instance
+  - [x] `@asynccontextmanager async def lifespan(app)` — opens `httpx.AsyncClient(timeout=5.0)`, builds `ContextState`, `SuppressionGate`, `Enrichment`, then `yield`; closes client on shutdown
+  - [x] `app = build_app(...)` with lifespan attached; uvicorn entry point
 
-- [ ] Write security/contract tests RED phase (AC: 12)
-  - [ ] `tests/unit/test_security.py` — `test_no_env_get_in_*` AST checks for every new module (Rule 8)
-  - [ ] `tests/contract/test_candidate_payload_contract.py` — replays exact inference body shapes (copy from `inference/src/inference/callback.py` and `zone_counter.py`); asserts 202
+- [x] Write security/contract tests RED phase (AC: 12)
+  - [x] `tests/unit/test_security.py` — `test_no_env_get_in_*` AST checks for every new module (Rule 8)
+  - [x] `tests/contract/test_candidate_payload_contract.py` — replays exact inference body shapes (copy from `inference/src/inference/callback.py` and `zone_counter.py`); asserts 202
 
-- [ ] Write unit tests (AC: 12) — `test_suppression.py`, `test_door_obstruction.py`, `test_occupancy.py`, `test_accessibility.py`, `test_enrichment.py`, `test_context.py`
+- [x] Write unit tests (AC: 12) — `test_suppression.py`, `test_door_obstruction.py`, `test_occupancy.py`, `test_accessibility.py`, `test_enrichment.py`, `test_context.py`
 
-- [ ] Write integration test (AC: 12) — `tests/integration/test_fusion_pipeline.py` using `respx` to capture event-store POSTs
+- [x] Write integration test (AC: 12) — `tests/integration/test_fusion_pipeline.py` using `respx` to capture event-store POSTs
 
-- [ ] Run quality gates (AC: 12)
-  - [ ] `mypy --strict src/fusion/`
-  - [ ] `pytest --strict-markers -q --cov=fusion --cov-fail-under=90`
-  - [ ] `ruff check src/ tests/`
+- [x] Run quality gates (AC: 12)
+  - [x] `mypy --strict src/fusion/`
+  - [x] `pytest --strict-markers -q --cov=fusion --cov-fail-under=90`
+  - [x] `ruff check src/ tests/`
 
-- [ ] Update GitLab CI (`.gitlab-ci.yml`) — add `fusion-test` job mirroring `inference-test`
+- [x] Update GitLab CI (`.gitlab-ci.yml`) — add `fusion-test` job mirroring `inference-test`
 
 ## Security Tests
 
 **API endpoint security:**
-- [ ] `test_post_context_malformed_returns_422` — `maintenance_mode: "yes"` (string not bool) → 422 (StrictBool)
-- [ ] `test_post_context_extra_field_returns_422` — unknown field → 422 (`extra="forbid"`)
-- [ ] `test_post_door_obstruction_missing_required_returns_422` — empty body → 422
-- [ ] `test_post_slip_fall_alert_type_wrong_value_returns_422` — `alert_type="unknown"` → 422 (Literal mismatch)
-- [ ] `test_post_alert_raised_payload_schema_valid` — emitted `AlertRaisedPayload` validates against shared schema
+- [x] `test_post_context_malformed_returns_422` — `maintenance_mode: "yes"` (string not bool) → 422 (StrictBool)
+- [x] `test_post_context_extra_field_returns_422` — unknown field → 422 (`extra="forbid"`)
+- [x] `test_post_door_obstruction_missing_required_returns_422` — empty body → 422
+- [x] `test_post_slip_fall_alert_type_wrong_value_returns_422` — `alert_type="unknown"` → 422 (Literal mismatch)
+- [x] `test_post_alert_raised_payload_schema_valid` — emitted `AlertRaisedPayload` validates against shared schema
 
 **OEBB-specific (Rule 8 + contract):**
-- [ ] `test_no_env_get_in_<module>` — AST walks every new module under `src/fusion/`; asserts zero calls to `os.environ.get` (config-injection only)
-- [ ] `test_no_raw_video_or_stream_url_in_envelope` — fuzz `EventEnvelope.payload` over a sample run; no RTSP URLs / video paths leak
-- [ ] `test_suppressed_candidates_not_posted` — under MAINTENANCE state, no POST to `event_store_url` (respx assert no requests)
-- [ ] `test_fusion_source_field_always_fusion` — every envelope emitted has `source="fusion"` (NEVER `"inference"`)
-- [ ] `test_door_obstruction_discarded_when_door_open` — open door → no POST to event-store
-- [ ] `test_speed_zero_door_obstruction_is_warning_not_critical` — FR9 inverse check
+- [x] `test_no_env_get_in_<module>` — AST walks every new module under `src/fusion/`; asserts zero calls to `os.environ.get` (config-injection only)
+- [x] `test_no_raw_video_or_stream_url_in_envelope` — fuzz `EventEnvelope.payload` over a sample run; no RTSP URLs / video paths leak
+- [x] `test_suppressed_candidates_not_posted` — under MAINTENANCE state, no POST to `event_store_url` (respx assert no requests)
+- [x] `test_fusion_source_field_always_fusion` — every envelope emitted has `source="fusion"` (NEVER `"inference"`)
+- [x] `test_door_obstruction_discarded_when_door_open` — open door → no POST to event-store
+- [x] `test_speed_zero_door_obstruction_is_warning_not_critical` — FR9 inverse check
 
 ## Dev Notes
 
@@ -372,6 +372,63 @@ claude-opus-4-7[1m]
 
 ### Debug Log References
 
+- Initial coverage run: 88.96% (failed gate). Added `tests/unit/test_health.py` covering readiness cache, ramp-emit failure path, `_car_id_for_door` fallback, suppressed slip-fall, accessibility candidate endpoint → final coverage 98.76%.
+- `main.py` is excluded from coverage via `[tool.coverage.run] omit = ["*/main.py"]` (matches inference's exclusion of `pipeline.py` — entry-point/uvicorn bootstrap is verified by ops, not unit tests).
+- `_drop_none` serializer on `AlertRaisedPayload` was confirmed to KEEP `priority` when value is `"normal"` (only `None` is dropped) — `test_no_station_approach_keeps_priority_normal` asserts this explicitly.
+- `EventEnvelope` accepts empty payload `{}` (validator skips PAYLOAD_MODELS lookup) — used for the PoC `JOURNEY_ENDED` emit since arrival timestamps are not available at fusion. A later story can populate the real `JourneyEndedPayload` fields when vlan-pollers exposes arrival metadata.
+
 ### Completion Notes List
 
+- **Pre-Flight gate honoured.** Assumptions, simplicity check, and surgical-change test recorded above before RED phase.
+- **Security tests first.** `test_security.py` (AST no-`os.environ.get` + Pydantic schema checks) was written before any production module.
+- **Quality gates: all green.**
+  - `pytest -q --cov=fusion --cov-fail-under=90` → **77 passed, 98.76% coverage**.
+  - `mypy --strict src/fusion` → no issues in 11 source files.
+  - `ruff check src/ tests/` → all checks passed.
+- **Karpathy adherence**: minimal code, no speculative abstractions, every module maps 1:1 to an AC. No `weight_camera`/`weight_apc` (ADR-15). No re-emission of `ACCESSIBILITY_DETECTED` (inference owns that path).
+- **Contract safety net**: `tests/contract/test_candidate_payload_contract.py` replays the exact bodies inference posts (DoorObstructionPayload with `door_state="unknown"`; slip-fall dict shape) and asserts 202. If the upstream contract drifts, CI fails fast.
+- **Gap V1 documented in code**: `ContextPushModel` accepts `maintenance_mode`/`depot_mode`/`gps_valid`/`consist`/`door_state`/`ramp_*` with safe defaults so vlan-pollers can phase these in without breaking fusion. Until then suppression evaluates to NORMAL by default.
+- **CI**: added `lint:fusion` and `test:fusion` jobs in `.gitlab-ci.yml`; bandit extended to `fusion/src`.
+- **Out of scope** (not implemented in this story; flagged for later epic-4 work): ADR-18 T1 STREAM_PRIORITY emitter, ADR-18 T2 `COACH_COMFORT_INDEX` (story 4-10), unattended_bag, real `JourneyEndedPayload` content on DEPOT.
+
 ### File List
+
+**Created**
+- `fusion/pyproject.toml`
+- `fusion/Dockerfile`
+- `fusion/.env.example`
+- `fusion/src/fusion/__init__.py`
+- `fusion/src/fusion/config.py`
+- `fusion/src/fusion/models.py`
+- `fusion/src/fusion/context_state.py`
+- `fusion/src/fusion/suppression.py`
+- `fusion/src/fusion/door_obstruction.py`
+- `fusion/src/fusion/occupancy.py`
+- `fusion/src/fusion/accessibility.py`
+- `fusion/src/fusion/enrichment.py`
+- `fusion/src/fusion/health.py`
+- `fusion/src/fusion/main.py`
+- `fusion/tests/__init__.py`
+- `fusion/tests/unit/__init__.py`
+- `fusion/tests/unit/test_security.py`
+- `fusion/tests/unit/test_context.py`
+- `fusion/tests/unit/test_suppression.py`
+- `fusion/tests/unit/test_enrichment.py`
+- `fusion/tests/unit/test_door_obstruction.py`
+- `fusion/tests/unit/test_occupancy.py`
+- `fusion/tests/unit/test_accessibility.py`
+- `fusion/tests/unit/test_health.py`
+- `fusion/tests/contract/__init__.py`
+- `fusion/tests/contract/test_candidate_payload_contract.py`
+- `fusion/tests/integration/__init__.py`
+- `fusion/tests/integration/test_fusion_pipeline.py`
+
+**Modified**
+- `.gitlab-ci.yml` — added `lint:fusion`, `test:fusion`; bandit extended to include `fusion/src`.
+
+**Deleted**
+- (none)
+
+### Change Log
+
+- 2026-05-20 — **fusion container bootstrapped (E4-S6)**. Initial implementation of suppression state machine, door obstruction ZFR cross-reference, slip-fall enrichment, ACCESSIBILITY_DETECTED → RAMP_DEPLOYED correlation (R4), per-coach car_id resolution (R3), occupancy passthrough (ADR-15), station-approach escalation (ADR-18 T3), and FR9 speed-correlated door fault severity. 77 tests, 98.76% coverage, mypy strict + ruff clean.

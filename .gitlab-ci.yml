@@ -39,13 +39,21 @@ lint:cloud-backend:
     - cd cloud-backend && python -m ruff check src/ tests/
     - cd cloud-backend && python -m mypy --strict src/
 
+lint:fusion:
+  stage: lint
+  script:
+    - pip install -e shared/
+    - pip install -e "fusion/[dev]"
+    - cd fusion && python -m ruff check src/ tests/
+    - cd fusion && python -m mypy --strict src/
+
 # ── Security ──────────────────────────────────────────────────────────────────
 
 security:bandit:
   stage: security
   script:
     - pip install bandit
-    - bandit -r shared/src event-store/src cloud-backend/src -ll
+    - bandit -r shared/src event-store/src cloud-backend/src fusion/src -ll
   allow_failure: false
 
 security:detect-secrets:
@@ -70,6 +78,14 @@ test:event-store:
     - pip install -e shared/
     - pip install -e "event-store/[dev]"
     - cd event-store && python -m pytest tests/ -m "unit or contract or integration" --cov=event_store --cov-report=term-missing --cov-fail-under=80
+
+test:fusion:
+  stage: test
+  # E4-S6: fusion alert correlation & suppression; ≥90% coverage (per story AC12)
+  script:
+    - pip install -e shared/
+    - pip install -e "fusion/[dev]"
+    - cd fusion && python -m pytest tests/ -m "unit or contract or integration" --cov=fusion --cov-report=term-missing --cov-fail-under=90
 
 test:cloud-backend:
   stage: test
