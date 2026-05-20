@@ -16,9 +16,9 @@ so that `fusion` can maintain a closed-ledger per-coach count and detect inter-w
 
 1. **cameras.json gangway camera schema + startup validation:** Given `cameras.json` includes a camera entry with `zone: "gangway-fwd"` or `zone: "gangway-aft"` and a `tripwire` field specifying a polygon line across the camera frame, when `rtsp-ingest` starts, then each gangway camera is loaded with its tripwire configuration `{ coach_from, coach_to, direction_axis, tripwire_polygon }`; a missing `tripwire` field on a gangway-zone camera raises a startup error (sys.exit or RuntimeError caught by the pipeline thread).
 
-2. **WAGON_EXIT emission:** Given `hailotracker` is tracking a `track_id` in a gangway camera frame, when the tracked person's bounding box centroid crosses the tripwire polygon from the `coach_from` side to the `coach_to` side, then a `WAGON_EXIT` event is POSTed to `event-store` via `DEFAULT_RETRY` with payload matching `WagonExitPayload`: `{ track_id: int, coach_from, coach_to, camera_id, direction, confidence }`; `direction` is `"forward"` or `"backward"` relative to train direction of travel.
+2. **WAGON_EXIT emission:** Given `hailotracker` is tracking a `track_id` in a gangway camera frame, when the tracked person's bounding box centroid crosses the tripwire polygon from the `coach_from` side to the `coach_to` side, then a `WAGON_EXIT` event is POSTed to `event-store` via `DEFAULT_RETRY` with payload matching `WagonExitPayload`: `{ track_id: int, coach_from, coach_to, camera_id, traversal, confidence, expect_orphan }`; `traversal` is `"from_to"` or `"to_from"` from the camera-frame perspective (D1: renamed from `direction`; train direction-of-travel not computable at edge — push-pull operation, Stadler SNMP OID TBD).
 
-3. **WAGON_ENTRY emission:** Given a `WAGON_EXIT` event has been emitted for a `track_id`, when the same `track_id` is subsequently detected crossing the entry tripwire on the adjacent coach's gangway camera, then a `WAGON_ENTRY` event is POSTed to `event-store` with the same `track_id`, `coach_from`, `coach_to`, and `direction`; the pair is linked by `track_id`.
+3. **WAGON_ENTRY emission:** Given a `WAGON_EXIT` event has been emitted for a `track_id`, when the same `track_id` is subsequently detected crossing the entry tripwire on the adjacent coach's gangway camera, then a `WAGON_ENTRY` event is POSTed to `event-store` with the same `track_id`, `coach_from`, `coach_to`, and `traversal`; the pair is linked by `track_id`.
 
 4. **Low-confidence suppression:** Given a tripwire crossing is detected with `confidence < 0.70`, when the event would be emitted, then the event is NOT posted; a structured log is emitted at DEBUG with `reason: "low_confidence"`, `track_id`, `confidence`; the track continues to be monitored.
 
@@ -223,7 +223,29 @@ async def _emit_wagon_exit(self, ...) -> None:
     resp.raise_for_status()
 ```
 
-## Senior Developer Review (AI)
+## Senior Developer Review (AI) — Round 2
+
+**Review Date:** 2026-05-20 (second pass, post-patch)
+**Reviewer Model:** opus (3 parallel layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor)
+**Outcome:** APPROVED (after follow-up patches)
+
+### Review Findings
+
+**Decision-Needed:**
+- [x] [Review][Decision] D3: Orphan timer on fwd camera is never cancelled by aft camera WAGON_ENTRY — resolved Option A (party-mode roundtable Winston/Amelia): downgrade `orphaned_exit` log WARNING→DEBUG, add TODO(E4-S9) comment; handlers remain isolated. [tripwire.py:_handle_orphaned_exit]
+
+**Patch:**
+- [x] [Review][Patch] P8: Confidence never propagated from `accepted` dicts to TripwireHandler — added `"confidence": confidence` to person dict in `accepted.append()` [callback.py:472-479]
+- [x] [Review][Patch] P9: `_last_side` switched from `dict` to `OrderedDict`; `move_to_end(track_id)` on every write for true LRU eviction [tripwire.py:_last_side, _maybe_evict_last_side]
+- [x] [Review][Patch] P10: Prior orphan handle cancelled BEFORE `await _emit_wagon_exit` — eliminates race between concurrent same-track crossings [tripwire.py:_handle_detection]
+- [x] [Review][Patch] P11: Dismissed — `fusion_url` has a non-None default in Settings; `str` field cannot be None [inference/config.py:28]
+- [x] [Review][Patch] P12: Dismissed — `sys.exit(1)` runs in main lifespan thread before pipeline threads start; SystemExit is correct process-level behaviour here [main.py:wire()]
+- [x] [Review][Patch] P13: AC2/AC3 acceptance text updated to `traversal`/`"from_to"/"to_from"` and `expect_orphan` [4-8-gangway-tripwire-ingest.md:AC2,AC3]
+
+**Deferred:**
+- [x] [Review][Defer] W3: State (`_last_side`) committed before HTTP emit — if emit fails after retries, crossing is lost AND side is already flipped [tripwire.py:_handle_detection] — deferred, pre-existing emit-then-commit pattern shared with ZoneCounter; idempotency key work tracked as W1
+
+## Senior Developer Review (AI) — Round 1
 
 **Review Date:** 2026-05-20
 **Reviewer Model:** opus (3 parallel layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor)

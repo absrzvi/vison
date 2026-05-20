@@ -475,6 +475,7 @@ class OccupancyCallback:
                         "label": label,
                         "bbox": bbox,
                         "in_vestibule": in_vestibule,
+                        "confidence": confidence,
                     }
                 )
             elif label == "bicycle":

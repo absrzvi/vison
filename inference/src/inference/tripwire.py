@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -133,7 +134,9 @@ class TripwireHandler:
 
         # track_id → last observed side ("from" | "to")
         # Capped at _LAST_SIDE_MAX_SIZE to prevent unbounded growth over long journeys (P5).
-        self._last_side: dict[int, str] = {}
+        # P9: OrderedDict for LRU eviction — move_to_end on every write keeps
+        # recently-active tracks safe; eviction prunes truly-oldest entries.
+        self._last_side: OrderedDict[int, str] = OrderedDict()
         # track_id → pending exit state (waiting for paired WAGON_ENTRY)
         self._pending_exits: dict[int, _PendingExit] = {}
 
@@ -193,6 +196,7 @@ class TripwireHandler:
         if prev_side is None or prev_side == current_side:
             # No crossing — update side unconditionally (first sight or no change).
             self._last_side[track_id] = current_side
+            self._last_side.move_to_end(track_id)  # P9: LRU — keep recently-active at tail
             self._maybe_evict_last_side()
             return
 
@@ -211,6 +215,7 @@ class TripwireHandler:
 
         # Commit side transition only after passing confidence gate.
         self._last_side[track_id] = current_side
+        self._last_side.move_to_end(track_id)  # P9: LRU
         self._maybe_evict_last_side()
 
         # Compute traversal from camera-frame perspective.
@@ -238,6 +243,16 @@ class TripwireHandler:
             # handler (it will not see a paired WAGON_ENTRY). Emit with
             # expect_orphan=True and skip the orphan timer to avoid phantom alerts.
             expect_orphan = raw_traversal == "to_from"
+
+            # P10: cancel any prior orphan handle BEFORE awaiting the emit so a
+            # concurrent second crossing for the same track_id cannot race the
+            # pop-then-arm sequence (asyncio is single-threaded but a second
+            # run_coroutine_threadsafe task can interleave at any await point).
+            if not expect_orphan:
+                prior = self._pending_exits.pop(track_id, None)
+                if prior and prior.orphan_handle:
+                    prior.orphan_handle.cancel()
+
             await self._emit_wagon_exit(
                 track_id=track_id,
                 coach_from=self._config.coach_from,
@@ -248,11 +263,8 @@ class TripwireHandler:
             )
 
             if not expect_orphan:
-                # Schedule orphan timer only for from_to crossings (AC5).
-                # P1/P2: cancel any prior timer for this track_id before arming a new one.
-                prior = self._pending_exits.pop(track_id, None)
-                if prior and prior.orphan_handle:
-                    prior.orphan_handle.cancel()
+                # Arm orphan timer AFTER emit succeeds (AC5).
+                # P1/P2: prior handle already cancelled above.
 
                 loop = asyncio.get_running_loop()
                 # Capture values at schedule time to avoid stale-closure (E3 retro A3).
@@ -380,10 +392,17 @@ class TripwireHandler:
     async def _handle_orphaned_exit(
         self, track_id: int, coach_from: str, coach_to: str
     ) -> None:
-        """Called when WAGON_EXIT has no matching WAGON_ENTRY within timeout (AC5)."""
+        """Called when WAGON_EXIT has no matching WAGON_ENTRY within timeout (AC5).
+
+        D3: This fires on every normal traversal because the aft handler does not
+        cancel the fwd handler's pending entry (handlers are isolated by design).
+        fusion's closed-ledger (E4-S9) is the authoritative reconciliation point.
+        # TODO(E4-S9): remove or reclassify this signal once fusion emits orphan events.
+        Logged at DEBUG (not WARNING) to avoid alert fatigue on normal crossings.
+        """
         # Remove from pending (may already be gone if WAGON_ENTRY arrived just in time)
         self._pending_exits.pop(track_id, None)
-        log.warning(
+        log.debug(
             "tripwire.orphaned_exit",
             camera_id=self._camera_id,
             track_id=track_id,

@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: code review of 4-8-gangway-tripwire-ingest round 2 (2026-05-20, opus)
+
+- **W3** — `_last_side` committed before HTTP emit — if emit fails after retries, crossing is lost AND side is already flipped, preventing re-trigger. Pre-existing emit-then-commit pattern shared with ZoneCounter; idempotency key work tracked as W1. [tripwire.py:_handle_detection]
+
 ## Deferred from: code review of 4-8-gangway-tripwire-ingest (2026-05-20, opus)
 
 - **W1** — `@DEFAULT_RETRY` on `_emit_wagon_exit`/`_emit_wagon_entry` may duplicate events (non-idempotent POST). Pre-existing shared pattern, same as ZoneCounter. [tripwire.py:_emit_wagon_exit/entry]
