@@ -307,7 +307,8 @@ def test_bicycle_below_confidence_threshold_suppressed():
 
 ### Agent Model Used
 
-claude-sonnet-4-6
+claude-sonnet-4-6 (initial implementation)
+claude-opus-4-7-1M (2026-05-20 — code-review follow-up to address R1–R19 + F1–F13)
 
 ### Debug Log References
 
@@ -321,7 +322,24 @@ N/A — implementation completed without blockers.
 - `health.py`: extended `ContextPushModel` with `ramp_deployed`, `ramp_door_id`, `ramp_station_id`; `build_app` now accepts optional `safety_handler`; ramp event fires via `asyncio.ensure_future`
 - `zone_counter.py`: added `_check_slip_fall` (height collapse + centroid velocity), `_post_slip_fall_candidate` (→ fusion), `_check_vestibule_congestion` (→ event-store, 10s rate-limit), `_post_vestibule_congestion`
 - `main.py`: `_load_cameras_data` returns tuple (cameras, full json); `wire()` instantiates `SafetyHandler` and threads it through callbacks and `build_app`
-- **Quality gates**: mypy 0 errors, ruff 0 violations, 119 tests pass, 91.62% coverage (≥90% threshold)
+- **Quality gates** (2026-05-19): mypy 0 errors, ruff 0 violations, 119 tests pass, 91.62% coverage (≥90% threshold)
+
+#### 2026-05-20 review follow-up (claude-opus-4-7-1M)
+
+- ✅ Resolved review finding [BLOCKER R1]: vestibule_id `f"{car_id}-{zone}"` kept; test updated to expect `"car-1-door"`
+- ✅ Resolved review finding [Decision R2]: strict — skip emit when `confidence is None`; test inverted to assert no emit
+- ✅ Resolved review finding [Decision R3]: PoC simplification — `car_id = settings.vehicle_id`; deferred coach-level resolution to E4-S6
+- ✅ Resolved review finding [Decision R4]: dropped `_last_track_ids` correlation; `triggered_by_track_id="unknown"` always; fusion (E4-S6) correlates
+- ✅ Resolved review finding [Decision R5]: added optional `vestibule_zone` polygon to cameras.json schema; callback tags `in_vestibule` per person; ZoneCounter uses the tagged subset
+- ✅ Resolved review finding [Decision R6]: `door_state="unknown"` (AC1 authoritative); shared schema Literal already accepts it
+- ✅ Resolved review finding [Decision R7]: `camera_id` threaded through `ZoneCounter.update()`; `_track_bboxes` re-keyed by `(car_id, camera_id)` for multi-camera-per-car
+- ✅ Resolved review finding [Patch R8]: `add_done_callback(_on_post_done)` on ramp-deployed schedule
+- ✅ Resolved review finding [Patch R9]: `loop_holder.loop` + `run_coroutine_threadsafe` pattern; threaded through `build_app()`
+- ✅ Resolved review finding [Patch R10]: collapsed by R4 deletion
+- ✅ Resolved review finding [Decision R12]: unique per-emit suitcase track_id `f"suitcase-{ms}"`
+- ✅ Resolved review finding [Patch R13]: removed unused `bbox` parameter from `_handle_person_door_obstruction`
+- ✅ Added R19: TestClient happy-path test for `POST /context ramp_deployed=True → safety_handler.on_ramp_deployed`
+- **Quality gates (2026-05-20)**: mypy 0 errors, ruff 0 violations, **119 pass / 0 fail**, coverage 91.03% (≥90%); shared 125 pass
 
 ### File List
 
@@ -337,7 +355,126 @@ inference/tests/unit/test_accessibility.py
 inference/tests/unit/test_safety.py
 inference/tests/unit/test_vestibule_congestion.py
 inference/tests/unit/test_door_obstruction.py
+inference/tests/unit/test_health.py
+cameras.json
+shared/src/oebb_shared/events/payloads.py
+_bmad-output/implementation-artifacts/deferred-work.md
 
 ### Change Log
 
 - 2026-05-19: Story 4-5 implemented — safety & accessibility detection: door obstruction (AC1), accessibility detected (AC2), ramp deployed (AC3), slip/fall (AC4), vestibule congestion (AC5), detection class expansion (AC6), quality gates (AC7)
+- 2026-05-20: Addressed code review findings — 20 items resolved (R1–R13/R19 + F1–F13/F-decision-merged). Key changes: dropped `_last_track_ids` correlation (R4), threaded `camera_id` through `ZoneCounter.update()` for multi-camera-per-car (R7), added optional `vestibule_zone` polygon to cameras.json schema (R5), `door_state="unknown"` per AC1 (R6), unique per-emit suitcase track_id (R12), strict `confidence is None` skip (R2), `loop_holder` threaded through `build_app()` (R9). 119 tests pass, coverage 91.03%, mypy/ruff clean.
+
+## Senior Developer Review (AI)
+
+**Review Date:** 2026-05-19
+**Review Outcome:** Changes Requested
+**Layers:** Blind Hunter · Edge Case Hunter · Acceptance Auditor (claude-opus-4-7)
+
+### Action Items
+
+- [x] [Review][Decision] F11: `door_state` value — resolved 2026-05-20: schema Literal extended to include `"unknown"`; impl emits `"unknown"` per AC1. Dev Notes line 106 ("`open`" recommendation) superseded. [callback.py:297, shared/.../payloads.py:171]
+- [x] [Review][Patch] F1: `_door_zone_hits` pruned each frame for tracks that left the scene [callback.py:496-503]
+- [x] [Review][Patch] F2: `_track_bboxes` pruned each frame for disappeared tracks; also re-keyed by `(car_id, camera_id)` so multi-camera-per-car doesn't clobber [zone_counter.py:289-297]
+- [x] [Review][Patch] F3: `_last_suitcase_bbox` cleared when no suitcase detected in frame [callback.py:489-492]
+- [x] [Review][Patch] F4: Person obstruction counter reset to 0 after threshold emit [callback.py:254]
+- [x] [Review][Patch] F5: Suitcase IoU obstruction counter reset to 0 after threshold emit [callback.py:221]
+- [x] [Review][Patch] F6: `_dispatch_bicycle` rate-limited to one emit per camera per 10s [callback.py:317-321]
+- [x] [Review][Patch] F7: health.py uses `loop_holder.loop` (with `get_running_loop` fallback for tests); both via `run_coroutine_threadsafe` + `add_done_callback` [health.py:93-120]
+- [x] [Review][Patch] F8: Resolved 2026-05-20 via R5 — vestibule_zone polygon added to `cameras.json` schema; callback tags persons whose centroid is in the vestibule polygon; ZoneCounter counts the tagged subset rather than whole-car count [callback.py:_call_, zone_counter.py:165-176]
+- [x] [Review][Patch] F9: Resolved 2026-05-20 as PoC simplification — `car_id = settings.vehicle_id`; deferred coach-level resolution to E4-S6 with ZFR per-coach signals (see deferred-work.md R3 entry, safety.py module docstring) [safety.py:55]
+- [x] [Review][Patch] F10: Resolved 2026-05-20 — `vestibule_id = f"{car_id}-{zone}"` (dynamic per camera zone); test updated to match [zone_counter.py:328, test_vestibule_congestion.py:50]
+- [x] [Review][Patch] F12: Resolved 2026-05-20 via R4 — `_last_track_ids` and `update_last_track` removed entirely; `triggered_by_track_id = "unknown"` unconditionally on inference side; fusion (E4-S6) correlates [safety.py]
+- [x] [Review][Patch] F13: `_dispatch_bicycle` skips emit when `confidence is None` (strict interpretation of AC2) [callback.py:317]
+- [x] [Review][Defer] F14: Private access `self._zone_counter._journey_holder.journey_id` in `_post_accessibility_event` [callback.py] — deferred, pre-existing pattern in codebase
+
+## Review Follow-ups (AI)
+
+- [x] [AI-Review][Decision] F11: door_state canonical value resolved to `"unknown"` (AC1 wins); shared schema Literal extended
+- [x] [AI-Review][Patch] F1: Prune `_door_zone_hits` for disappeared tracks
+- [x] [AI-Review][Patch] F2: Prune `_track_bboxes` for disappeared tracks
+- [x] [AI-Review][Patch] F3: Prune `_last_suitcase_bbox` for disappeared cameras/frames
+- [x] [AI-Review][Patch] F4: Reset person obstruction counter after threshold emit
+- [x] [AI-Review][Patch] F5: Reset suitcase obstruction counter after threshold emit
+- [x] [AI-Review][Patch] F6: Add rate-limit / de-dup to `_dispatch_bicycle`
+- [x] [AI-Review][Patch] F7: Fix `asyncio.get_event_loop()` in health.py — uses `loop_holder.loop`
+- [x] [AI-Review][Patch] F8: Pass vestibule-zone person count (via `in_vestibule` tag), not whole-car count
+- [x] [AI-Review][Patch] F9: car_id stays as vehicle_id (PoC simplification); deferred to E4-S6
+- [x] [AI-Review][Patch] F10: Use `zone` in `vestibule_id` construction (`f"{car_id}-{zone}"`)
+- [x] [AI-Review][Patch] F12: `SafetyHandler._last_track_ids` removed; `triggered_by_track_id="unknown"` always
+- [x] [AI-Review][Patch] F13: Enforce confidence threshold even when `confidence is None` (skip emit)
+
+## Review Findings — Fresh BMAD Code Review (2026-05-20)
+
+**Review Date:** 2026-05-20
+**Review Outcome:** Changes Requested — BLOCKER: AC7 quality gate violated (2 of 119 tests fail on master)
+**Layers:** Blind Hunter · Edge Case Hunter · Acceptance Auditor (claude-opus-4-7-1M)
+**Quality Gate Evidence:** mypy --strict PASS · ruff PASS · coverage 90.92% (above 90%) · **pytest 117 PASS / 2 FAIL**
+
+### Decision Needed
+
+- [x] [Review][Decision] R2: Resolved 2026-05-20 — strict: skip emit when `confidence is None` (AC2 wording "confidence >= threshold" — None is not >=). Test `test_bicycle_none_confidence_still_emits` renamed to `test_bicycle_none_confidence_skips_emit` and inverted. [callback.py:317, test_accessibility.py:152]
+- [x] [Review][Decision] R3: Resolved 2026-05-20 — `car_id = settings.vehicle_id` as PoC simplification. Coach-level resolution deferred to E4-S6 (see deferred-work.md). [safety.py:55]
+- [x] [Review][Decision] R4: Resolved 2026-05-20 — feature dropped entirely; `_last_track_ids` and `update_last_track` removed; `triggered_by_track_id="unknown"` always. Fusion (E4-S6) correlates. [safety.py]
+- [x] [Review][Decision] R5: Resolved 2026-05-20 — added optional `vestibule_zone` polygon to cameras.json schema; callback tags persons whose centroid falls in the vestibule polygon via `in_vestibule` field; ZoneCounter uses the tagged subset count. [cameras.json:14, callback.py:_call_, zone_counter.py:165-176]
+- [x] [Review][Decision] R6: Resolved 2026-05-20 — `"unknown"` wins (AC1 authoritative); shared `door_state` Literal already permits `"unknown"`. Dev Notes line 106 superseded. [callback.py:297, shared/.../payloads.py:171]
+- [x] [Review][Decision] R7: Resolved 2026-05-20 — `camera_id` threaded through `ZoneCounter.update()` → `_check_slip_fall` → `_post_slip_fall_candidate`; also re-keyed `_track_bboxes` by `(car_id, camera_id)` so multi-camera-per-car doesn't clobber. [zone_counter.py:109-117, 252-258, 286, callback.py:_call_]
+- [x] [Review][Decision] R12: Resolved 2026-05-20 — unique per-emit track_id `f"suitcase-{int(time.monotonic()*1000)%100000}"` so fusion can dedupe. [callback.py:225]
+
+### Patch (BLOCKER — must fix to satisfy AC7)
+
+- [x] [Review][Patch] R1: Resolved 2026-05-20 — kept impl `f"{car_id}-{zone}"`; updated `test_vestibule_congestion_threshold_crossing` to assert `"car-1-door"` (matches the camera's zone). [zone_counter.py:328, test_vestibule_congestion.py:57]
+
+### Patch (Non-blocker)
+
+- [x] [Review][Patch] R8: `add_done_callback(_on_post_done)` attached to `run_coroutine_threadsafe` future in `health.context_push`. [health.py:113-120]
+- [x] [Review][Patch] R9: `loop_holder` threaded through `build_app()`; sync handler schedules via `run_coroutine_threadsafe(coro, loop_holder.loop)` with a `get_running_loop()` fallback for tests. [health.py:48, 93-120, main.py:113-119]
+- [x] [Review][Patch] R10: Resolved by R4 deletion — `_last_accessibility_track` removed entirely; nothing left to reorder. [callback.py:332]
+- [x] [Review][Patch] R13: `bbox` parameter removed from `_handle_person_door_obstruction`. [callback.py:243, 503]
+- [x] [Review][Patch] R19: Added `test_context_push_ramp_deployed_invokes_safety_handler` in test_health.py — drives FastAPI TestClient against a real loop-holder thread + stub safety handler, asserts the scheduled coroutine actually runs. [test_health.py:145-204]
+
+### Defer (pre-existing or future work)
+
+- [x] [Review][Defer] R11: `OccupancyCallback._event_store_client` is used to POST to `fusion_url` — variable name misleading. Cross-cutting rename to `_http_client`. Pre-existing single-client architecture decision. [callback.py — all `_event_store_client.post(fusion_url...)` sites]
+- [x] [Review][Defer] R15: `_handle_suitcase_door_obstruction` accepts `list[bbox]` but only processes `bboxes[0]` — multiple suitcases per frame silently dropped. PoC simplification; document at function level.
+- [x] [Review][Defer] R16: Slip/fall has no rate-limit / in-flight suppression at the source — relies on fusion suppression (E4-S6). Document the contract.
+- [x] [Review][Defer] R17: Suitcase obstruction `track_id` non-unique across emissions — deferred pending fusion contract (E4-S6).
+- [x] [Review][Defer] R18: Multi-camera-per-car not supported — `_car_zone[car_id]` keeps last camera's zone only; `_track_bboxes` keyed by car_id (not camera) clobbers across cameras. Current `cameras.json` is 1-cam-per-car so PoC works; document the constraint.
+- [x] [Review][Defer] R20: `zone_counter.update()` serially awaits 4 POSTs (occupancy → threshold → slip_fall → vestibule) — safety event prioritization inverted vs occupancy. Architectural; fusion suppression mitigates.
+- [x] [Review][Defer] R22: Person/suitcase obstruction emit cadence is every 2 frames (~666ms at 3fps) after counter reset — relies on fusion suppression. Document contract.
+
+### Dismissed (not reported)
+
+- R14 dismissed: `_valid_types` defensive coercion to "unknown" in `_post_door_obstruction_candidate` is impl-internal noise; callers never pass invalid values.
+- R21 dismissed: `_dispatch_bicycle` rate-limit dict race — asyncio loop serializes all `_dispatch_bicycle` invocations on a single loop, so the read-modify-write is atomic in practice.
+
+### Quality Gate Summary (rerun 2026-05-20)
+
+| Gate | Required | Actual | Status |
+|---|---|---|---|
+| `mypy --strict src/` | 0 errors | 0 errors (10 files) | PASS |
+| `ruff check src/ tests/` | 0 violations | 0 violations | PASS |
+| Coverage of `src/inference/` excl pipeline | ≥90% | 90.92% | PASS |
+| `pytest --strict-markers` | All pass | 117 PASS / 2 FAIL | **FAIL** |
+
+Failing tests:
+1. `tests/unit/test_vestibule_congestion.py::test_vestibule_congestion_threshold_crossing` — `vestibule_id` mismatch (R1)
+2. `tests/unit/test_accessibility.py::test_bicycle_none_confidence_still_emits` — F13 patch contradicts test expectation (R2)
+
+### Recommendation
+
+Status: **not-ready-for-done** → back to `in-progress` until AC7 quality gate passes. The two test failures alone block story completion. R3/R4/R5 (decision-needed) carry semantic implications for fusion (E4-S6) and should be resolved before the next epic story to avoid cascading rework.
+
+### Resolution (2026-05-20)
+
+All R1-R13/R19 items addressed (see ticks above). Quality gates re-run on the same HEAD:
+
+| Gate | Required | Actual | Status |
+|---|---|---|---|
+| `mypy --strict src/` | 0 errors | 0 errors (10 files) | PASS |
+| `ruff check src/ tests/` | 0 violations | 0 violations | PASS |
+| Coverage of `src/inference/` excl pipeline | ≥90% | 91.03% | PASS |
+| `pytest --strict-markers` | All pass | 119 PASS / 0 FAIL | PASS |
+| Shared regression (`oebb-shared`) | All pass | 125 PASS | PASS |
+
+R3 (car_id), R11, R15, R16, R17, R18, R20, R22 carry forward as deferred items in `deferred-work.md` under the 2026-05-20 heading. Status flipped `in-progress` → `review`.

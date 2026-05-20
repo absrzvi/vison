@@ -39,23 +39,13 @@ async def test_on_ramp_deployed_posts_event() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_on_ramp_deployed_uses_last_track() -> None:
-    """triggered_by_track_id is taken from _last_track_ids when available."""
-    handler = _make_handler()
-    handler.update_last_track("C1_DOOR_01", "acc-C1_DOOR_01-99999")
+async def test_on_ramp_deployed_triggered_by_track_id_is_always_unknown() -> None:
+    """R4 (2026-05-20): triggered_by_track_id is always 'unknown' from inference.
 
-    await handler.on_ramp_deployed(door_id="door-1A", station_id="VIE-HBF")
-
-    call_kwargs = handler._client.post.call_args
-    json_body = call_kwargs[1].get("json", {})
-    payload = json_body.get("payload", {})
-    assert payload.get("triggered_by_track_id") == "acc-C1_DOOR_01-99999"
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_on_ramp_deployed_no_track_uses_unknown() -> None:
-    """triggered_by_track_id is 'unknown' when no accessibility track is recorded."""
+    Fusion (E4-S6) owns ACCESSIBILITY_DETECTED → RAMP_DEPLOYED correlation. The
+    inference-side per-camera last-track dict was removed because the multi-camera
+    selection was arbitrary and the read/write race was real.
+    """
     handler = _make_handler()
 
     await handler.on_ramp_deployed(door_id="door-1A", station_id="VIE-HBF")
@@ -64,13 +54,6 @@ async def test_on_ramp_deployed_no_track_uses_unknown() -> None:
     json_body = call_kwargs[1].get("json", {})
     payload = json_body.get("payload", {})
     assert payload.get("triggered_by_track_id") == "unknown"
-
-
-@pytest.mark.unit
-def test_update_last_track_stores_track_id() -> None:
-    handler = _make_handler()
-    handler.update_last_track("cam-1", "acc-cam-1-12345")
-    assert handler._last_track_ids["cam-1"] == "acc-cam-1-12345"
 
 
 @pytest.mark.unit
@@ -85,3 +68,21 @@ async def test_on_ramp_deployed_empty_door_id_uses_unknown() -> None:
     json_body = call_kwargs[1].get("json", {})
     payload = json_body.get("payload", {})
     assert payload.get("door_id") == "unknown"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_on_ramp_deployed_car_id_uses_vehicle_id() -> None:
+    """R3 (2026-05-20): car_id is sourced from vehicle_id as a PoC simplification.
+
+    vlan-pollers /context push carries no per-coach signal today. Documented in
+    safety.py docstring and deferred-work.md.
+    """
+    handler = _make_handler()
+
+    await handler.on_ramp_deployed(door_id="door-1A", station_id="VIE-HBF")
+
+    call_kwargs = handler._client.post.call_args
+    json_body = call_kwargs[1].get("json", {})
+    payload = json_body.get("payload", {})
+    assert payload.get("car_id") == "OBB-TEST"

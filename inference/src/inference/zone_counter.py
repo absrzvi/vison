@@ -91,22 +91,38 @@ class ZoneCounter:
             car_id: asyncio.Lock() for car_id in self._states
         }
 
-        # E4-S5: slip/fall detection — last 2 bboxes per (car_id, track_id)
-        self._track_bboxes: dict[str, dict[int, tuple[float, float, float, float]]] = {}
+        # E4-S5: slip/fall detection — last bbox per (car_id, camera_id, track_id).
+        # Keyed by camera_id (not car_id alone) so multi-camera-per-car doesn't clobber
+        # tracks emitted by different cameras for the same coach.
+        self._track_bboxes: dict[
+            tuple[str, str], dict[int, tuple[float, float, float, float]]
+        ] = {}
         # E4-S5: vestibule congestion rate-limit — one emit per vestibule per 10s
         self._vestibule_last_emit: dict[str, float] = {}
 
-        # Build camera zone lookup: car_id → zone
-        self._car_zone: dict[str, str] = {
-            str(cam["coach_id"]): str(cam.get("zone", "interior")) for cam in cameras
+        # Build (car_id, camera_id) → zone lookup. Multi-camera-per-car: each camera
+        # carries its own zone, so we can't fold to car_id alone.
+        self._camera_zone: dict[tuple[str, str], str] = {
+            (str(cam["coach_id"]), str(cam["camera_id"])): str(cam.get("zone", "interior"))
+            for cam in cameras
         }
 
     def update_journey_id(self, journey_id: str) -> None:
         """Update the journey_id used for outbound envelopes (M13 — /context push)."""
         self._journey_holder.journey_id = journey_id
 
-    async def update(self, car_id: str, detections: list[dict[str, Any]]) -> None:
-        """Update zone counts from track IDs and emit events if rate allows."""
+    async def update(
+        self,
+        car_id: str,
+        detections: list[dict[str, Any]],
+        camera_id: str | None = None,
+    ) -> None:
+        """Update zone counts from track IDs and emit events if rate allows.
+
+        camera_id identifies the originating camera so slip/fall and vestibule
+        emissions carry the right source identifier and tracks are scoped per
+        camera (R7 — multi-camera-per-car).
+        """
         if car_id not in self._states:
             return
 
@@ -151,8 +167,24 @@ class ZoneCounter:
         try:
             await self._post_occupancy_update(state)
             await self._check_threshold(car_id, prev_count, state.occupancy_count)
-            await self._check_slip_fall(car_id, detections)
-            await self._check_vestibule_congestion(car_id, state.occupancy_count)
+            await self._check_slip_fall(car_id, detections, camera_id=camera_id)
+            # R5: vestibule person count is the subset whose centroid the callback
+            # tagged as in the camera's vestibule polygon. If no detection carries
+            # the tag (cameras.json without a vestibule_zone, or legacy callers),
+            # fall back to the total person count so behaviour matches the old
+            # "treat any door-camera person as vestibule" semantics.
+            person_dets = [d for d in detections if d.get("label") == "person"]
+            tagged = [d for d in person_dets if d.get("in_vestibule")]
+            vestibule_person_count = (
+                len(tagged)
+                if any("in_vestibule" in d for d in person_dets)
+                else len(person_dets)
+            )
+            await self._check_vestibule_congestion(
+                car_id,
+                vestibule_person_count,
+                camera_id=camera_id,
+            )
         finally:
             self._in_flight[car_id] = False
 
@@ -238,10 +270,21 @@ class ZoneCounter:
         resp.raise_for_status()
 
     async def _check_slip_fall(
-        self, car_id: str, detections: list[dict[str, Any]]
+        self,
+        car_id: str,
+        detections: list[dict[str, Any]],
+        camera_id: str | None = None,
     ) -> None:
-        """Detect slip/fall events from consecutive person bounding boxes."""
-        car_bboxes = self._track_bboxes.setdefault(car_id, {})
+        """Detect slip/fall events from consecutive person bounding boxes.
+
+        Tracks are keyed per (car_id, camera_id) so the same coach observed by
+        multiple cameras doesn't share a single bbox map (R7).
+        """
+        # Use a sentinel "unknown" camera bucket for callers that don't supply one
+        # (preserves backwards compat with tests that seed _track_bboxes by car_id).
+        bucket_key = (car_id, camera_id or "unknown")
+        car_bboxes = self._track_bboxes.setdefault(bucket_key, {})
+        active_track_ids: set[int] = set()
         for det in detections:
             if det.get("label") != "person":
                 continue
@@ -249,6 +292,7 @@ class ZoneCounter:
             bbox = det.get("bbox")
             if track_id is None or bbox is None:
                 continue
+            active_track_ids.add(track_id)
             prev = car_bboxes.get(track_id)
             if prev is not None:
                 h1 = prev[3] - prev[1]
@@ -265,9 +309,13 @@ class ZoneCounter:
                     await self._post_slip_fall_candidate(
                         car_id=car_id,
                         track_id=track_id,
-                        camera_id="unknown",
+                        camera_id=camera_id or "unknown",
                     )
             car_bboxes[track_id] = bbox
+        # F2: prune stale track entries for tracks that left frame
+        for stale_id in list(car_bboxes.keys()):
+            if stale_id not in active_track_ids:
+                del car_bboxes[stale_id]
 
     @DEFAULT_RETRY
     async def _post_slip_fall_candidate(
@@ -284,9 +332,32 @@ class ZoneCounter:
         )
         resp.raise_for_status()
 
-    async def _check_vestibule_congestion(self, car_id: str, person_count: int) -> None:
-        """Emit VESTIBULE_CONGESTION when door/vestibule zone exceeds threshold."""
-        zone = self._car_zone.get(car_id, "interior")
+    async def _check_vestibule_congestion(
+        self,
+        car_id: str,
+        person_count: int,
+        camera_id: str | None = None,
+    ) -> None:
+        """Emit VESTIBULE_CONGESTION when door/vestibule zone exceeds threshold.
+
+        Uses the source camera's zone when provided; falls back to a per-car
+        lookup so callers without camera context (legacy tests) still resolve a
+        zone. Multi-camera-per-car coaches need the per-camera path to avoid
+        misattributing interior counts to a door camera's vestibule (R5/R7).
+        """
+        if camera_id is not None:
+            zone = self._camera_zone.get((car_id, camera_id))
+            if zone is None:
+                return
+        else:
+            # Legacy fallback: pick any camera_id for this car. Returns "interior"
+            # if no door/vestibule camera is configured.
+            zone = next(
+                (
+                    z for (c_id, _), z in self._camera_zone.items() if c_id == car_id
+                ),
+                "interior",
+            )
         if zone not in ("door", "vestibule"):
             return
 
@@ -296,7 +367,7 @@ class ZoneCounter:
         if score <= score_threshold:
             return
 
-        vestibule_id = f"{car_id}-vestibule"
+        vestibule_id = f"{car_id}-{zone}"
         now = time.monotonic()
         if now - self._vestibule_last_emit.get(vestibule_id, 0.0) < 10.0:
             return

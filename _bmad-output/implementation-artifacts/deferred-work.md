@@ -1,5 +1,31 @@
 # Deferred Work
 
+## Deferred from: code review follow-up on 4-5-inference-safety-accessibility (2026-05-20)
+
+- **R3 (PoC)** — `RampDeployedPayload.car_id` is sourced from `settings.vehicle_id` (whole train), not a coach-level identifier. vlan-pollers `POST /context` carries no per-coach signal. Resolution requires either (a) adding `ramp_car_id` to `ContextPushModel` with vlan-pollers cooperation or (b) injecting a `door_id → car_id` reverse map from `cameras.json` into `SafetyHandler`. Decision: ship as-is for PoC; revisit with E4-S6 (fusion) when ZFR per-coach signals are available. [safety.py module docstring; safety.py:55]
+- **R11** — `OccupancyCallback._event_store_client` posts to `fusion_url` — variable name misleading. Cross-cutting rename to `_http_client`. Pre-existing single-client architecture decision from 4-4. [callback.py]
+- **R15** — `_handle_suitcase_door_obstruction` processes only `bboxes[0]` — multiple suitcases per frame silently dropped. PoC simplification. [callback.py:210]
+- **R16** — Slip/fall has no rate-limit / in-flight suppression at source — relies on fusion suppression (E4-S6 contract). [zone_counter.py:244-280]
+- **R17** — Suitcase obstruction `track_id` deduplication semantics — now generates unique per-emit IDs (`suitcase-{ms}`) via R12 fix; fusion contract for whether to treat as distinct objects vs single logical obstruction is still TBD in E4-S6.
+- **R18** — Multi-camera-per-car: partially resolved. `_track_bboxes` now keyed by `(car_id, camera_id)` and `_camera_zone` keyed by `(car_id, camera_id)` (R7 fix). Remaining gap: `_handle_suitcase_door_obstruction` uses `(camera_id, -1)` sentinel — collision-free across cameras but only one suitcase per camera tracked at a time.
+- **R20** — `zone_counter.update()` serially awaits 4 POSTs — safety prioritization inverted vs occupancy. Fusion suppression mitigates. [zone_counter.py:152-159]
+- **R22** — Person/suitcase obstruction emit cadence every 2 frames (~666ms at 3fps) after counter reset — relies on fusion suppression. [callback.py:220-221, 252-253]
+
+## Deferred from: code review of 4-5-inference-safety-accessibility (2026-05-19)
+
+- **F14** — Private access `self._zone_counter._journey_holder.journey_id` in `callback.py._post_accessibility_event`. Pre-existing pattern in codebase (same pattern in zone_counter.py); refactor to a public accessor when codebase-wide cleanup pass is done. [callback.py]
+
+## Deferred from: code review of 4-4-inference-detection-tracking-occupancy (2026-05-19)
+
+- **B** — `asyncio.Lock` constructed before event loop: PoC targets Python 3.11 where deferred loop-binding is fine; pre-3.10 would warn. No action needed until target Python version changes. [zone_counter.py:88-91]
+- **D** — `_in_flight` flag is logically redundant with per-car lock; cleanup blocked on decision C resolution. [zone_counter.py:125-130]
+- **G** — `_first_frame` TOCTOU is idempotent (setting ready=True twice is harmless); multi-source `_first_frame` semantics deferred to hardware validation day. [pipeline.py:130-135]
+- **L** — Pipeline crash keeps `/health/live` green; liveness vs. readiness probe separation is an ops/k8s configuration concern outside PoC scope. [main.py:118-128]
+- **N** — AC7 P2/P1 suppression not re-exercised through new lifespan path; original budget unit tests cover logic; no regression in diff. [budget.py]
+- **O** — `getattr(callback, "_rtsp_url", None)` accesses private attribute; refactor to public property/constructor arg in a cleanup pass. [pipeline.py:106]
+- **P** — `threshold_count = threshold_pct * capacity` float arithmetic: off-by-fraction for non-round capacities; PoC uses multiples of 10 so low risk; add `int(round(...))` when capacity types are formalised. [zone_counter.py:178]
+- **Q** — `uridecodebin` in single-source path has no `name=` tag; collides with `_source_pipeline_multi` naming scheme on multi-source upgrade; fix on hardware day. [pipeline.py:116]
+
 ## Deferred to E4-S6 (fusion) from story 4-4 party mode (2026-05-19)
 
 - **Coach-level "occupancy signal lost" health indicator.** Trigger: coach is in scheduled service AND zero detections for >5 minutes. Visualisation: amber badge on Control Centre map; "?" instead of occupancy bar on Conductor App. Promote to red when correlated with APC door-cycle events (APC says boarding happened, camera says zero → confirmed fault). Owns cross-VLAN correlation: APC + camera + scheduled service window. Per ADR-18 this lives in fusion, not inference.

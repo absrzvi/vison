@@ -115,6 +115,7 @@ def wire(
         budget=budget,
         journey_holder=journey_holder,
         safety_handler=safety_handler,
+        loop_holder=loop_holder,
     )
     return budget, journey_holder, callbacks, app
 

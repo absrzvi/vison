@@ -140,3 +140,79 @@ def test_context_non_bool_p2_throttled_returns_422() -> None:
     client = make_client(ready=True)
     r = client.post("/context", json={"p2_throttled": "false"})
     assert r.status_code == 422
+
+
+@pytest.mark.unit
+def test_context_push_ramp_deployed_invokes_safety_handler() -> None:
+    """R19 (2026-05-20): POST /context with ramp_deployed=True schedules
+    safety_handler.on_ramp_deployed onto the loop_holder loop."""
+    import asyncio
+    import threading
+
+    from inference.health import build_app
+    from inference.models import LoopHolder
+
+    # Spin up a real asyncio loop in a background thread so run_coroutine_threadsafe
+    # has a target. Mirrors the lifespan pattern used in main.py.
+    loop_started = threading.Event()
+    holder = LoopHolder(loop=None)
+
+    def _runner() -> None:
+        lp = asyncio.new_event_loop()
+        asyncio.set_event_loop(lp)
+        holder.loop = lp
+        loop_started.set()
+        lp.run_forever()
+
+    t = threading.Thread(target=_runner, daemon=True)
+    t.start()
+    try:
+        loop_started.wait(timeout=2.0)
+        assert holder.loop is not None
+
+        # Track invocations against the safety_handler stub.
+        seen: list[tuple[str, str]] = []
+        done = threading.Event()
+
+        class _StubSafety:
+            async def on_ramp_deployed(self, door_id: str, station_id: str) -> None:
+                seen.append((door_id, station_id))
+                done.set()
+
+        safety = _StubSafety()
+
+        client = TestClient(
+            build_app(
+                readiness=[ReadinessHolder(camera_id="C1", ready=True)],
+                budget=make_budget(),
+                journey_holder=JourneyHolder(journey_id="OBB-TEST_t1_20260519"),
+                safety_handler=safety,  # type: ignore[arg-type]
+                loop_holder=holder,
+            )
+        )
+        r = client.post(
+            "/context",
+            json={
+                "p2_throttled": False,
+                "ramp_deployed": True,
+                "ramp_door_id": "door-1A",
+                "ramp_station_id": "VIE-HBF",
+            },
+        )
+        assert r.status_code == 200
+
+        # Wait for the scheduled coroutine to actually run on the background loop.
+        assert done.wait(timeout=2.0), "safety_handler.on_ramp_deployed never called"
+        assert seen == [("door-1A", "VIE-HBF")]
+    finally:
+        if holder.loop is not None:
+            holder.loop.call_soon_threadsafe(holder.loop.stop)
+        t.join(timeout=2.0)
+
+
+@pytest.mark.unit
+def test_context_push_ramp_non_bool_returns_422() -> None:
+    """StrictBool also applies to ramp_deployed."""
+    client = make_client(ready=True)
+    r = client.post("/context", json={"p2_throttled": False, "ramp_deployed": "yes"})
+    assert r.status_code == 422

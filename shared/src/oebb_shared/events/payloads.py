@@ -168,7 +168,7 @@ class DoorObstructionPayload(_BasePayload):
     track_id: _NonEmptyStr
     camera_id: _NonEmptyStr
     confidence: _ConfidenceScore | None = None
-    door_state: Literal["open", "closing", "closed"]
+    door_state: Literal["open", "closing", "closed", "unknown"]
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:

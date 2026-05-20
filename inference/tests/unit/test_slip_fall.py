@@ -57,17 +57,18 @@ async def test_fall_detected_on_height_collapse_and_velocity() -> None:
 
     zc._post_slip_fall_candidate = mock_post_slip  # type: ignore[method-assign]
 
-    # Seed previous bbox
-    zc._track_bboxes.setdefault("car-1", {})[42] = prev_bbox  # type: ignore[attr-defined]
+    # Seed previous bbox under the (car_id, camera_id) bucket
+    zc._track_bboxes.setdefault(("car-1", "C1_INT_01"), {})[42] = prev_bbox  # type: ignore[attr-defined]
 
     detections: list[dict[str, Any]] = [
         {"track_id": 42, "label": "person", "bbox": curr_bbox}
     ]
-    await zc._check_slip_fall("car-1", detections)  # type: ignore[attr-defined]
+    await zc._check_slip_fall("car-1", detections, camera_id="C1_INT_01")  # type: ignore[attr-defined]
 
     assert len(posted) == 1
     assert posted[0]["car_id"] == "car-1"
     assert posted[0]["track_id"] == 42
+    assert posted[0]["camera_id"] == "C1_INT_01"
 
 
 @pytest.mark.unit
@@ -86,9 +87,13 @@ async def test_no_fall_on_height_collapse_alone() -> None:
         posted.append(True)
 
     zc._post_slip_fall_candidate = mock_post_slip  # type: ignore[method-assign]
-    zc._track_bboxes.setdefault("car-1", {})[7] = prev_bbox  # type: ignore[attr-defined]
+    zc._track_bboxes.setdefault(("car-1", "C1_INT_01"), {})[7] = prev_bbox  # type: ignore[attr-defined]
 
-    await zc._check_slip_fall("car-1", [{"track_id": 7, "label": "person", "bbox": curr_bbox_low_vel}])  # type: ignore[attr-defined]
+    await zc._check_slip_fall(
+        "car-1",
+        [{"track_id": 7, "label": "person", "bbox": curr_bbox_low_vel}],
+        camera_id="C1_INT_01",
+    )  # type: ignore[attr-defined]
     assert len(posted) == 0
 
 
@@ -108,9 +113,13 @@ async def test_no_fall_on_velocity_alone() -> None:
         posted.append(True)
 
     zc._post_slip_fall_candidate = mock_post_slip  # type: ignore[method-assign]
-    zc._track_bboxes.setdefault("car-1", {})[99] = prev_bbox  # type: ignore[attr-defined]
+    zc._track_bboxes.setdefault(("car-1", "C1_INT_01"), {})[99] = prev_bbox  # type: ignore[attr-defined]
 
-    await zc._check_slip_fall("car-1", [{"track_id": 99, "label": "person", "bbox": curr_bbox}])  # type: ignore[attr-defined]
+    await zc._check_slip_fall(
+        "car-1",
+        [{"track_id": 99, "label": "person", "bbox": curr_bbox}],
+        camera_id="C1_INT_01",
+    )  # type: ignore[attr-defined]
     assert len(posted) == 0
 
 
@@ -128,7 +137,11 @@ async def test_no_fall_on_first_frame() -> None:
 
     zc._post_slip_fall_candidate = mock_post_slip  # type: ignore[method-assign]
 
-    await zc._check_slip_fall("car-1", [{"track_id": 5, "label": "person", "bbox": curr_bbox}])  # type: ignore[attr-defined]
+    await zc._check_slip_fall(
+        "car-1",
+        [{"track_id": 5, "label": "person", "bbox": curr_bbox}],
+        camera_id="C1_INT_01",
+    )  # type: ignore[attr-defined]
     assert len(posted) == 0
 
 
@@ -142,5 +155,9 @@ async def test_bbox_updated_after_check() -> None:
     zc._track_bboxes = {}  # type: ignore[attr-defined]
     zc._post_slip_fall_candidate = AsyncMock()  # type: ignore[method-assign]
 
-    await zc._check_slip_fall("car-1", [{"track_id": 3, "label": "person", "bbox": bbox}])  # type: ignore[attr-defined]
-    assert zc._track_bboxes["car-1"][3] == bbox  # type: ignore[attr-defined]
+    await zc._check_slip_fall(
+        "car-1",
+        [{"track_id": 3, "label": "person", "bbox": bbox}],
+        camera_id="C1_INT_01",
+    )  # type: ignore[attr-defined]
+    assert zc._track_bboxes[("car-1", "C1_INT_01")][3] == bbox  # type: ignore[attr-defined]

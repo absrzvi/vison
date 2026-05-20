@@ -148,8 +148,14 @@ async def test_bicycle_unmapped_camera_skips_emit() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_bicycle_none_confidence_still_emits() -> None:
-    """bicycle with confidence=None (unavailable) passes threshold check and emits."""
+async def test_bicycle_none_confidence_skips_emit() -> None:
+    """bicycle with confidence=None (unavailable) fails the threshold check → no emit.
+
+    R2 (2026-05-20): AC2 wording is "confidence >= threshold". A missing
+    confidence value is not >= the threshold, so the detector's frame is
+    discarded. Fusion / cloud retraining picks up the gap if it's a model
+    issue rather than a transient detector miss.
+    """
     cb = _make_callback()
 
     posted: list[Any] = []
@@ -167,21 +173,4 @@ async def test_bicycle_none_confidence_still_emits() -> None:
         bbox=(10.0, 10.0, 200.0, 300.0),
     )
 
-    assert len(posted) == 1
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_last_accessibility_track_updated() -> None:
-    """After a bicycle detection, _last_accessibility_track stores the synthetic track_id."""
-    cb = _make_callback()
-    cb._post_accessibility_event = AsyncMock()  # type: ignore[method-assign]
-
-    await cb._dispatch_bicycle(
-        camera_id="C1_DOOR_01",
-        confidence=0.85,
-        bbox=(10.0, 10.0, 200.0, 300.0),
-    )
-
-    assert "C1_DOOR_01" in cb._last_accessibility_track
-    assert cb._last_accessibility_track["C1_DOOR_01"].startswith("acc-")
+    assert len(posted) == 0

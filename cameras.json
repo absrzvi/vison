@@ -10,7 +10,8 @@
       "seat_zones": [
         { "name": "seating-fwd", "polygon": [[0, 0], [640, 0], [640, 300], [0, 300]] },
         { "name": "aisle", "polygon": [[200, 300], [440, 300], [440, 480], [200, 480]] }
-      ]
+      ],
+      "vestibule_zone": { "name": "vestibule-1A", "polygon": [[200, 300], [440, 300], [440, 480], [200, 480]] }
     },
     {
       "camera_id": "C1_INT_01",

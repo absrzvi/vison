@@ -144,6 +144,16 @@ class OccupancyCallback:
         # M2/P-M16: RTSP URL stored here so InferencePipeline can pass it to GStreamer
         # without re-reading cameras.json (single source of truth).
         self._rtsp_url = str(camera.get("rtsp_url", ""))
+        # R5: optional vestibule polygon for door cameras. When present, callback
+        # tags persons whose centroid falls inside it; ZoneCounter uses the count
+        # of tagged persons for VESTIBULE_CONGESTION (not the seat-zone count).
+        vest_raw = camera.get("vestibule_zone")
+        self._vestibule_zone: ZoneMask | None = None
+        if isinstance(vest_raw, dict) and vest_raw.get("polygon"):
+            self._vestibule_zone = ZoneMask(
+                name=str(vest_raw.get("name", "vestibule")),
+                polygon=[list(p) for p in vest_raw["polygon"]],
+            )
 
         if not zone_masks:
             log.critical(
@@ -169,8 +179,8 @@ class OccupancyCallback:
         self._door_zone_hits: dict[tuple[str, int], int] = {}
         # E4-S5: last suitcase bbox per camera for IoU-based pseudo-tracking
         self._last_suitcase_bbox: dict[str, tuple[float, float, float, float] | None] = {}
-        # E4-S5: last accessibility track per camera (updated on every bicycle emit)
-        self._last_accessibility_track: dict[str, str] = {}
+        # E4-S5: bicycle rate-limit — one emit per camera per 10s
+        self._bicycle_last_emit: dict[str, float] = {}
 
         # P-M20: bbox coord space verification — first-frame range check.
         # HARDWARE-VERIFY: Hailo bbox space (pixel vs normalized) confirmed on first
@@ -216,13 +226,16 @@ class OccupancyCallback:
         self._last_suitcase_bbox[self._camera_id] = best_bbox
 
         if count >= self._settings.door_obstruction_min_frames:
+            self._door_zone_hits[hit_key] = 0  # reset to avoid per-frame flood
             door_id = self._cam_to_door.get(self._camera_id, "unknown")
+            # R12: unique per-emit track_id so fusion can dedupe vs distinct obstructions.
+            unique_track = f"suitcase-{int(time.monotonic() * 1000) % 100000}"
             try:
                 fut = asyncio.run_coroutine_threadsafe(
                     self._post_door_obstruction_candidate(
                         door_id=door_id,
                         obstruction_type="object",
-                        track_id="suitcase-0",
+                        track_id=unique_track,
                         confidence=None,
                     ),
                     loop,
@@ -238,7 +251,6 @@ class OccupancyCallback:
     def _handle_person_door_obstruction(
         self,
         track_id: int,
-        bbox: tuple[float, float, float, float],
         loop: asyncio.AbstractEventLoop,
     ) -> None:
         """Track person detections in door zone and emit candidate after min_frames."""
@@ -247,6 +259,7 @@ class OccupancyCallback:
         self._door_zone_hits[hit_key] = count
 
         if count >= self._settings.door_obstruction_min_frames:
+            self._door_zone_hits[hit_key] = 0  # reset to avoid per-frame flood
             door_id = self._cam_to_door.get(self._camera_id, "unknown")
             try:
                 fut = asyncio.run_coroutine_threadsafe(
@@ -277,9 +290,9 @@ class OccupancyCallback:
         if self._event_store_client is None:
             return
         log.info(
-            "callback.door_state_default_open",
+            "callback.door_state_unknown",
             camera_id=self._camera_id,
-            note="door_state defaults to open; fusion will cross-reference ZFR",
+            note="door_state unknown until ZFR cross-reference in fusion",
         )
         _valid_types = ("person", "object", "unknown")
         safe_type = obstruction_type if obstruction_type in _valid_types else "unknown"
@@ -290,7 +303,7 @@ class OccupancyCallback:
             track_id=track_id,
             camera_id=self._camera_id,
             confidence=confidence,
-            door_state="open",
+            door_state="unknown",
         )
         resp = await self._event_store_client.post(
             f"{self._settings.fusion_url}/candidates/door_obstruction",
@@ -306,8 +319,15 @@ class OccupancyCallback:
     ) -> None:
         """Evaluate bicycle detection and emit ACCESSIBILITY_DETECTED if threshold met."""
         threshold = self._settings.accessibility_confidence_threshold
-        if confidence is not None and confidence < threshold:
+        # F13: None confidence means detector gave no score — skip rather than assume pass
+        if confidence is None or confidence < threshold:
             return
+
+        # F6: rate-limit to one emit per camera per 10s
+        now = time.monotonic()
+        if now - self._bicycle_last_emit.get(camera_id, 0.0) < 10.0:
+            return
+        self._bicycle_last_emit[camera_id] = now
 
         near_door_id = self._cam_to_door.get(camera_id)
         if near_door_id is None:
@@ -319,10 +339,8 @@ class OccupancyCallback:
             return
 
         synthetic_track = f"acc-{camera_id}-{int(time.monotonic() * 1000) % 100000}"
-        self._last_accessibility_track[camera_id] = synthetic_track
-        if self._safety_handler is not None:
-            self._safety_handler.update_last_track(camera_id, synthetic_track)
-
+        # R4 (2026-05-20): no longer correlates with SafetyHandler. Fusion (E4-S6)
+        # owns ACCESSIBILITY_DETECTED → RAMP_DEPLOYED correlation.
         await self._post_accessibility_event(
             camera_id=camera_id,
             track_id=synthetic_track,
@@ -441,7 +459,20 @@ class OccupancyCallback:
             if label == "person":
                 if track_id is None:
                     continue
-                accepted.append({"track_id": track_id, "label": label, "bbox": bbox})
+                # R5: tag persons whose centroid falls inside the vestibule polygon
+                # so ZoneCounter can score vestibule congestion on the correct count.
+                in_vestibule = (
+                    self._vestibule_zone is not None
+                    and _bbox_in_any_zone(bbox, [self._vestibule_zone])
+                )
+                accepted.append(
+                    {
+                        "track_id": track_id,
+                        "label": label,
+                        "bbox": bbox,
+                        "in_vestibule": in_vestibule,
+                    }
+                )
             elif label == "bicycle":
                 bicycle_detections.append((confidence, bbox))
             elif label == "suitcase":
@@ -456,7 +487,9 @@ class OccupancyCallback:
         # (shutdown TOCTOU). Catch RuntimeError so the streaming thread doesn't crash.
         try:
             fut = asyncio.run_coroutine_threadsafe(
-                self._zone_counter.update(self._car_id, accepted),
+                self._zone_counter.update(
+                    self._car_id, accepted, camera_id=self._camera_id
+                ),
                 loop,
             )
             fut.add_done_callback(_on_post_done)
@@ -470,11 +503,23 @@ class OccupancyCallback:
         # Door obstruction: suitcase detections (IoU-based pseudo-tracking)
         if self._camera_zone == "door" and suitcase_detections:
             self._handle_suitcase_door_obstruction(suitcase_detections, loop)
+        elif self._camera_zone == "door":
+            # F3: no suitcases this frame — clear stale bbox so next detection resets IoU
+            self._last_suitcase_bbox.pop(self._camera_id, None)
+            self._door_zone_hits.pop((self._camera_id, -1), None)
 
         # Door obstruction: person detections in door zone via track_id
         if self._camera_zone == "door":
+            active_track_ids = {det["track_id"] for det in accepted}
+            # F1: prune hits for tracks that disappeared from frame
+            stale = [
+                k for k in self._door_zone_hits
+                if k[0] == self._camera_id and k[1] >= 0 and k[1] not in active_track_ids
+            ]
+            for k in stale:
+                del self._door_zone_hits[k]
             for det in accepted:
-                self._handle_person_door_obstruction(det["track_id"], det["bbox"], loop)
+                self._handle_person_door_obstruction(det["track_id"], loop)
 
         # Bicycle → accessibility
         for conf, bbox in bicycle_detections:

@@ -40,10 +40,17 @@ def _make_zone_counter(
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_vestibule_congestion_threshold_crossing() -> None:
-    """person_count > threshold → VESTIBULE_CONGESTION POSTed to event-store."""
+    """person_count > threshold → VESTIBULE_CONGESTION POSTed to event-store.
+
+    R1 (2026-05-20): vestibule_id is composed from car_id + the camera's zone
+    (here "door"), so a door camera produces "car-1-door". Configure cameras.json
+    with zone="vestibule" if you want the literal "-vestibule" suffix.
+    """
     zc = _make_zone_counter(zone="door", threshold=8, score_threshold=0.75)
 
-    await zc._check_vestibule_congestion("car-1", person_count=10)  # type: ignore[attr-defined]
+    await zc._check_vestibule_congestion(
+        "car-1", person_count=10, camera_id="C1_DOOR_01"
+    )  # type: ignore[attr-defined]
 
     zc._client.post.assert_called_once()
     call_args = zc._client.post.call_args
@@ -53,7 +60,7 @@ async def test_vestibule_congestion_threshold_crossing() -> None:
     assert json_body["event_type"] == "VESTIBULE_CONGESTION"
     payload = json_body["payload"]
     assert payload["car_id"] == "car-1"
-    assert payload["vestibule_id"] == "car-1-vestibule"
+    assert payload["vestibule_id"] == "car-1-door"
     assert payload["person_count"] == 10
     assert payload["congestion_score"] == pytest.approx(1.0)
 
@@ -64,7 +71,9 @@ async def test_vestibule_congestion_below_score_threshold() -> None:
     """person_count at or below score threshold → no emit."""
     zc = _make_zone_counter(zone="door", threshold=8, score_threshold=0.75)
 
-    await zc._check_vestibule_congestion("car-1", person_count=5)  # type: ignore[attr-defined]
+    await zc._check_vestibule_congestion(
+        "car-1", person_count=5, camera_id="C1_DOOR_01"
+    )  # type: ignore[attr-defined]
 
     zc._client.post.assert_not_called()
 
@@ -75,8 +84,12 @@ async def test_vestibule_congestion_rate_limit() -> None:
     """Second emit within 10s is suppressed."""
     zc = _make_zone_counter(zone="door", threshold=8, score_threshold=0.75)
 
-    await zc._check_vestibule_congestion("car-1", person_count=10)  # type: ignore[attr-defined]
-    await zc._check_vestibule_congestion("car-1", person_count=10)  # type: ignore[attr-defined]
+    await zc._check_vestibule_congestion(
+        "car-1", person_count=10, camera_id="C1_DOOR_01"
+    )  # type: ignore[attr-defined]
+    await zc._check_vestibule_congestion(
+        "car-1", person_count=10, camera_id="C1_DOOR_01"
+    )  # type: ignore[attr-defined]
 
     assert zc._client.post.call_count == 1
 
@@ -87,7 +100,9 @@ async def test_interior_zone_no_congestion_emit() -> None:
     """Interior zone cameras never emit VESTIBULE_CONGESTION."""
     zc = _make_zone_counter(zone="interior", threshold=8, score_threshold=0.75)
 
-    await zc._check_vestibule_congestion("car-1", person_count=100)  # type: ignore[attr-defined]
+    await zc._check_vestibule_congestion(
+        "car-1", person_count=100, camera_id="C1_DOOR_01"
+    )  # type: ignore[attr-defined]
 
     zc._client.post.assert_not_called()
 
@@ -98,7 +113,9 @@ async def test_vestibule_congestion_score_calculation() -> None:
     """congestion_score = person_count / threshold, capped at 1.0."""
     zc = _make_zone_counter(zone="door", threshold=8, score_threshold=0.75)
 
-    await zc._check_vestibule_congestion("car-1", person_count=8)  # type: ignore[attr-defined]
+    await zc._check_vestibule_congestion(
+        "car-1", person_count=8, camera_id="C1_DOOR_01"
+    )  # type: ignore[attr-defined]
 
     # score = 8/8 = 1.0 > 0.75, should emit
     zc._client.post.assert_called_once()

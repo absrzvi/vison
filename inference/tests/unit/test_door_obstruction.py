@@ -131,11 +131,10 @@ def test_handle_person_door_obstruction_emits_on_min_frames() -> None:
     asyncio_mod.run_coroutine_threadsafe = fake_run_coroutine_threadsafe  # type: ignore[assignment]
 
     try:
-        bbox = (10.0, 10.0, 200.0, 300.0)
         # First frame — counter = 1, no emit yet (min_frames=2)
-        cb._handle_person_door_obstruction(42, bbox, loop)
+        cb._handle_person_door_obstruction(42, loop)
         # Second frame — counter = 2, emit
-        cb._handle_person_door_obstruction(42, bbox, loop)
+        cb._handle_person_door_obstruction(42, loop)
         assert len(futures_added) == 1
     finally:
         asyncio_mod.run_coroutine_threadsafe = original  # type: ignore[assignment]
