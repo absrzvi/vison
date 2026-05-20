@@ -11,6 +11,11 @@ On successful ACK:
   * Delete confirmed-published rows from ``publish_queue`` (queue is for
     retry only — once event-store has the ack we don't need them locally)
 
+On cursor drift (event-store returns 400 INVALID_CURSOR via
+``acked=None``): advance ``last_acked_event_id`` LOCALLY to the drifted
+cursor with a WARN log so the next tick doesn't re-issue the same drift
+(code-review patch 2026-05-20).
+
 Event-store internally runs ``truncate_old_journeys(retain=3)`` after each
 successful ACK — that's the ADR-4 sync-then-truncate pattern.
 """
@@ -71,10 +76,34 @@ async def _tick(
     except httpx.HTTPError as exc:
         log.warning("cloud_sync.ack_failed", error=str(exc))
         return
-    acked = body.get("data", {}).get("acked")
-    truncated = body.get("data", {}).get("truncated_journeys", 0)
+    data = body.get("data") or {}
+    acked = data.get("acked")
+    truncated = data.get("truncated_journeys", 0)
     if acked is None:
-        # Cursor drift; ack_cursor already logged.
+        # Cursor drift — event-store doesn't know this event_id. Advance our
+        # local pointer past it so we don't re-issue the same drifted cursor
+        # every tick forever. The event may have been truncated upstream;
+        # the queue rows can be removed locally too (code-review 2026-05-20).
+        log.warning(
+            "cloud_sync.cursor_drift_advanced_locally",
+            drifted_cursor=new_cursor,
+        )
+        db_mod.cursor_state_set_acked(conn, new_cursor)
+        deleted = db_mod.delete_acked(conn, new_cursor)
+        log.info(
+            "cloud_sync.cursor_drift_purged",
+            cursor=new_cursor,
+            deleted_local_rows=deleted,
+        )
+        return
+    # Type guard — event-store contract says str, but a future drift would
+    # be silent without this (code-review patch 2026-05-20).
+    if not isinstance(acked, str):
+        log.warning(
+            "cloud_sync.ack_unexpected_type",
+            acked_type=type(acked).__name__,
+            acked=str(acked),
+        )
         return
     db_mod.cursor_state_set_acked(conn, acked)
     deleted = db_mod.delete_acked(conn, acked)

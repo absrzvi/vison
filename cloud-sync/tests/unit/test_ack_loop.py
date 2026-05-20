@@ -104,7 +104,10 @@ async def test_tick_advances_and_deletes_rows(tmp_path: Path) -> None:
 
 @pytest.mark.unit
 async def test_tick_handles_cursor_drift_response(tmp_path: Path) -> None:
-    """When event-store returns ``acked=None`` (cursor drift), tick is a no-op."""
+    """When event-store returns ``acked=None`` (cursor drift), tick advances
+    last_acked LOCALLY past the drifted cursor + purges local rows so the
+    next tick doesn't re-issue the same drift forever (code-review 2026-05-20).
+    """
     db_file = _make_queue(tmp_path)
     conn = db_mod.get_connection(db_file)
     try:
@@ -113,10 +116,15 @@ async def test_tick_handles_cursor_drift_response(tmp_path: Path) -> None:
         client = _FakeClient({"data": {"acked": None, "truncated_journeys": 0}})
         settings = Settings(queue_db_path=db_file)
         await ack_loop.tick(client, conn, settings)
-        # No rows deleted, no acked cursor advance.
+        # HTTP call WAS made, then local cursor advanced past the drift.
         assert client.calls == ["e1"]
         _, last_acked = db_mod.cursor_state_get(conn)
-        assert last_acked is None
+        assert last_acked == "e1"
+        # Local rows up to and including the drifted cursor are purged.
+        remaining = conn.execute(
+            "SELECT COUNT(*) AS n FROM publish_queue"
+        ).fetchone()["n"]
+        assert remaining == 0
     finally:
         conn.close()
 

@@ -335,3 +335,13 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - **Broadcaster runs even with 0 subscribers** — per-POST lock acquire + empty-list snapshot has measurable cost (likely contributor to median=25ms / p99=132ms on Windows dev). Optimize only if Linux CI starts failing the 50ms p99 gate; trivial guard: `if not self._subscribers: return` before acquiring the lock.
 - **`test_ws_fanout_latency_under_100ms` is single-sample**, includes TestClient sync→async hop. Flake-prone on slow CI runners. Convert to N-sample warm-up + percentile assertion in a follow-up.
 - **`asyncio.Queue` loop-binding fragility** — current code is correct because the POST handler is `async def`. Add a runtime check (or migrate to a loop-free queue impl) if any sync broadcast path is introduced later.
+
+## Deferred from: code review of story 4-cs1-cloud-sync-container (2026-05-20)
+
+- **`mark_published`/`mark_failed` commits per row** — at 500 ev/s sustained, that's 500 fsyncs/sec under WAL on the R5001C SYS2. Batch commits per N rows or per timer in a perf-tuning follow-up.
+- **`/health` opens a fresh SQLite connection per request** — k8s liveness at 1s frequency × WAL fsync churn. Use a long-lived /health connection in a follow-up.
+- **`init_db` on a corrupt SQLite buffer file** — raises out of lifespan with no quarantine. Document the recovery procedure (rename + reinit + cursor-rebuild from event-store cursor); auto-quarantine in a future hardening pass.
+- **`oebb_shared.http.retry.DEFAULT_RETRY` retries on permanent 4xx** — burns 50s of retries on a 422. Same finding carried from story 4-7; needs cross-container coordination.
+- **No jitter on MQTT reconnect schedule** — single-train PoC has only one cloud-sync, so no thundering-herd risk. Add jitter when the fleet scales (multiple cloud-sync replicas reconnecting after a Mosquitto bounce).
+- **`truncate_old_journeys` is synchronous inside the event-store route handler** — blocks the uvicorn worker on multi-thousand-row deletes. Offload to a background task or run in a thread-pool executor in a follow-up.
+- **`pull_loop` cursor monotonicity check** — defence in depth against event-store re-emitting an older id; not needed today.

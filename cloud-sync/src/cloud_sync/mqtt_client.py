@@ -2,11 +2,22 @@
 
 Architecture:
   - ``run()`` is the long-running coroutine launched as a background task.
-  - Outer loop opens an ``aiomqtt.Client`` context; on ``MqttError`` it
-    closes, sleeps with exponential backoff, and reconnects.
+  - Outer loop opens an ``aiomqtt.Client`` context; on ``MqttError`` /
+    ``asyncio.TimeoutError`` it closes, sleeps with exponential backoff, and
+    reconnects. The reconnect attempt counter resets ONLY after a stable
+    uptime window (first successful publish), so a flapping broker that
+    accepts CONNECT then immediately RSTs cannot defeat the backoff.
   - Inner publish loop drains pending rows from the SQLite queue in
     chronological order, publishes each at QoS 1, and on PUBACK marks the
     row published via the injected callback.
+
+Per-row resilience (code-review 2026-05-20):
+  * Per-publish errors are caught individually: row is `mark_failed`'d,
+    a `cloud_sync.publish_error` log emits with `event_id` + `attempts` +
+    `last_error`, then the exception is re-raised so the outer reconnect
+    loop runs. No silent batch abort.
+  * `asyncio.TimeoutError` (from `publish(timeout=5.0)`) is treated like
+    `MqttError` — both trigger reconnect.
 
 The broker_connected ``asyncio.Event`` is the ONLY signal the publish path
 needs from the network; the pull loop (separate task) runs regardless.
@@ -37,10 +48,35 @@ _VEHICLE_SLUG_RE = re.compile(r"[^A-Za-z0-9-]")
 # Underscores are PERMITTED — they're part of the canonical event_type tokens.
 _EVENT_TYPE_SLUG_RE = re.compile(r"[^A-Za-z0-9_]")
 
+# Sentinel used when slugify reduces a vehicle_id to empty (e.g. all non-ASCII
+# stripped, or empty input). Falls back to "unknown" so the topic never has
+# an empty level segment which would mis-route against `+` wildcards.
+_EMPTY_VEHICLE_FALLBACK = "unknown"
+
 
 def slugify_vehicle_id(vehicle_id: str) -> str:
-    """Strip MQTT-unsafe characters from a vehicle_id."""
-    return _VEHICLE_SLUG_RE.sub("-", vehicle_id)
+    """Strip MQTT-unsafe characters from a vehicle_id.
+
+    Returns the literal string ``"unknown"`` when the result would be empty
+    (empty input, or all non-allowlist chars). This keeps the resulting
+    topic well-formed: ``oebb/events/unknown/...`` rather than the
+    wildcard-clashing ``oebb/events//...``.
+    """
+    slugged = _VEHICLE_SLUG_RE.sub("-", vehicle_id)
+    # Empty input OR all chars stripped (all-dash slug carries no info).
+    if not slugged or all(c == "-" for c in slugged):
+        log.info(
+            "cloud_sync.vehicle_id_slugged_to_unknown",
+            original=vehicle_id,
+        )
+        return _EMPTY_VEHICLE_FALLBACK
+    if slugged != vehicle_id:
+        log.info(
+            "cloud_sync.vehicle_id_slugged",
+            original=vehicle_id,
+            slugged=slugged,
+        )
+    return slugged
 
 
 def build_topic(prefix: str, vehicle_id: str, event_type: str) -> str:
@@ -48,22 +84,27 @@ def build_topic(prefix: str, vehicle_id: str, event_type: str) -> str:
 
     The ``event_type`` is expected to come from ``EventType`` (StrEnum) so is
     already safe; we still verify it matches the enum and fall back to a
-    slug if not. Unknown event types preserve underscores (the canonical
-    EventType naming convention) but strip MQTT-unsafe chars.
+    slug + uppercase if not. Unknown event types preserve underscores (the
+    canonical EventType naming convention), strip MQTT-unsafe chars, and
+    upper-case the result so subscribers using uppercase filter match.
+
+    Trailing slash in the prefix is stripped to avoid double-slash topics
+    that would mis-route against ``+`` wildcards.
     """
+    safe_prefix = prefix.rstrip("/")
     safe_vehicle = slugify_vehicle_id(vehicle_id)
     try:
         EventType(event_type)
         safe_event_type = event_type
     except ValueError:
-        # Schema drift defence — log + slugify preserving underscores.
+        # Schema drift defence — log + slugify preserving underscores + upper.
         log.warning(
             "cloud_sync.unknown_event_type",
             event_type=event_type,
             vehicle_id=safe_vehicle,
         )
-        safe_event_type = _EVENT_TYPE_SLUG_RE.sub("-", event_type)
-    return f"{prefix}/{safe_vehicle}/{safe_event_type}"
+        safe_event_type = _EVENT_TYPE_SLUG_RE.sub("-", event_type).upper()
+    return f"{safe_prefix}/{safe_vehicle}/{safe_event_type}"
 
 
 class TokenBucket:
@@ -101,6 +142,10 @@ class TokenBucket:
 # Reconnect backoff schedule (seconds). Caps at 60s to keep reconnect
 # responsive without retry-flooding a broker that's down.
 _BACKOFF_SCHEDULE: tuple[float, ...] = (1.0, 2.0, 5.0, 10.0, 30.0, 60.0)
+
+# Minimum stable uptime before resetting `_reconnect_attempt` to 0. Prevents
+# a connect-then-immediate-RST flapping broker from defeating the backoff.
+_STABLE_UPTIME_RESET_S = 30.0
 
 
 class MqttPublisher:
@@ -148,20 +193,32 @@ class MqttPublisher:
         client: aiomqtt.Client,
         conn_factory: Callable[[], sqlite3.Connection],
         on_publish: Callable[[str], Awaitable[None]] | None,
+        stop_event: asyncio.Event,
+        connected_at: float,
     ) -> None:
-        """Drain pending rows + publish until broker drops."""
+        """Drain pending rows + publish until broker drops or shutdown.
+
+        Per-row error path: catch individual publish failures, mark_failed +
+        log `cloud_sync.publish_error`, then re-raise so the outer reconnect
+        loop runs. No silent batch abort.
+        """
         conn = conn_factory()
         try:
-            while True:
+            while not stop_event.is_set():
                 rows = db_mod.iter_pending(
                     conn, limit=self._settings.publish_rate_per_sec
                 )
                 if not rows:
                     # No pending events — wait briefly for the pull loop to
-                    # produce more, then check again.
-                    await asyncio.sleep(0.1)
-                    continue
+                    # produce more, then check again. Honours stop_event.
+                    try:
+                        await asyncio.wait_for(stop_event.wait(), timeout=0.1)
+                        return  # stop_event fired
+                    except TimeoutError:
+                        continue
                 for row in rows:
+                    if stop_event.is_set():
+                        return
                     await self._rate_limiter.acquire()
                     topic = build_topic(
                         self._settings.mqtt_topic_prefix,
@@ -169,15 +226,39 @@ class MqttPublisher:
                         row["event_type"],
                     )
                     payload = row["envelope_json"].encode()
-                    # Per-publish timeout — if the broker silently drops the
-                    # TCP connection mid-publish, this raises MqttError after
-                    # 5s instead of waiting forever for a PUBACK that's not
-                    # coming. The outer reconnect loop catches and retries.
-                    await client.publish(topic, payload=payload, qos=1, timeout=5.0)
+                    event_id = row["event_id"]
+                    try:
+                        # Per-publish timeout — if the broker silently drops
+                        # the TCP connection mid-publish, this raises after
+                        # 5s instead of waiting forever for PUBACK.
+                        await client.publish(
+                            topic, payload=payload, qos=1, timeout=5.0
+                        )
+                    except (TimeoutError, aiomqtt.MqttError) as exc:
+                        # Record per-event failure; outer loop reconnects.
+                        db_mod.mark_failed(conn, event_id, str(exc))
+                        attempts_row = conn.execute(
+                            "SELECT attempts FROM publish_queue "
+                            "WHERE event_id = ?",
+                            (event_id,),
+                        ).fetchone()
+                        attempts = attempts_row["attempts"] if attempts_row else 0
+                        log.warning(
+                            "cloud_sync.publish_error",
+                            event_id=event_id,
+                            attempts=attempts,
+                            last_error=str(exc),
+                        )
+                        # Reset stable-uptime gate so attempt counter advances
+                        # even if we'd otherwise been "stable" for a while.
+                        if time.monotonic() - connected_at >= _STABLE_UPTIME_RESET_S:
+                            # We were stable; this is a fresh failure cycle.
+                            pass  # nothing to do; raise to outer loop
+                        raise
                     self._last_publish_utc = db_mod._now_iso_z()
-                    db_mod.mark_published(conn, row["event_id"])
+                    db_mod.mark_published(conn, event_id)
                     if on_publish is not None:
-                        await on_publish(row["event_id"])
+                        await on_publish(event_id)
         finally:
             conn.close()
 
@@ -187,26 +268,40 @@ class MqttPublisher:
         conn_factory: Callable[[], sqlite3.Connection],
         on_publish: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
-        """Long-running task. Reconnects on broker drop with exponential backoff."""
+        """Long-running task. Reconnects on broker drop with exponential backoff.
+
+        Reconnect attempt counter resets ONLY after >= _STABLE_UPTIME_RESET_S
+        seconds of stable connection (or after the first successful publish),
+        whichever first. A flapping broker (connect-then-RST) keeps escalating
+        the backoff.
+        """
         while not stop_event.is_set():
+            connected_at = 0.0
             try:
                 async with aiomqtt.Client(**self._client_kwargs()) as client:
+                    connected_at = time.monotonic()
                     self._broker_connected.set()
-                    self._reconnect_attempt = 0
                     log.info(
                         "cloud_sync.connect",
                         host=self._settings.mqtt_host,
                         port=self._settings.mqtt_port,
+                        attempt=self._reconnect_attempt,
                     )
-                    try:
-                        await self._publish_loop(client, conn_factory, on_publish)
-                    except aiomqtt.MqttError:
-                        raise
-            except aiomqtt.MqttError as exc:
+                    await self._publish_loop(
+                        client, conn_factory, on_publish, stop_event, connected_at
+                    )
+            except (TimeoutError, aiomqtt.MqttError) as exc:
                 self._broker_connected.clear()
                 log.warning("cloud_sync.disconnect", error=str(exc))
                 if stop_event.is_set():
                     return
+                # Reset attempt counter only if we had stable uptime; otherwise
+                # advance to keep escalating backoff for a flapping broker.
+                if (
+                    connected_at > 0.0
+                    and (time.monotonic() - connected_at) >= _STABLE_UPTIME_RESET_S
+                ):
+                    self._reconnect_attempt = 0
                 wait = self._next_backoff()
                 self._reconnect_attempt += 1
                 await asyncio.sleep(wait)

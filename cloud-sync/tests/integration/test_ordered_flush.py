@@ -159,10 +159,15 @@ async def test_reconnects_and_resumes_after_broker_bounce(tmp_path: Path) -> Non
 
         received_phase2 = len(broker2.received)
 
-    # Combined, we should have all 20 envelopes (no duplicates since QoS 1
-    # was PUBACKed in phase 1 for everything broker1 received).
+    # Combined: all 20 envelopes must arrive, and duplicates must be bounded.
+    # QoS 1 may re-publish a row whose PUBACK didn't make it back before the
+    # broker dropped — at most one such pending row was in-flight, so the
+    # upper bound is 21. Code-review patch 2026-05-20 tightened from ">= 20"
+    # to a bounded range so a future runaway re-publish bug doesn't pass
+    # silently.
     total = received_phase1 + received_phase2
-    assert total >= 20, (
-        f"only {total} events arrived across two broker sessions "
-        f"(phase1={received_phase1}, phase2={received_phase2})"
+    assert 20 <= total <= 25, (
+        f"unexpected event count across two broker sessions: total={total} "
+        f"(phase1={received_phase1}, phase2={received_phase2}) — "
+        f"expected exactly 20 with at most a few QoS 1 retries"
     )

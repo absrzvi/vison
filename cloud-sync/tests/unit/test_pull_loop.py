@@ -59,7 +59,12 @@ async def test_pull_loop_handles_http_error_and_retries(tmp_path: Path) -> None:
             )
             await asyncio.sleep(0.3)  # let it cycle through the error path
             stop_event.set()
-            await asyncio.wait_for(task, timeout=10.0)
+            # Cancel to interrupt any in-flight tenacity backoff sleep.
+            task.cancel()
+            try:
+                await asyncio.wait_for(task, timeout=10.0)
+            except (TimeoutError, asyncio.CancelledError):
+                pass
 
     # No rows enqueued; the pull loop survived the HTTP error.
     conn2 = db_mod.get_connection(db_file)

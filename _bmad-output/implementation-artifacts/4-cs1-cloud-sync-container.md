@@ -1,6 +1,6 @@
 # Story 4.CS1: `cloud-sync` Container — Onboard MQTT Gateway
 
-Status: review
+Status: done
 
 <!-- Created 2026-05-20 by bmad-create-story. NEW container that bridges
 onboard event-store ↔ landside Mosquitto broker. Adds a small companion HTTP
@@ -445,6 +445,55 @@ claude-opus-4-7[1m]
 - **Event-store companion endpoint** (`POST /api/v1/sync/cursor`) added per AC12. Idempotent on same id; 400 INVALID_CURSOR on unknown id (mirrors story 4-7 cursor error shape). Auth-gated. `event-store/CLAUDE.md` updated with the new Key Pattern.
 - **GitLab CI**: `lint:cloud-sync` + `test:cloud-sync` jobs added; bandit extended to `cloud-sync/src`.
 - **Karpathy adherence**: no Kafka/RabbitMQ; no shared MQTT abstraction; no `aiolimiter` (TokenBucket is 25 LOC); no payload interpretation anywhere.
+
+### Review Findings (bmad-code-review 2026-05-20, opus-4.7 parallel Blind/EdgeCase/Auditor)
+
+**Decision-needed (2):**
+- [x] [Review][Decision] **`db.enqueue_event` uses `json.dumps(sort_keys=True, separators=...)`** — mutates byte stream from what event-store served. Spec + commit message say "verbatim transport". Options: (a) store the raw response bytes from event-store via a new `envelope_bytes` column, (b) document "semantically-equivalent JSON, not byte-equivalent" in CLAUDE.md and rename the claim, (c) keep current behavior (sort_keys=True provides deterministic dedup hashing later).
+- [x] [Review][Decision] **AC11 flagship test was split** into `test_100_events_arrive_in_chronological_order` + `test_reconnects_and_resumes_after_broker_bounce` because aiomqtt 2.x mid-publish drop detection is environment-sensitive. Spec mandated ONE unified test with broker drop on events 40-60. Options: (a) accept the split (current state, documented), (b) write the unified test and accept flakiness/skip-on-Windows, (c) restructure with a different approach (e.g. fake broker that simulates exact drop semantics paho expects).
+
+**Patch (24):**
+- [x] [Review][Patch] **BLOCKER fix**: implement 4 missing security tests claimed `[x]` but absent — `test_no_raw_video_or_stream_url_in_published_payload`, `test_mqtt_credentials_never_logged`, `test_payload_passed_through_verbatim` (end-to-end byte comparison), `test_topic_format_strict_allowlist` [`cloud-sync/tests/unit/test_security.py`]
+- [x] [Review][Patch] **BLOCKER fix**: emit `cloud_sync.publish_error` log + call `db.mark_failed` per-event on publish failure (AC8 violation: only connection-level logs exist) [`cloud-sync/src/cloud_sync/mqtt_client.py`]
+- [x] [Review][Patch] Sibling task crash silently swallowed — add `_task_done_callback(name)` that logs exception when a background task dies [`cloud-sync/src/cloud_sync/main.py`]
+- [x] [Review][Patch] Malformed envelope kills pull_loop forever — try/except around `enqueue_event` iteration; log + skip bad envelope; continue cursor [`cloud-sync/src/cloud_sync/pull_loop.py`]
+- [x] [Review][Patch] `contiguous_published_prefix` loads entire queue into memory — rewrite to use `LIMIT 1` gap-finder + targeted lookup [`cloud-sync/src/cloud_sync/db.py`]
+- [x] [Review][Patch] Reconnect backoff resets on CONNACK not on stable operation — gate the reset behind first successful publish [`cloud-sync/src/cloud_sync/mqtt_client.py`]
+- [x] [Review][Patch] UUID regex rejects uppercase (RFC 4122 says case-insensitive) — change to `[0-9a-fA-F]` in both cloud-sync and event-store/routes/sync.py
+- [x] [Review][Patch] Concurrent event-store ACK race — wrap the handler in a SQLite IMMEDIATE transaction [`event-store/src/event_store/routes/sync.py`]
+- [x] [Review][Patch] `ack_cursor` 400 INVALID_CURSOR loops forever — advance `last_acked_event_id` locally on cursor drift so subsequent ticks don't re-issue [`cloud-sync/src/cloud_sync/ack_loop.py` + `event_store_client.py`]
+- [x] [Review][Patch] Topic builder lowercase event_type fallback preserves case — `.upper()` on ValueError path [`cloud-sync/src/cloud_sync/mqtt_client.py`]
+- [x] [Review][Patch] Drop dead `settings_module` import from event-store/routes/sync.py
+- [x] [Review][Patch] `asyncio.TimeoutError` from `client.publish(timeout=5)` escapes MqttError catch — broaden to `except (MqttError, TimeoutError)` [`cloud-sync/src/cloud_sync/mqtt_client.py`]
+- [x] [Review][Patch] Per-row publish failures unrecorded — wrap `client.publish` in try/except per event, call `mark_failed`. Pairs with publish_error patch.
+- [x] [Review][Patch] Whitespace-only secrets treated as real — strip+empty-check in `_coerce_empty_to_none` [`cloud-sync/src/cloud_sync/config.py`]
+- [x] [Review][Patch] Trailing slash in `mqtt_topic_prefix` → double-slash topic — rstrip("/") in `build_topic` [`cloud-sync/src/cloud_sync/mqtt_client.py`]
+- [x] [Review][Patch] `publish_rate_per_sec` and `pull_batch_size` need positive-int constraints — add `Field(gt=0)` / `Field(ge=1, le=500)` [`cloud-sync/src/cloud_sync/config.py`]
+- [x] [Review][Patch] `/health` AttributeError on missing app.state — `getattr(..., None)` fallback with degraded response [`cloud-sync/src/cloud_sync/health.py`]
+- [x] [Review][Patch] `slugify_vehicle_id("")` yields empty topic level — return `"unknown"` for empty, log INFO when slugging changes the id [`cloud-sync/src/cloud_sync/mqtt_client.py`]
+- [x] [Review][Patch] Publish loop shutdown can hang for full PUBACK timeout × remaining rows — check `stop_event` between rows; bound lifespan teardown gather with `asyncio.wait_for(timeout=10)` [`cloud-sync/src/cloud_sync/mqtt_client.py` + `main.py`]
+- [x] [Review][Patch] `delete_acked` cursor row included via `<=` may include unpublished row at the exact boundary — defence in depth check [`cloud-sync/src/cloud_sync/db.py`]
+- [x] [Review][Patch] `body.get("data", {}).get("acked")` accepts arbitrary types — `isinstance(acked, str)` guard [`cloud-sync/src/cloud_sync/ack_loop.py`]
+- [x] [Review][Patch] `truncate_retain_journeys` config is dead — either pass it from cloud-sync via POST body OR drop the dead field [`cloud-sync/src/cloud_sync/config.py` + event-store route]
+- [x] [Review][Patch] Test assertion `total >= 20` doesn't bound duplicates — tighten to `20 <= total <= 25` [`cloud-sync/tests/integration/test_ordered_flush.py`]
+- [x] [Review][Patch] `test_sync_cursor_ack` mixes TestClient + ASGITransport — refactor to one path or add explicit comment about why both are needed
+
+**Defer (7):**
+- [x] [Review][Defer] `mark_published`/`mark_failed` commits per row → fsync pressure at 500/s. Batch commits in a follow-up performance pass.
+- [x] [Review][Defer] `/health` opens SQLite per request — k8s 1s liveness × WAL fsync churn. Long-lived /health conn in follow-up.
+- [x] [Review][Defer] `init_db` on corrupt SQLite raises in lifespan — operational concern, no quarantine. Document recovery procedure.
+- [x] [Review][Defer] `DEFAULT_RETRY` retries permanent 4xx — shared retry policy lives in `oebb_shared`; covered by deferred-work item from story 4-7.
+- [x] [Review][Defer] Reconnect schedule has no jitter — single-train PoC, add when fleet scales.
+- [x] [Review][Defer] Synchronous `truncate_old_journeys` blocks event-store loop — for 10k+ row deletes, p99 spike on GET /events. Background-task offload in a follow-up.
+- [x] [Review][Defer] `pull_loop` cursor monotonicity check — event-store today returns chronological pages; defence in depth only.
+
+**Dismissed (6):**
+- pytest markers "not registered" — pyproject.toml DOES declare them; false positive
+- `delete_acked` "deletes published-or-earlier" — caller ensures contiguity; defence-in-depth would be redundant
+- `test_queue.py` named in spec, file is `test_db.py` — cosmetic
+- `main.py` excluded from coverage — matches event-store + fusion patterns
+- `SecretStr.get_secret_value()` per reconnect — value not logged anywhere
+- Non-ASCII vehicle_id collisions — slugify is correct security behavior; logging covered by #17
 
 ### File List
 

@@ -169,23 +169,47 @@ def contiguous_published_prefix(conn: sqlite3.Connection) -> str | None:
 
     Returns ``None`` when the first pending row already lacks ``published_at``
     (no progress to ACK yet).
+
+    Strategy (code-review 2026-05-20): use two targeted queries instead of
+    scanning the whole queue. (1) Find the (timestamp, event_id) of the
+    first pending row — that's the "gap". (2) Find the last published row
+    strictly before the gap. O(log N) on the indexed columns, no full scan.
+    Drops memory pressure from O(N) to O(1) during 72h offline windows.
     """
-    # Strategy: read all (event_id, timestamp, published_at) ordered, walk in
-    # Python. For PoC volumes (<= few x 10k rows pending) this is fine; if
-    # the queue ever grows beyond memory we'd switch to a cursor loop.
-    rows = conn.execute(
+    gap = conn.execute(
         """
-        SELECT event_id, published_at
+        SELECT timestamp, event_id
         FROM publish_queue
+        WHERE published_at IS NULL
         ORDER BY timestamp ASC, event_id ASC
+        LIMIT 1
         """
-    ).fetchall()
-    last_acked: str | None = None
-    for r in rows:
-        if r["published_at"] is None:
-            break
-        last_acked = str(r["event_id"])
-    return last_acked
+    ).fetchone()
+    if gap is None:
+        # No gap — everything is published.
+        last_row = conn.execute(
+            """
+            SELECT event_id
+            FROM publish_queue
+            WHERE published_at IS NOT NULL
+            ORDER BY timestamp DESC, event_id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        return str(last_row["event_id"]) if last_row else None
+    # Find the last published row strictly before the gap.
+    before_gap = conn.execute(
+        """
+        SELECT event_id
+        FROM publish_queue
+        WHERE published_at IS NOT NULL
+          AND (timestamp, event_id) < (?, ?)
+        ORDER BY timestamp DESC, event_id DESC
+        LIMIT 1
+        """,
+        (gap["timestamp"], gap["event_id"]),
+    ).fetchone()
+    return str(before_gap["event_id"]) if before_gap else None
 
 
 def delete_acked(conn: sqlite3.Connection, up_to_event_id: str) -> int:

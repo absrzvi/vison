@@ -67,7 +67,23 @@ def _build_app(settings: Settings) -> FastAPI:
         app.state.queue_db_path = settings.queue_db_path
         app.state.mqtt = mqtt
 
-        # 4. Launch the three loops.
+        # 4. Launch the three loops. Each task gets a done-callback that
+        # surfaces any exception in structured logs (code-review patch
+        # 2026-05-20). Without this a sibling task crash would leave the
+        # container in a zombie state — healthy on /health but with one of
+        # the three loops dead until restart.
+        def _task_done_callback(task: asyncio.Task[None]) -> None:
+            if task.cancelled():
+                return
+            exc = task.exception()
+            if exc is not None:
+                log.warning(
+                    "cloud_sync.background_task_crashed",
+                    task_name=task.get_name(),
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
+
         tasks = [
             asyncio.create_task(
                 pull_loop.run(stop_event, event_store, _conn_factory, settings),
@@ -82,6 +98,8 @@ def _build_app(settings: Settings) -> FastAPI:
                 name="cloud_sync.ack_loop",
             ),
         ]
+        for t in tasks:
+            t.add_done_callback(_task_done_callback)
         log.info("cloud_sync.started", port=settings.port)
         try:
             yield
@@ -89,7 +107,14 @@ def _build_app(settings: Settings) -> FastAPI:
             stop_event.set()
             for t in tasks:
                 t.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
+            # Bounded shutdown — don't hang behind a stuck publish.
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*tasks, return_exceptions=True),
+                    timeout=10.0,
+                )
+            except TimeoutError:
+                log.warning("cloud_sync.shutdown_gather_timeout")
             await http_client.aclose()
             log.info("cloud_sync.stopped")
 
