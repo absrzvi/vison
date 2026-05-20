@@ -45,6 +45,7 @@
       "coach_from": "car-3",
       "coach_to": "car-4",
       "direction_axis": "x",
+      "traversal": "from_to",
       "tripwire": {
         "tripwire_polygon": [[320, 0], [320, 480]]
       },
@@ -62,6 +63,7 @@
       "coach_from": "car-3",
       "coach_to": "car-4",
       "direction_axis": "x",
+      "traversal": "from_to",
       "tripwire": {
         "tripwire_polygon": [[320, 0], [320, 480]]
       },

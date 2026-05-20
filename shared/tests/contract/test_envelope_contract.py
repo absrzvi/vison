@@ -183,15 +183,16 @@ _MINIMAL_PAYLOADS: dict[str, dict] = {
         "coach_from": "car-3",
         "coach_to": "car-4",
         "camera_id": "cam-3-gangway-fwd",
-        "direction": "forward",
+        "traversal": "from_to",
         "confidence": 0.88,
+        "expect_orphan": False,
     },
     "WAGON_ENTRY": {
         "track_id": 312,
         "coach_from": "car-3",
         "coach_to": "car-4",
         "camera_id": "cam-4-gangway-aft",
-        "direction": "forward",
+        "traversal": "from_to",
         "confidence": 0.91,
     },
     "LEDGER_DRIFT_ALERT": {

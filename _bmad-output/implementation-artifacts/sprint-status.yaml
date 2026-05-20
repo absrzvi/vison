@@ -107,7 +107,7 @@ development_status:
   4-6-fusion-alert-correlation-suppression: done
   4-7-event-store-onboard-rest-api-websocket: done
   4-cs1-cloud-sync-container: done
-  4-8-gangway-tripwire-ingest: review
+  4-8-gangway-tripwire-ingest: done  # code-review 2026-05-20 (opus-4.7): APPROVED after D1/D2 + P1-P7 patches; traversal rename, expect_orphan, 141 tests
   4-9-closed-ledger-reconciliation: backlog
   4-10-coach-comfort-index: backlog
   epic-4-retrospective: optional

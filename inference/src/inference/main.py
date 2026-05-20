@@ -99,15 +99,22 @@ def wire(
     for cam, cam_readiness in zip(cameras, readiness, strict=True):
         zone_masks = _zone_masks_for_camera(cam)
 
-        # E4-S8: construct TripwireHandler for gangway cameras; validate tripwire field.
+        # E4-S8: construct TripwireHandler for gangway cameras; validate all required fields.
         tripwire_handler: TripwireHandler | None = None
         cam_zone = str(cam.get("zone", ""))
         if cam_zone in _GANGWAY_ZONES:
+            missing: list[str] = []
             if not cam.get("tripwire") or "tripwire_polygon" not in cam.get("tripwire", {}):
+                missing.append("tripwire.tripwire_polygon")
+            for req in ("coach_from", "coach_to", "direction_axis"):
+                if not cam.get(req):
+                    missing.append(req)
+            if missing:
                 log.critical(
                     "main.missing_tripwire_config",
                     camera_id=cam.get("camera_id"),
                     zone=cam_zone,
+                    missing=missing,
                 )
                 sys.exit(1)
             tripwire_handler = TripwireHandler(

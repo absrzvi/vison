@@ -9,13 +9,18 @@ the pattern in callback.py.
 
 No os.environ.get() — all config via injected Settings (Rule 8).
 No GStreamer or pipeline imports (Rule 6).
+
+Traversal semantics: events carry 'traversal: from_to | to_from' from the camera-frame
+perspective. Train direction-of-travel is NOT computed at the edge — push-pull trains
+reverse on return legs and the edge has no cab-active signal (Stadler SNMP OID TBD).
+Runtime direction enrichment is deferred (see deferred-work.md W-traversal).
 """
 from __future__ import annotations
 
 import asyncio
 import concurrent.futures
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 import structlog
@@ -34,6 +39,9 @@ log = structlog.get_logger(__name__)
 
 _CONFIDENCE_THRESHOLD = 0.70
 _DEFAULT_ORPHAN_TIMEOUT_S = 10.0
+# Maximum number of track_ids retained in _last_side before oldest entries are pruned.
+# Monotonically-increasing tracker ids accumulate over a journey; cap prevents unbounded growth.
+_LAST_SIDE_MAX_SIZE = 2000
 
 
 @dataclass
@@ -43,6 +51,7 @@ class TripwireConfig:
     coach_from: str
     coach_to: str
     direction_axis: str
+    traversal: Literal["from_to", "to_from"]  # per-journey camera-frame orientation
     tripwire_polygon: list[list[int]]  # list of [x, y] points forming the line
 
 
@@ -52,7 +61,7 @@ class _PendingExit:
 
     coach_from: str
     coach_to: str
-    direction: str
+    traversal: str
     confidence: float
     orphan_handle: asyncio.TimerHandle | None = None
 
@@ -62,6 +71,14 @@ class TripwireHandler:
 
     One instance per gangway camera. The handler tracks which side of the tripwire
     each track_id was last seen on; a side-change constitutes a crossing.
+
+    Traversal field: "from_to" when centroid crossed from coach_from side to coach_to
+    side; "to_from" for reverse crossing. train direction-of-travel is NOT inferred —
+    push-pull operation invalidates static direction_axis assumptions.
+
+    Orphan timer: armed only for from_to crossings on gangway-fwd. to_from crossings
+    are emitted with expect_orphan=True and no timer (the aft handler will not see
+    a matching WAGON_ENTRY for a reverse exit from fwd).
     """
 
     def __init__(
@@ -85,10 +102,26 @@ class TripwireHandler:
                 f"missing 'tripwire.tripwire_polygon' field"
             )
 
+        # P7: validate all required config fields (AC1)
+        for required in ("coach_from", "coach_to", "direction_axis"):
+            if not camera.get(required):
+                raise RuntimeError(
+                    f"Camera {camera.get('camera_id')!r} has zone={zone!r} but "
+                    f"missing required field '{required}'"
+                )
+
+        traversal_raw = str(camera.get("traversal", "from_to"))
+        if traversal_raw not in ("from_to", "to_from"):
+            raise RuntimeError(
+                f"Camera {camera.get('camera_id')!r} has invalid traversal={traversal_raw!r}; "
+                f"expected 'from_to' or 'to_from'"
+            )
+
         self._config = TripwireConfig(
             coach_from=str(camera["coach_from"]),
             coach_to=str(camera["coach_to"]),
-            direction_axis=str(camera.get("direction_axis", "x")),
+            direction_axis=str(camera["direction_axis"]),
+            traversal=traversal_raw,  # type: ignore[arg-type]
             tripwire_polygon=[list(p) for p in tripwire_raw["tripwire_polygon"]],
         )
         self._camera_id = str(camera["camera_id"])
@@ -98,8 +131,9 @@ class TripwireHandler:
         self._loop_holder = loop_holder
         self._journey_holder = journey_holder
 
-        # track_id → last observed side ("from" | "to" | None)
-        self._last_side: dict[int, str | None] = {}
+        # track_id → last observed side ("from" | "to")
+        # Capped at _LAST_SIDE_MAX_SIZE to prevent unbounded growth over long journeys (P5).
+        self._last_side: dict[int, str] = {}
         # track_id → pending exit state (waiting for paired WAGON_ENTRY)
         self._pending_exits: dict[int, _PendingExit] = {}
 
@@ -152,15 +186,17 @@ class TripwireHandler:
         current_side = self._centroid_side(cx, cy)
 
         prev_side = self._last_side.get(track_id)
-        self._last_side[track_id] = current_side
 
+        # P4: update _last_side ONLY after confidence gate so a low-conf frame
+        # does not teleport side state (causing a phantom crossing on the next
+        # high-conf frame from the original side).
         if prev_side is None or prev_side == current_side:
-            # No crossing yet
+            # No crossing — update side unconditionally (first sight or no change).
+            self._last_side[track_id] = current_side
+            self._maybe_evict_last_side()
             return
 
-        # Crossing detected
-        direction = "forward" if prev_side == "from" else "backward"
-
+        # Crossing detected — check confidence BEFORE committing side state.
         # Low-confidence suppression (AC4)
         if confidence is None or confidence < _CONFIDENCE_THRESHOLD:
             log.debug(
@@ -170,7 +206,20 @@ class TripwireHandler:
                 confidence=confidence,
                 reason="low_confidence",
             )
+            # Do NOT update _last_side — track continues from prev_side.
             return
+
+        # Commit side transition only after passing confidence gate.
+        self._last_side[track_id] = current_side
+        self._maybe_evict_last_side()
+
+        # Compute traversal from camera-frame perspective.
+        # "from_to" = centroid moved from coach_from side to coach_to side.
+        # Camera config.traversal indicates per-journey mounting orientation
+        # (not train travel direction — see module docstring).
+        raw_traversal: Literal["from_to", "to_from"] = (
+            "from_to" if prev_side == "from" else "to_from"
+        )
 
         if self._camera_zone == "gangway-aft":
             # Receiving (entry) side — emit WAGON_ENTRY directly.
@@ -180,36 +229,52 @@ class TripwireHandler:
                 track_id=track_id,
                 coach_from=self._config.coach_from,
                 coach_to=self._config.coach_to,
-                direction=direction,
+                traversal=raw_traversal,
                 confidence=confidence,
             )
         else:
-            # gangway-fwd (exit) side — emit WAGON_EXIT and start orphan timer.
+            # gangway-fwd (exit) side — emit WAGON_EXIT.
+            # D2: to_from crossings on fwd camera cannot be reconciled by the aft
+            # handler (it will not see a paired WAGON_ENTRY). Emit with
+            # expect_orphan=True and skip the orphan timer to avoid phantom alerts.
+            expect_orphan = raw_traversal == "to_from"
             await self._emit_wagon_exit(
                 track_id=track_id,
                 coach_from=self._config.coach_from,
                 coach_to=self._config.coach_to,
-                direction=direction,
+                traversal=raw_traversal,
                 confidence=confidence,
+                expect_orphan=expect_orphan,
             )
-            # Schedule orphan timer (AC5)
-            loop = asyncio.get_running_loop()
-            # Capture values at schedule time to avoid stale-closure (E3 retro A3)
-            _tid, _cfrom, _cto = track_id, self._config.coach_from, self._config.coach_to
-            handle = loop.call_later(
-                self._orphan_timeout_s,
-                lambda: asyncio.ensure_future(
-                    self._handle_orphaned_exit(_tid, _cfrom, _cto),
-                    loop=loop,
-                ),
-            )
-            self._pending_exits[track_id] = _PendingExit(
-                coach_from=self._config.coach_from,
-                coach_to=self._config.coach_to,
-                direction=direction,
-                confidence=confidence,
-                orphan_handle=handle,
-            )
+
+            if not expect_orphan:
+                # Schedule orphan timer only for from_to crossings (AC5).
+                # P1/P2: cancel any prior timer for this track_id before arming a new one.
+                prior = self._pending_exits.pop(track_id, None)
+                if prior and prior.orphan_handle:
+                    prior.orphan_handle.cancel()
+
+                loop = asyncio.get_running_loop()
+                # Capture values at schedule time to avoid stale-closure (E3 retro A3).
+                # P3: use loop.create_task inside call_later instead of deprecated
+                # asyncio.ensure_future(loop=loop) which was removed in Python 3.12.
+                _tid = track_id
+                _cfrom = self._config.coach_from
+                _cto = self._config.coach_to
+
+                handle = loop.call_later(
+                    self._orphan_timeout_s,
+                    lambda: loop.create_task(
+                        self._handle_orphaned_exit(_tid, _cfrom, _cto)
+                    ),
+                )
+                self._pending_exits[track_id] = _PendingExit(
+                    coach_from=self._config.coach_from,
+                    coach_to=self._config.coach_to,
+                    traversal=raw_traversal,
+                    confidence=confidence,
+                    orphan_handle=handle,
+                )
 
     def _centroid_side(self, cx: float, cy: float) -> str:
         """Determine which side of the tripwire the centroid (cx, cy) is on.
@@ -232,6 +297,15 @@ class TripwireHandler:
         cross = (x2 - x1) * (cy - y1) - (y2 - y1) * (cx - x1)
         return "from" if cross >= 0 else "to"
 
+    def _maybe_evict_last_side(self) -> None:
+        """Prune oldest entries when _last_side exceeds max size (P5)."""
+        if len(self._last_side) > _LAST_SIDE_MAX_SIZE:
+            # Remove oldest quarter to amortise eviction cost.
+            evict_count = _LAST_SIDE_MAX_SIZE // 4
+            to_evict = list(self._last_side.keys())[:evict_count]
+            for k in to_evict:
+                del self._last_side[k]
+
     # ------------------------------------------------------------------
     # Event emission
     # ------------------------------------------------------------------
@@ -242,16 +316,18 @@ class TripwireHandler:
         track_id: int,
         coach_from: str,
         coach_to: str,
-        direction: str,
+        traversal: Literal["from_to", "to_from"],
         confidence: float,
+        expect_orphan: bool = False,
     ) -> None:
         payload = WagonExitPayload(
             track_id=track_id,
             coach_from=coach_from,
             coach_to=coach_to,
             camera_id=self._camera_id,
-            direction=direction,  # type: ignore[arg-type]
+            traversal=traversal,
             confidence=confidence,
+            expect_orphan=expect_orphan,
         )
         envelope = self._build_envelope(EventType.WAGON_EXIT, payload.model_dump(), "info")
         resp = await self._client.post(
@@ -265,7 +341,8 @@ class TripwireHandler:
             coach_from=coach_from,
             coach_to=coach_to,
             camera_id=self._camera_id,
-            direction=direction,
+            traversal=traversal,
+            expect_orphan=expect_orphan,
         )
 
     @DEFAULT_RETRY
@@ -274,7 +351,7 @@ class TripwireHandler:
         track_id: int,
         coach_from: str,
         coach_to: str,
-        direction: str,
+        traversal: Literal["from_to", "to_from"],
         confidence: float,
     ) -> None:
         payload = WagonEntryPayload(
@@ -282,7 +359,7 @@ class TripwireHandler:
             coach_from=coach_from,
             coach_to=coach_to,
             camera_id=self._camera_id,
-            direction=direction,  # type: ignore[arg-type]
+            traversal=traversal,
             confidence=confidence,
         )
         envelope = self._build_envelope(EventType.WAGON_ENTRY, payload.model_dump(), "info")
@@ -297,7 +374,7 @@ class TripwireHandler:
             coach_from=coach_from,
             coach_to=coach_to,
             camera_id=self._camera_id,
-            direction=direction,
+            traversal=traversal,
         )
 
     async def _handle_orphaned_exit(

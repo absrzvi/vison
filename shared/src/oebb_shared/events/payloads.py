@@ -333,7 +333,12 @@ class SyncCompletedPayload(_BasePayload):
 # ADR-17 — Inter-wagon movement payloads
 # ---------------------------------------------------------------------------
 
-DirectionStr = Literal["forward", "backward"]
+TraversalStr = Literal["from_to", "to_from"]
+# "from_to" = centroid crossed from coach_from side to coach_to side.
+# "to_from" = reverse crossing. Named from camera-frame perspective, not
+# train-direction-of-travel, because the edge has no runtime heading signal
+# (push-pull trains reverse; cab-active SNMP OID TBD with Stadler).
+# Runtime direction enrichment deferred to post-PoC (see deferred-work.md W-traversal).
 
 
 class WagonExitPayload(_BasePayload):
@@ -343,8 +348,9 @@ class WagonExitPayload(_BasePayload):
     coach_from: _NonEmptyStr
     coach_to: _NonEmptyStr
     camera_id: _NonEmptyStr
-    direction: DirectionStr
+    traversal: TraversalStr
     confidence: Annotated[float, Field(ge=0.0, le=1.0)]
+    expect_orphan: bool = False  # True when crossing is known to be unreconcilable (e.g. to_from on fwd camera)
 
 
 class WagonEntryPayload(_BasePayload):
@@ -354,7 +360,7 @@ class WagonEntryPayload(_BasePayload):
     coach_from: _NonEmptyStr
     coach_to: _NonEmptyStr
     camera_id: _NonEmptyStr
-    direction: DirectionStr
+    traversal: TraversalStr
     confidence: Annotated[float, Field(ge=0.0, le=1.0)]
 
 

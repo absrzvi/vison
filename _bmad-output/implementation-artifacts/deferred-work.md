@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of 4-8-gangway-tripwire-ingest (2026-05-20, opus)
+
+- **W1** — `@DEFAULT_RETRY` on `_emit_wagon_exit`/`_emit_wagon_entry` may duplicate events (non-idempotent POST). Pre-existing shared pattern, same as ZoneCounter. [tripwire.py:_emit_wagon_exit/entry]
+- **W2** — `_journey_holder.journey_id` captured lazily at emit time; orphan timer fires 10s later with potentially wrong journey_id on journey rollover. Pre-existing pattern shared with ZoneCounter `_build_envelope`. [tripwire.py:_build_envelope]
+
 ## Deferred from: post-followup code review on 4-5-inference-safety-accessibility (2026-05-20, opus-4.7)
 
 - **S2** — `cameras.json:14` `vestibule_zone` polygon is identical to the `aisle` `seat_zones` polygon `[[200,300],[440,300],[440,480],[200,480]]`. Every person standing in the aisle is double-counted as in_vestibule, so VESTIBULE_CONGESTION will fire on aisle crowding rather than near-door clustering. Tolerable in the single-camera PoC (only one door camera, fixed simulator stream); real deployments need a near-door rectangle. Needs ops/UX polygon data — out of PoC scope. [cameras.json:14]

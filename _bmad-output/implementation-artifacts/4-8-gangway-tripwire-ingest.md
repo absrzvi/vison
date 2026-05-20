@@ -1,6 +1,6 @@
 # Story 4.8: `inference` Gangway Tripwire Ingest (Inter-Wagon Movement)
 
-Status: review
+Status: done
 
 <!-- Created 2026-05-20 by bmad-create-story. EXTENDS the existing inference
 container (not bootstrap). Adds tripwire.py + updates callback.py routing for
@@ -222,6 +222,31 @@ async def _emit_wagon_exit(self, ...) -> None:
     )
     resp.raise_for_status()
 ```
+
+## Senior Developer Review (AI)
+
+**Review Date:** 2026-05-20
+**Reviewer Model:** opus (3 parallel layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor)
+**Outcome:** APPROVED (after follow-up patches)
+
+### Action Items
+
+**Decision-Needed:**
+- [x] [Review][Decision] D1: `direction` field renamed → `traversal: Literal["from_to", "to_from"]` (camera-frame perspective). Train direction-of-travel not computable at edge (push-pull, no Stadler cab-active OID confirmed). Runtime direction enrichment deferred to post-PoC spike. AC2 updated in schema comment.
+- [x] [Review][Decision] D2: to_from crossings on gangway-fwd emit WAGON_EXIT(expect_orphan=True) with NO orphan timer; from_to crossings arm orphan timer as before. Resolved in party-mode roundtable (Winston/Amelia/John).
+
+**Patch:**
+- [x] [Review][Patch] P1: Orphan timer now cancelled on re-crossing — `prior.orphan_handle.cancel()` before arming new timer [tripwire.py:_handle_detection]
+- [x] [Review][Patch] P2: Re-crossing timer cancellation — merged fix with P1
+- [x] [Review][Patch] P3: `asyncio.ensure_future(loop=loop)` → `loop.create_task(...)` inside call_later (Python 3.12 compat) [tripwire.py:_handle_detection]
+- [x] [Review][Patch] P4: `_last_side` updated AFTER confidence gate (not before) — prevents low-conf frame teleporting side state [tripwire.py:_handle_detection]
+- [x] [Review][Patch] P5: `_last_side` capped at `_LAST_SIDE_MAX_SIZE=2000`; `_maybe_evict_last_side()` prunes oldest quarter on overflow [tripwire.py]
+- [x] [Review][Patch] P6: `test_to_from_crossing_emits_wagon_exit_backward` added (AC7 backward crossing) [test_tripwire.py]
+- [x] [Review][Patch] P7: Startup validates `coach_from`, `coach_to`, `direction_axis` presence; missing fields listed in critical log [main.py:wire()]
+
+**Deferred:**
+- [x] [Review][Defer] W1: `@DEFAULT_RETRY` on non-idempotent POST may duplicate events [tripwire.py:_emit_wagon_exit/entry] — deferred, pre-existing shared pattern (same as ZoneCounter)
+- [x] [Review][Defer] W2: Journey-id captured lazily at emit time — wrong attribution on journey rollover [tripwire.py:_build_envelope] — deferred, pre-existing pattern shared with ZoneCounter/_build_envelope
 
 ## Story Progress
 

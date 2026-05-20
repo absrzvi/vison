@@ -104,7 +104,7 @@ def test_hailo_pipeline_not_imported_in_tripwire() -> None:
 
 @pytest.mark.unit
 def test_wagon_exit_payload_schema_valid() -> None:
-    """WAGON_EXIT payload must validate against WagonExitPayload."""
+    """WAGON_EXIT payload must validate against WagonExitPayload (traversal field, D1 rename)."""
     from oebb_shared.events import WagonExitPayload
 
     p = WagonExitPayload(
@@ -112,19 +112,21 @@ def test_wagon_exit_payload_schema_valid() -> None:
         coach_from="car-3",
         coach_to="car-4",
         camera_id="C3_GANGWAY_FWD",
-        direction="forward",
+        traversal="from_to",
         confidence=0.88,
+        expect_orphan=False,
     )
     dumped = p.model_dump()
-    for f in ("track_id", "coach_from", "coach_to", "camera_id", "direction", "confidence"):
+    for f in ("track_id", "coach_from", "coach_to", "camera_id", "traversal", "confidence"):
         assert f in dumped, f"missing required field: {f}"
-    assert dumped["direction"] == "forward"
+    assert dumped["traversal"] == "from_to"
     assert dumped["track_id"] == 42
+    assert dumped["expect_orphan"] is False
 
 
 @pytest.mark.unit
 def test_wagon_entry_payload_schema_valid() -> None:
-    """WAGON_ENTRY payload must validate against WagonEntryPayload."""
+    """WAGON_ENTRY payload must validate against WagonEntryPayload (traversal field, D1 rename)."""
     from oebb_shared.events import WagonEntryPayload
 
     p = WagonEntryPayload(
@@ -132,11 +134,11 @@ def test_wagon_entry_payload_schema_valid() -> None:
         coach_from="car-3",
         coach_to="car-4",
         camera_id="C4_GANGWAY_AFT",
-        direction="forward",
+        traversal="from_to",
         confidence=0.91,
     )
     dumped = p.model_dump()
-    for f in ("track_id", "coach_from", "coach_to", "camera_id", "direction", "confidence"):
+    for f in ("track_id", "coach_from", "coach_to", "camera_id", "traversal", "confidence"):
         assert f in dumped, f"missing required field: {f}"
 
 
