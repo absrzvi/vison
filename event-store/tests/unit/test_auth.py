@@ -159,3 +159,39 @@ def test_no_env_get_in_new_modules() -> None:
                 and node.func.value.attr == "environ"
             ):
                 raise AssertionError(f"{path.name} contains os.environ.get (Rule 8)")
+
+
+@pytest.mark.unit
+def test_empty_string_api_key_treated_as_dev_mode_bypass() -> None:
+    """Code-review patch (2026-05-20): ``EVENT_STORE_API_KEY=""`` (empty
+    string) must be normalised to None at config-load time, so a Docker
+    compose default placeholder doesn't create a "looks configured but
+    unreachable" deployment.
+    """
+    from event_store.config import Settings
+
+    s = Settings(api_key=SecretStr(""))
+    assert s.api_key is None
+
+
+@pytest.mark.unit
+def test_ws_endpoint_does_not_require_api_key_in_this_story(
+    client_with_api_key: TestClient,
+) -> None:
+    """AC8 + Dev Notes Rule 9: WS auth is explicitly deferred in this story.
+
+    The /ws endpoint must accept a connection without ``X-API-Key`` even when
+    the REST API is auth-gated. WS auth lands in a future story.
+    """
+    sub = {
+        "event_types": ["OCCUPANCY_UPDATE"],
+        "min_severity": "info",
+        "reconnect_replay_depth": 0,
+    }
+    # No X-API-Key header here — must succeed despite api_key configured.
+    with client_with_api_key.websocket_connect("/ws") as ws:
+        import json as _json
+
+        ws.send_text(_json.dumps(sub))
+        ack = _json.loads(ws.receive_text())
+        assert ack["status"] == "subscribed"

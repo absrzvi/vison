@@ -8,7 +8,11 @@ from typing import Any
 import structlog
 
 from .config import settings
-from .exceptions import JourneyNotFoundError, UnsupportedSchemaVersionError
+from .exceptions import (
+    InvalidCursorError,
+    JourneyNotFoundError,
+    UnsupportedSchemaVersionError,
+)
 
 log = structlog.get_logger()
 
@@ -21,10 +25,12 @@ _SCHEMA_FILE = Path(__file__).parent / "schema.sql"
 _SEVERITY_SCORE: dict[str, int] = {"info": 0, "warning": 1, "critical": 2}
 
 
-def _severity_score(value: str | None) -> int:
-    if value is None:
-        return -1
-    return _SEVERITY_SCORE.get(value, -1)
+def _severity_score(value: str) -> int:
+    """Return the integer score for a known severity. Raises ValueError for
+    unknown strings — caller must validate at boundary."""
+    if value not in _SEVERITY_SCORE:
+        raise ValueError(f"unknown severity: {value!r}")
+    return _SEVERITY_SCORE[value]
 
 
 def get_connection(db_path: str | None = None) -> sqlite3.Connection:
@@ -88,10 +94,15 @@ def _build_filter_clauses(
     after_event_id: str | None,
     conn: sqlite3.Connection,
 ) -> tuple[list[str], list[Any]]:
-    """Build the dynamic WHERE clauses + parameters for filtered event reads.
+    """Build dynamic WHERE clauses + parameters for filtered event reads.
 
-    Returns (clauses, params) — caller assembles the final SQL. All values are
-    parameterised — no string interpolation of user input.
+    Code-review patches (2026-05-20):
+      * Unknown ``after_event_id`` now raises ``InvalidCursorError`` so the
+        route layer can return 400 with the ADR-10 envelope. Previously a
+        bogus cursor silently returned page 1 from the start, which is a
+        pagination footgun.
+      * Unknown ``min_severity`` raises ``ValueError`` rather than silently
+        becoming "match all" via the legacy -1 sentinel.
     """
     clauses: list[str] = []
     params: list[Any] = []
@@ -100,9 +111,10 @@ def _build_filter_clauses(
         ref = conn.execute(
             "SELECT timestamp FROM events WHERE event_id = ?", (after_event_id,)
         ).fetchone()
-        if ref:
-            clauses.append("(timestamp, event_id) > (?, ?)")
-            params.extend([ref["timestamp"], after_event_id])
+        if ref is None:
+            raise InvalidCursorError(after_event_id)
+        clauses.append("(timestamp, event_id) > (?, ?)")
+        params.extend([ref["timestamp"], after_event_id])
 
     if journey_id:
         clauses.append("journey_id = ?")
@@ -184,13 +196,28 @@ def get_filtered_events_for_replay(
     """Return the LAST ``limit`` events matching the subscription filter,
     in chronological order (timestamp ASC, event_id ASC) — AC7.
 
-    The SQL strategy: ORDER BY DESC + LIMIT to grab the tail, then reverse in
-    Python. This is O(n log n) on the index, not on the whole table.
+    SQL strategy: ORDER BY DESC + LIMIT to grab the tail, then reverse in
+    Python. O(n log n) on the index, not on the whole table.
 
-    ``coach_ids`` filters by ``json_extract(payload, '$.car_id')`` — SQLite
-    supports JSON1 by default in 3.38+. Defensive when not present (returns
-    all rows since coach can't be checked at the DB layer).
+    Coach filter semantics (code-review patch 2026-05-20): the live broadcast
+    path treats events whose payload lacks ``car_id`` as "match any coach
+    filter" (see ``broadcaster._coach_id_from_payload`` + ``SubscriptionRequest
+    .matches_coach``). The replay query must MIRROR that semantic — events
+    with NULL ``json_extract(payload, '$.car_id')`` are included regardless of
+    the coach_ids filter, so reconnect doesn't drop e.g. JOURNEY_ENDED events
+    that have empty payloads.
+
+    JSON1 dependency (code-review patch): ``json_extract`` is a HARD dependency.
+    SQLite 3.38+ ships JSON1 by default; the Dockerfile uses python:3.11-slim
+    which includes a compatible build. If JSON1 is unavailable the query
+    raises ``OperationalError`` — caller logs + returns no results so the
+    handler can continue rather than crash. Documented behaviour, not
+    silently lying as the previous docstring did.
     """
+    if coach_ids is not None and len(coach_ids) == 0:
+        # Caller validated this at the boundary; defence in depth.
+        raise ValueError("coach_ids must be None or a non-empty list")
+
     clauses, params = _build_filter_clauses(
         event_types=event_types,
         min_severity=min_severity,
@@ -200,21 +227,35 @@ def get_filtered_events_for_replay(
     )
     if coach_ids:
         placeholders = ",".join(["?"] * len(coach_ids))
-        clauses.append(f"json_extract(payload, '$.car_id') IN ({placeholders})")
+        # Mirror live semantics: events without car_id match all coach filters.
+        clauses.append(
+            f"(json_extract(payload, '$.car_id') IN ({placeholders}) "
+            "OR json_extract(payload, '$.car_id') IS NULL)"
+        )
         params.extend(coach_ids)
     where_sql = (" WHERE " + " AND ".join(clauses)) if clauses else ""
 
-    rows = conn.execute(
-        f"""
-        SELECT event_id, journey_id, vehicle_id, timestamp, event_type,
-               severity, source, schema_version, payload
-        FROM events
-        {where_sql}
-        ORDER BY timestamp DESC, event_id DESC
-        LIMIT ?
-        """,
-        [*params, limit],
-    ).fetchall()
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT event_id, journey_id, vehicle_id, timestamp, event_type,
+                   severity, source, schema_version, payload
+            FROM events
+            {where_sql}
+            ORDER BY timestamp DESC, event_id DESC
+            LIMIT ?
+            """,
+            [*params, limit],
+        ).fetchall()
+    except sqlite3.OperationalError as exc:
+        # JSON1 unavailable or query miscompile. Don't crash the handler;
+        # the live path will start streaming as soon as live events arrive.
+        log.warning(
+            "replay.sql_failed",
+            error=str(exc),
+            sql_hint="json_extract may be unavailable (rebuild SQLite with JSON1)",
+        )
+        return []
 
     # Reverse so callers receive chronological order.
     return [

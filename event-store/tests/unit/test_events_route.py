@@ -101,22 +101,50 @@ def test_post_duplicate_returns_200_with_stored_false(client: TestClient) -> Non
 
 
 @pytest.mark.unit
-def test_post_schema_version_999_returns_422(client: TestClient) -> None:
-    """AC3: unsupported schema_version → 422 + service does not crash.
+def test_post_schema_version_999_returns_422_adr10_envelope(client: TestClient) -> None:
+    """AC3: unsupported schema_version → 422 + ADR-10 envelope.
 
     The shared ``EventEnvelope`` model rejects unsupported ``schema_version`` at
-    Pydantic validation time (returns FastAPI's standard 422 with a list of
-    validation errors). The route layer's UnsupportedSchemaVersionError path is
-    reached only if Pydantic accepts the value — for the canonical envelope
-    today the validator catches it first. Either way: 422, no crash.
+    Pydantic validation time, BEFORE the route handler runs. A
+    ``RequestValidationError`` exception handler in ``main.py`` re-shapes any
+    422 whose ``loc`` includes ``schema_version`` into the ADR-10 envelope
+    (code-review patch 2026-05-20, decision 4).
     """
     body = dict(_VALID_ENVELOPE)
     body["schema_version"] = 999
     r = client.post("/api/v1/events", json=body)
     assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert detail["error"] == "UNSUPPORTED_SCHEMA_VERSION"
+    assert detail["recoverable"] is False
+    assert "schema_version" in detail["detail"].lower() or "999" in detail["detail"]
     # Service is still alive after the 422.
     r2 = client.get("/health/live")
     assert r2.status_code == 200
+
+
+@pytest.mark.unit
+def test_post_event_malformed_returns_422(client: TestClient) -> None:
+    """Security: a malformed envelope (e.g. bad severity literal) returns 422."""
+    body = dict(_VALID_ENVELOPE)
+    body["severity"] = "EMERGENCY"  # not in {info, warning, critical}
+    r = client.post("/api/v1/events", json=body)
+    assert r.status_code == 422
+
+
+@pytest.mark.unit
+def test_post_event_empty_payload_does_not_crash(client: TestClient) -> None:
+    """Security: empty payload `{}` is accepted by the canonical envelope and
+    does NOT crash the service. The shared envelope validator skips
+    PAYLOAD_MODELS lookup when payload is empty.
+    """
+    body = dict(_VALID_ENVELOPE)
+    body["payload"] = {}
+    r = client.post("/api/v1/events", json=body)
+    # Empty payload is permitted by EventEnvelope's validator.
+    assert r.status_code == 201
+    # Service still alive.
+    assert client.get("/health/live").status_code == 200
 
 
 @pytest.mark.unit
@@ -216,3 +244,50 @@ def test_get_events_filter_combination(client: TestClient) -> None:
     assert body["count"] == 1
     assert body["data"][0]["event_type"] == "ALERT_RAISED"
     assert body["data"][0]["severity"] == "warning"
+
+
+@pytest.mark.unit
+def test_get_events_unknown_cursor_returns_400(client: TestClient) -> None:
+    """Code-review patch (2026-05-20): a cursor referencing an unknown
+    event_id is a client error. Previously returned page 1 silently."""
+    r = client.get(
+        "/api/v1/events",
+        params={"after": "ffffffff-ffff-4fff-8fff-ffffffffffff"},
+    )
+    assert r.status_code == 400
+    detail = r.json()["detail"]
+    assert detail["error"] == "INVALID_CURSOR"
+    assert detail["recoverable"] is False
+
+
+@pytest.mark.unit
+def test_get_events_next_cursor_set_on_full_page(client: TestClient) -> None:
+    """AC4: ``next_cursor`` is the last item's event_id when the page is full."""
+    # Insert 3 events; request limit=2 → next_cursor must be event #2's id.
+    envs = []
+    for i in range(3):
+        env = _envelope(
+            event_id=f"aaaaaaaa-aaaa-4aaa-8aaa-{i:012d}",
+            timestamp=f"2026-05-17T10:01:{i:02d}Z",
+        )
+        envs.append(env)
+        client.post("/api/v1/events", json=env)
+
+    r = client.get("/api/v1/events", params={"limit": 2})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["count"] == 2
+    # Full page → next_cursor is the last returned event_id.
+    assert body["next_cursor"] == body["data"][-1]["event_id"]
+
+
+@pytest.mark.unit
+def test_get_events_next_cursor_null_on_partial_page(client: TestClient) -> None:
+    """AC4: ``next_cursor`` is null when fewer rows than the requested limit
+    are returned (= caller has reached the end-of-stream)."""
+    client.post("/api/v1/events", json=_VALID_ENVELOPE)
+    r = client.get("/api/v1/events", params={"limit": 100})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["count"] == 1
+    assert body["next_cursor"] is None

@@ -181,3 +181,51 @@ def test_ws_no_raw_video_or_stream_url_in_messages(client: TestClient) -> None:
         for _ in range(2):
             raw = ws.receive_text()
             assert not forbidden.search(raw), f"forbidden pattern in WS msg: {raw}"
+
+
+@pytest.mark.integration
+def test_ws_rejects_empty_event_types_subscription(client: TestClient) -> None:
+    """Code-review patch (2026-05-20): empty event_types makes a "deaf"
+    subscriber (no live events, all replay events). Reject explicitly."""
+    from starlette.websockets import WebSocketDisconnect
+
+    sub = {"event_types": [], "min_severity": "info", "reconnect_replay_depth": 0}
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws") as ws:
+            ws.send_text(json.dumps(sub))
+            ws.receive_text()  # handler closes with 1003 before sending ack
+
+
+@pytest.mark.integration
+def test_ws_rejects_empty_coach_ids_subscription(client: TestClient) -> None:
+    """Code-review patch (2026-05-20): empty coach_ids has inconsistent live
+    vs replay semantics. Reject; client must send null or a non-empty list."""
+    from starlette.websockets import WebSocketDisconnect
+
+    sub = {
+        "event_types": ["OCCUPANCY_UPDATE"],
+        "min_severity": "info",
+        "coach_ids": [],
+        "reconnect_replay_depth": 0,
+    }
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws") as ws:
+            ws.send_text(json.dumps(sub))
+            ws.receive_text()
+
+
+@pytest.mark.integration
+def test_ws_rejects_bool_reconnect_replay_depth(client: TestClient) -> None:
+    """Code-review patch (2026-05-20): ``true``/``false`` for depth must NOT
+    be silently coerced to 1/0 (bool is a subclass of int)."""
+    from starlette.websockets import WebSocketDisconnect
+
+    sub = {
+        "event_types": ["OCCUPANCY_UPDATE"],
+        "min_severity": "info",
+        "reconnect_replay_depth": True,
+    }
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws") as ws:
+            ws.send_text(json.dumps(sub))
+            ws.receive_text()

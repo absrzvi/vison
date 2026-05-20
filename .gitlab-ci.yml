@@ -74,10 +74,12 @@ test:shared:
 
 test:event-store:
   stage: test
+  # E4-S7: AC9 raises coverage gate to 90% (was 80%) AND enforces p99 < 50ms
+  # strict latency on Linux (Windows dev runs loosen to 200ms).
   script:
     - pip install -e shared/
     - pip install -e "event-store/[dev]"
-    - cd event-store && python -m pytest tests/ -m "unit or contract or integration" --cov=event_store --cov-report=term-missing --cov-fail-under=80
+    - cd event-store && python -m pytest tests/ -m "unit or contract or integration" --cov=event_store --cov-report=term-missing --cov-fail-under=90
 
 test:fusion:
   stage: test

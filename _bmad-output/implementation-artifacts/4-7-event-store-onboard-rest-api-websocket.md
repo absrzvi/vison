@@ -1,6 +1,6 @@
 # Story 4.7: `event-store` Onboard REST API & WebSocket Fan-Out
 
-Status: review
+Status: done
 
 <!-- Created 2026-05-20 by bmad-create-story. This story EXTENDS the existing
 event-store container (not bootstrap). The /api/v1/events endpoint already
@@ -412,6 +412,43 @@ claude-opus-4-7[1m]
 - **Pre-existing CLAUDE.md staleness fixed**: `since_id` → `after`; coverage 80% → 90%; duplicate-409 → duplicate-200 (the contract change this story embodies).
 - **Out of scope (deliberate)**: dead `IngestRequest` batch model untouched; duplicate root `schema.sql` untouched; WS authentication deferred (Dev Notes Rule 9 + TODO comment in handler.py).
 
+### Review Findings (bmad-code-review 2026-05-20, opus-4.7 parallel Blind/EdgeCase/Auditor)
+
+**Decision-needed (5):**
+- [x] [Review][Decision] **Replay → live race** [`handler.py:114-118`]. Events committed by other producers between replay's SELECT and `broadcaster.add()` are lost from BOTH replay and live. Story AC7 says "no event is delivered twice if the client was not disconnected" — but the inverse "no event is dropped during reconnect" is implied and currently false under concurrent ingest. Fix options: (a) register subscriber BEFORE replay so live queues fill during replay, then dedupe by event_id at the send boundary; (b) capture `max_event_id` from replay's SELECT and have live writer skip ≤ that id; (c) accept the gap and document. This is the most impactful blocker — the entire AC7 design is undermined under concurrent ingest.
+- [x] [Review][Decision] **Duplicate POST returns client's event_id, not the stored one** [`routes/events.py:55-60`]. If a client retries with a fresh `event_id` but same `(journey_id, event_type, timestamp)` natural key, the response says `stored=false` and gives back the new event_id — which was never persisted. Client cannot GET that id. Options: (a) SELECT and return the actual stored event_id (extra round-trip), (b) document idempotency as "natural-key, not event_id" and have producers retry with same event_id, (c) reject conflicting natural-key/event_id combos at write time.
+- [x] [Review][Decision] **`coach_ids=[]` semantic mismatch** [`database.py:201-204` + `subscription.py:23-24`]. Replay treats `[]` as "no filter"; live `matches_coach(_, [])` returns False (filter everything). Options: (a) reject `[]` in `_parse_subscription` (must be a non-empty list or None), (b) treat `[]` as None everywhere, (c) treat `[]` as "match nothing" everywhere.
+- [x] [Review][Decision] **AC3 ADR-10 envelope likely never fires** [`routes/events.py:36-44`, `tests/unit/test_events_route.py:115-126`]. Pydantic envelope validation rejects `schema_version=999` BEFORE the route's `UnsupportedSchemaVersionError` path. FastAPI returns its generic 422 (an array of validation errors), NOT the ADR-10 envelope. The test only asserts 422 + service-alive. Options: (a) add a custom exception handler that re-shapes envelope-validation 422s into ADR-10 shape, (b) update AC3 to explicitly accept Pydantic 422.
+- [x] [Review][Decision] **AC9 Windows budget softening** is a documented but literal AC deviation. Options: (a) confirm Linux CI exists and enforces 50ms (Definition of Done met), (b) remove the softening and accept Windows test failures, (c) split into Windows-tolerant + Linux-strict tests with explicit markers.
+
+**Patch (12):**
+- [x] [Review][Patch] WS reader/writer crash on non-Disconnect exceptions (binary frame, ConnectionResetError) → log as 500. Broaden catch clauses + close with code 1003 on protocol errors [`handler.py:25-28, 35-37, 86, 133-137`]
+- [x] [Review][Patch] `after_event_id` cursor silently no-ops on unknown id — pagination loops infinite — return 400 with `{"error": "INVALID_CURSOR", ...}` [`database.py:97-101`]
+- [x] [Review][Patch] JSON1 dependency in replay claims defensive but isn't — either add OperationalError fallback OR fix the docstring + document as hard dep [`database.py:201-208`]
+- [x] [Review][Patch] Replay coach filter excludes events without `payload.car_id` (e.g. JOURNEY_ENDED) — add `OR json_extract(...) IS NULL` to mirror live semantics [`database.py:201-204`]
+- [x] [Review][Patch] `_severity_score(None)` returns -1 → unknown severity becomes "match all" — validate at `_parse_subscription` boundary [`database.py:22-25`, `handler.py:_parse_subscription`]
+- [x] [Review][Patch] Empty `event_types=[]` makes a "deaf" subscriber (live filters everything; replay delivers everything) — reject `[]` in `_parse_subscription` [`handler.py:46-50`]
+- [x] [Review][Patch] `reconnect_replay_depth=true` (bool) parses as int=1 — `isinstance(depth_raw, bool)` reject [`handler.py:65-67`]
+- [x] [Review][Patch] Empty-string `EVENT_STORE_API_KEY=""` is NOT dev-mode bypass — every request 401s — treat `SecretStr("")` as None OR raise at startup [`auth.py:27`, `config.py:24`]
+- [x] [Review][Patch] `_coach_id_from_payload` silently strips non-string `car_id` — add WARN log when payload has unexpected shape [`broadcaster.py:48-55`]
+- [x] [Review][Patch] `journeys.py` dropped the typed `JourneyMeta` model — restore `response_model=JourneyMeta` and Pydantic-wrap the response [`routes/journeys.py:24-36`]
+- [x] [Review][Patch] `next_cursor` semantics not tested — add `test_next_cursor_set_on_full_page` and `test_next_cursor_null_on_partial_page` [`tests/unit/test_events_route.py`]
+- [x] [Review][Patch] Security Tests checklist claims `[x]` for missing tests: `test_post_event_malformed_returns_422`, `test_post_event_no_payload_does_not_crash`, `test_ws_endpoint_does_not_require_api_key_in_this_story` — add them or un-check [`tests/unit/test_events_route.py`, `tests/unit/test_auth.py`]
+
+**Defer (4):**
+- [x] [Review][Defer] Replay opens blocking sqlite3 in async handler — current PoC depths small; refactor with `run_in_threadpool` when payload size grows.
+- [x] [Review][Defer] Broadcaster runs even with 0 subscribers (per-POST lock overhead) — PoC acceptable; optimize only if Linux CI starts failing 50ms gate.
+- [x] [Review][Defer] `test_ws_fanout_latency_under_100ms` is single-sample flake-prone — add warm-up + N-sample percentile in a follow-up story.
+- [x] [Review][Defer] `asyncio.Queue` loop-binding fragility — flagged for the day someone adds a sync broadcast path.
+
+**Dismissed (6):**
+- Multiple subscription frames discarded — out of scope (no AC requires re-subscription)
+- `remove()` log misleading on double-remove — log noise only
+- Disconnected subscriber receives `put_nowait` post-snapshot — bounded GC-reclaimed leak
+- `test_replay_depth_zero_skips_replay` waived live-delivery — composite coverage via fanout test
+- "No regression assertion p99 stays < 132ms on Linux" — the 50ms strict bound IS the regression assertion
+- Header alias case-insensitivity — ASGI guarantees
+
 ### File List
 
 **Created**
@@ -445,3 +482,4 @@ claude-opus-4-7[1m]
 ### Change Log
 
 - 2026-05-20 — **event-store extended for E4-S7**. Full REST surface (POST idempotent 200-on-dup, GET filterable + cursor-paginated, GET journey) + X-API-Key auth + WebSocket broadcaster with per-subscriber back-pressure + reconnect replay (cap 1000). Wired through FastAPI lifespan on `app.state.broadcaster`. 60 tests pass, 91.76% coverage, mypy --strict clean, ruff clean. Race in WS handler ack timing fixed (ack now signals "registered for live delivery"). Windows p99 budget loosened to 200ms with comment; Linux CI enforces 50ms strictly.
+- 2026-05-20 — **code-review (opus-4.7) patches applied.** Resolved 5 decisions + 14 patches. Key fixes: (1) replay→live race closed via register-first + per-subscriber dedupe-by-event_id (`subscriber.pending_replay_ids` set, drained by writer); (2) AC3 ADR-10 envelope via `RequestValidationError` exception handler that reshapes `schema_version` errors; (3) `?after=<unknown>` cursor now 400 INVALID_CURSOR (was silent page-1); (4) `_parse_subscription` rejects empty `event_types`, empty `coach_ids`, and `bool` for `reconnect_replay_depth`; (5) `EVENT_STORE_API_KEY=""` normalised to None at config-load to prevent "looks-configured-but-unreachable" Docker footgun; (6) `JourneyMetaResponse` Pydantic envelope restored; (7) replay coach filter mirrors live semantics (`OR car_id IS NULL`); (8) JSON1 dependency documented + OperationalError fallback so handler doesn't crash; (9) WS reader/writer handle `RuntimeError` + generic Exception with structured logs; (10) `broadcaster._coach_id_from_payload` warns on non-string `car_id`; (11) Broadcaster fast-path skip when zero subscribers. New tests: cursor 400, `next_cursor` boundaries, ADR-10 schema_version envelope assertion, empty payload accepted, malformed envelope, journey 404, empty event_types/coach_ids rejection, bool depth rejection, empty api_key dev-mode, WS no-auth-required. 72 tests pass, 92.58% coverage. GitLab CI coverage gate raised 80→90.

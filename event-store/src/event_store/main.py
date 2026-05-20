@@ -5,7 +5,9 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, Request, WebSocket
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from .config import settings
 from .database import get_connection, init_db
@@ -56,6 +58,52 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="OEBB Event Store", version="0.1.0", lifespan=lifespan)
+
+
+@app.exception_handler(RequestValidationError)
+async def _schema_version_adr10_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Re-shape Pydantic ``schema_version`` validation errors into the
+    ADR-10 ``UNSUPPORTED_SCHEMA_VERSION`` envelope expected by AC3.
+
+    Pydantic's ``EventEnvelope.schema_version`` validator runs BEFORE the
+    route handler, so the route's own ``UnsupportedSchemaVersionError``
+    branch never executes for envelope-validated POSTs. This handler
+    inspects the validation errors and, when any of them target the
+    ``schema_version`` field, returns the ADR-10 envelope instead of
+    FastAPI's default ``{"detail": [...]}`` shape.
+
+    Other validation errors pass through to FastAPI's default 422 response.
+    Code-review patch (2026-05-20, decision 4).
+    """
+    schema_version_error = next(
+        (
+            err
+            for err in exc.errors()
+            if any(part == "schema_version" for part in err.get("loc", ()))
+        ),
+        None,
+    )
+    if schema_version_error is not None:
+        log.warning(
+            "schema_version_unsupported_via_envelope",
+            detail=schema_version_error.get("msg"),
+        )
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {
+                    "error": "UNSUPPORTED_SCHEMA_VERSION",
+                    "detail": schema_version_error.get(
+                        "msg", "unsupported schema_version"
+                    ),
+                    "recoverable": False,
+                }
+            },
+        )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
 
 app.include_router(health_router)
 app.include_router(events_router)

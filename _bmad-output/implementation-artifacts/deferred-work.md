@@ -328,3 +328,10 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - **`main.py` bootstrap-shell + lifespan route-append pattern is fragile.** OpenAPI/`/docs` ends up empty because the schema is cached from the bare shell before lifespan appends routes. Matches `inference/main.py` verbatim — refactoring needs to land across both containers in a single story. Risk: low (PoC `/docs` not used).
 - **`@DEFAULT_RETRY` retries on 4xx as well as 5xx.** Lives in `shared/src/oebb_shared/http/retry.py`. Changing this policy ripples into every container; needs a coordinated story with a contract test for the desired retry classes.
 - **`SuppressionGate._depot_journey_ended_emitted_for` grows unbounded across journey rotations.** Long-running PoC concern. Correct fix: prune on journey_id transition (clear when entering NORMAL with a new journey_id). Defer until E4 retro / a real long-run test.
+
+## Deferred from: code review of story 4-7-event-store-onboard-rest-api-websocket (2026-05-20)
+
+- **Replay opens blocking sqlite3 connection inside async handler.** For depth=1000 with large payloads this could block the event loop. Refactor with `fastapi.concurrency.run_in_threadpool` or asyncio-friendly SQLite (aiosqlite) when payload size or per-coach replay depth grows. PoC-acceptable today.
+- **Broadcaster runs even with 0 subscribers** — per-POST lock acquire + empty-list snapshot has measurable cost (likely contributor to median=25ms / p99=132ms on Windows dev). Optimize only if Linux CI starts failing the 50ms p99 gate; trivial guard: `if not self._subscribers: return` before acquiring the lock.
+- **`test_ws_fanout_latency_under_100ms` is single-sample**, includes TestClient sync→async hop. Flake-prone on slow CI runners. Convert to N-sample warm-up + percentile assertion in a follow-up.
+- **`asyncio.Queue` loop-binding fragility** — current code is correct because the POST handler is `async def`. Add a runtime check (or migrate to a loop-free queue impl) if any sync broadcast path is introduced later.

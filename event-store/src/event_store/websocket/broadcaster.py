@@ -7,11 +7,16 @@ is full) rather than blocking the writer path.
 
 Design notes (see story Dev Notes 5-7):
 - ``asyncio.Lock`` protects the subscriber set. All add/remove operations
-  must be guarded — fixes the same class of race surfaced in story 4-6 review.
+  must be guarded.
 - Per-subscriber ``asyncio.Queue(maxsize=256)`` with ``put_nowait`` for
   back-pressure. One slow client must NOT stall every writer.
 - Filter routing uses ``SubscriptionRequest.matches(event_type, severity,
-  coach_id)`` from ``oebb_shared.ws.subscription``. Re-uses tested logic.
+  coach_id)`` from ``oebb_shared.ws.subscription``.
+- Replay → live race fix (code-review 2026-05-20): subscribers expose a
+  ``pending_replay_ids: set[str]`` — the writer task drops any queued event
+  whose ``event_id`` is in that set (deduplication). Handler registers the
+  subscriber BEFORE running replay, so live events committed during the
+  replay window queue safely.
 """
 from __future__ import annotations
 
@@ -34,6 +39,11 @@ class Subscriber:
 
     ``eq=False`` so the dataclass remains hashable (identity-based) — required
     to live in the broadcaster's ``set``.
+
+    ``pending_replay_ids`` is populated by replay before the writer task
+    starts; the writer skips any queued envelope whose event_id is in this
+    set, then removes the id. This is how the register-first dedupe-by-id
+    design (code-review decision 1) closes the replay→live race.
     """
 
     websocket: WebSocket
@@ -43,16 +53,31 @@ class Subscriber:
         default_factory=lambda: asyncio.Queue(maxsize=_QUEUE_MAX)
     )
     dropped: int = 0
+    pending_replay_ids: set[str] = field(default_factory=set)
+    deduped: int = 0
 
 
 def _coach_id_from_payload(envelope: dict[str, Any]) -> str | None:
-    """Extract car_id from envelope payload for SubscriptionRequest filtering."""
-    payload = envelope.get("payload") or {}
-    if isinstance(payload, dict):
-        car_id = payload.get("car_id")
-        if isinstance(car_id, str):
-            return car_id
-    return None
+    """Extract car_id from envelope payload for SubscriptionRequest filtering.
+
+    Returns ``None`` when the payload is missing, not a dict, or the car_id
+    field is absent or not a string. Non-string car_id values are logged at
+    WARN so producer schema drift is surfaced rather than swallowed.
+    """
+    payload = envelope.get("payload")
+    if not isinstance(payload, dict):
+        return None
+    car_id = payload.get("car_id")
+    if car_id is None:
+        return None
+    if not isinstance(car_id, str):
+        log.warning(
+            "broadcaster.car_id_unexpected_type",
+            event_type=envelope.get("event_type"),
+            car_id_type=type(car_id).__name__,
+        )
+        return None
+    return car_id
 
 
 class Broadcaster:
@@ -73,13 +98,17 @@ class Broadcaster:
         )
 
     async def remove(self, subscriber: Subscriber) -> None:
+        was_present: bool
         async with self._lock:
+            was_present = subscriber in self._subscribers
             self._subscribers.discard(subscriber)
-        log.info(
-            "ws.subscriber_removed",
-            name=subscriber.name,
-            dropped=subscriber.dropped,
-        )
+        if was_present:
+            log.info(
+                "ws.subscriber_removed",
+                name=subscriber.name,
+                dropped=subscriber.dropped,
+                deduped=subscriber.deduped,
+            )
 
     async def subscriber_count(self) -> int:
         async with self._lock:
@@ -91,7 +120,14 @@ class Broadcaster:
         Filter is applied per-subscriber via ``SubscriptionRequest.matches``.
         On ``QueueFull`` the event is dropped for that subscriber only — log
         + increment a counter; never raise, never block the writer.
+
+        Fast path: when there are no subscribers, skip the lock acquire and
+        the iteration entirely. This is the common case for the cloud-backend
+        sync pull use case where no live WS clients are connected.
         """
+        if not self._subscribers:
+            return
+
         event_type = str(envelope.get("event_type", ""))
         severity = str(envelope.get("severity", ""))
         coach_id = _coach_id_from_payload(envelope)

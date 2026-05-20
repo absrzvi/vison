@@ -5,6 +5,14 @@ Idempotency contract (AC2 — explicit change from prior 409 behaviour):
   - Duplicate     → HTTP 200 with ``{"data": {"event_id": ..., "stored": false}}``
   - Schema 999    → HTTP 422 ADR-10 envelope
   - Bad envelope  → HTTP 422 (FastAPI default)
+  - Bad cursor    → HTTP 400 ADR-10 envelope (code-review patch 2026-05-20)
+
+Idempotency is keyed on the **natural key** ``(journey_id, event_type,
+timestamp)`` — NOT on ``event_id``. Producers MUST retry with the SAME
+``event_id`` to read back a meaningful response.event_id on duplicate; a
+client that retries with a fresh ``event_id`` against the same natural key
+will see ``stored=false`` for an event_id that was never persisted (decision
+2, code-review 2026-05-20: documented rather than auto-corrected).
 
 After a SUCCESSFUL insert (stored=True only), the envelope is fanned out to
 all matching WebSocket subscribers via ``request.app.state.broadcaster``.
@@ -21,7 +29,11 @@ from oebb_shared.events.envelope import EventEnvelope
 from ..auth import require_api_key
 from ..database import get_events_page, insert_event
 from ..deps import get_db
-from ..exceptions import JourneyNotFoundError, UnsupportedSchemaVersionError
+from ..exceptions import (
+    InvalidCursorError,
+    JourneyNotFoundError,
+    UnsupportedSchemaVersionError,
+)
 from ..models import EventPage
 
 router = APIRouter(prefix="/api/v1/events", dependencies=[Depends(require_api_key)])
@@ -84,6 +96,15 @@ def list_events(
             event_types=event_type,
             min_severity=min_severity,
         )
+    except InvalidCursorError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "INVALID_CURSOR",
+                "detail": str(exc),
+                "recoverable": False,
+            },
+        ) from exc
     except JourneyNotFoundError as exc:
         raise HTTPException(
             status_code=404,

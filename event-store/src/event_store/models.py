@@ -33,6 +33,16 @@ class JourneyMeta(BaseModel):
     end_time: str | None = None
 
 
+class JourneyMetaResponse(BaseModel):
+    """ADR-10 success envelope around ``JourneyMeta``.
+
+    Restores Pydantic response validation that was lost when the journeys
+    route was changed to ``-> dict[str, Any]`` (code-review patch 2026-05-20).
+    """
+
+    data: JourneyMeta
+
+
 class JourneyListItem(BaseModel):
     journey_id: str
     vehicle_id: str
