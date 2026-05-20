@@ -2,6 +2,11 @@
 
 All settings sourced via pydantic-settings (env vars / .env file).
 No os.environ.get() calls anywhere in this module — Rule 8.
+
+``Settings.journey_id`` was deliberately REMOVED in code-review patch
+(2026-05-20 decision against synthetic placeholders in real envelopes). The
+envelope journey_id comes from ``ContextState.journey_id`` only — when that
+is ``None``, emits are skipped with a WARN log.
 """
 from __future__ import annotations
 
@@ -23,6 +28,3 @@ class Settings(BaseSettings):
 
     # ADR-15: camera is authoritative. APC drift > threshold logs WARNING only.
     calibration_drift_threshold: float = 0.10
-
-    # ADR-2 / EventEnvelope placeholder until vlan-pollers pushes a real journey_id.
-    journey_id: str = "OBB-TEST_unknown_19700101"

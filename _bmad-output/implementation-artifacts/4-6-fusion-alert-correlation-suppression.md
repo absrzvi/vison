@@ -1,6 +1,6 @@
 # Story 4.6: `fusion` Alert Correlation & Suppression State Machine
 
-Status: review
+Status: done
 
 <!-- Created 2026-05-20 by bmad-create-story. Consumes contracts locked in story 4-5 (inference safety & accessibility). -->
 
@@ -391,6 +391,46 @@ claude-opus-4-7[1m]
 - **CI**: added `lint:fusion` and `test:fusion` jobs in `.gitlab-ci.yml`; bandit extended to `fusion/src`.
 - **Out of scope** (not implemented in this story; flagged for later epic-4 work): ADR-18 T1 STREAM_PRIORITY emitter, ADR-18 T2 `COACH_COMFORT_INDEX` (story 4-10), unattended_bag, real `JourneyEndedPayload` content on DEPOT.
 
+### Review Findings (bmad-code-review 2026-05-20, opus-4.7, parallel Blind/EdgeCase/Auditor)
+
+**Decision-needed (6):**
+- [x] [Review][Decision] **R3 `resolve_car_id` is dead code — AC9 unmet.** Defined in `context_state.py:86` but no call site in production. Spec required door obstruction + slip-fall + ramp to call it. Options: (a) wire into `door_obstruction.handle` + `_car_id_for_door`, (b) drop helper if consist is out-of-scope for PoC.
+- [x] [Review][Decision] **`update_from_push` partial-vs-replace semantics on dict fields** [`context_state.py:63-70`]. Truthy guard means `{}` cannot clear; non-empty push wholesale replaces. Need to choose: merge | replace | absent=keep/empty=clear.
+- [x] [Review][Decision] **Bool fields default-reset on partial push** [`models.py:21-25` + `context_state.py:70-74`]. `gps_valid`/`maintenance_mode`/`depot_mode`/`station_approach` silently reset to defaults when omitted. Options: switch to `Optional[StrictBool]` (absent=keep) or document "every push must carry all flags".
+- [x] [Review][Decision] **`_severity_for(speed_kmh=None)` returns `warning` — fail-open** [`enrichment.py:25`]. Stale telemetry on a moving train downgrades critical faults. Options: keep fail-open (current) or fail-closed (`critical` when unknown).
+- [x] [Review][Decision] **`Settings.context_ttl_seconds` missing** [`config.py`]. Story L62 listed it; not used in code. Add as no-op, or drop from spec.
+- [x] [Review][Decision] **`occupancy.py` is unwired — no FastAPI endpoint receives OCCUPANCY_UPDATE.** Today inference posts OCCUPANCY_UPDATE directly to event-store; fusion isn't in the path. Options: (a) leave as a forward-looking helper for the calibration-drift story; (b) wire a `/candidates/occupancy_update` endpoint now; (c) also: should occupancy be suppressed under DEPOT/MAINTENANCE? (edge case #26)
+
+**Patch (15):**
+- [x] [Review][Patch] Ramp `car_id` resolution: use `consist` + deterministic lookup, fix endswith collision [`health.py:133-144`, `accessibility.py`]
+- [x] [Review][Patch] Concurrent `/context` race in `SuppressionGate.on_context_changed` — wrap with `asyncio.Lock` [`suppression.py:53-78`]
+- [x] [Review][Patch] Ramp `/context` bypasses suppression — gate `handle_ramp_deployed` behind `gate.should_emit()` [`health.py:79-95`]
+- [x] [Review][Patch] Candidate handlers do not catch `httpx.HTTPError` from event-store — wrap in try/except, log + return 202 [`health.py:99-122`]
+- [x] [Review][Patch] `ramp_deployed=true` re-fires on every push — track previous ramp state in ContextState; emit only on false→true edge [`health.py:79-95`, `context_state.py`]
+- [x] [Review][Patch] Ramp lookup with `door_id="unknown"` may match a real track logged under `near_door_id="unknown"` — short-circuit to `triggered_by_track_id="unknown"` when door_id is unknown [`accessibility.py:47-50`]
+- [x] [Review][Patch] Remove `Settings.journey_id` synthetic placeholder — when `ctx.journey_id is None`, do NOT emit (log WARN) [`config.py:28`, `enrichment.py:58`]
+- [x] [Review][Patch] Contract test sends `track_id="42"` (string); inference posts `int`. Switch test to int; tighten `SlipFallCandidate.track_id` [`tests/contract/test_candidate_payload_contract.py:76`, `models.py`]
+- [x] [Review][Patch] Drop dead `asyncio_mode = "auto"` from `pyproject.toml` (anyio[trio] is the actual harness) [`pyproject.toml`]
+- [x] [Review][Patch] Add missing security test `test_no_raw_video_or_stream_url_in_envelope` (claimed [x] but not implemented) [`tests/unit/test_security.py`]
+- [x] [Review][Patch] Tests construct `httpx.AsyncClient()` in sync code, never closed — use a fixture with `async with` cleanup [`tests/integration/test_fusion_pipeline.py:30`, `tests/contract/test_candidate_payload_contract.py:43`]
+- [x] [Review][Patch] Suppression `journey_id=""` silently skips JOURNEY_ENDED — log WARN when DEPOT transition occurs without journey_id, still update `_last_state` [`suppression.py:64-68`]
+- [x] [Review][Patch] Slip-fall `track_id`/`camera_id` discarded when building AlertRaisedPayload — include in description string or zone field [`health.py:115-119`]
+- [x] [Review][Patch] Add integration test for simultaneous DEPOT+MAINTENANCE (Dev Note 6 explicitly placed this here) [`tests/integration/test_fusion_pipeline.py`]
+- [x] [Review][Patch] Dedupe car_id mis-routing (covered by ramp `car_id` patch above) — verify same fix resolves [`health.py:140-143`]
+
+**Defer (3):**
+- [x] [Review][Defer] `main.py` bootstrap-shell + lifespan route-append pattern is fragile (OpenAPI cached empty). Matches `inference/main.py` verbatim — refactor across both containers belongs to a separate story.
+- [x] [Review][Defer] `@DEFAULT_RETRY` retries on 4xx as well as 5xx. Policy lives in `shared/oebb_shared/http/retry.py`; changing it affects every container. Open separate task.
+- [x] [Review][Defer] `_depot_journey_ended_emitted_for` grows unbounded across journey rotations. Long-running concern; PoC acceptable. Prune on next journey_id rotation in a follow-up.
+
+**Dismissed (6):**
+- Suppression log name `"suppression.active"` (structlog `module.event` convention; spec string was illustrative)
+- `find_recent_accessibility` clock skew (`time.monotonic` is non-decreasing in-process)
+- `note_accessibility` overwrites — intentional "most recent track" semantics
+- `Enrichment.emit_envelope` `EventType(name)` raising `ValueError` (only called with known constants)
+- `_ReadinessCache` coroutine-safety (extra probe is harmless)
+- `Settings.vehicle_id` default `"OBB-TEST"` vs spec `"TEST-VEHICLE-01"` (both placeholders)
+
 ### File List
 
 **Created**
@@ -432,3 +472,4 @@ claude-opus-4-7[1m]
 ### Change Log
 
 - 2026-05-20 — **fusion container bootstrapped (E4-S6)**. Initial implementation of suppression state machine, door obstruction ZFR cross-reference, slip-fall enrichment, ACCESSIBILITY_DETECTED → RAMP_DEPLOYED correlation (R4), per-coach car_id resolution (R3), occupancy passthrough (ADR-15), station-approach escalation (ADR-18 T3), and FR9 speed-correlated door fault severity. 77 tests, 98.76% coverage, mypy strict + ruff clean.
+- 2026-05-20 — **code-review (opus-4.7) patches applied.** Resolved 6 decision items + 15 patches: wired `resolve_car_id` into door_obstruction (AC9), fixed concurrent suppression race with `asyncio.Lock`, added `ramp_deployed` edge-trigger debounce, switched `ContextPushModel` to Optional fields ("absent ≠ reset"), removed `Settings.journey_id` placeholder (envelope skipped + WARN when ctx.journey_id is None), `_severity_for` fail-closed on unknown speed, `car_id_for_door` made deterministic + consist-aware (None on ambiguity), candidate handlers wrap event-store errors so inference always sees 202, slip-fall description carries track_id/camera_id, contract test fixed to int track_id, added DEPOT+MAINTENANCE simultaneous integration test, added raw-video-leak security test, added pytest-asyncio dev dep. Coverage now 97.29% (92 tests). Deferred: shared `@DEFAULT_RETRY` retry-on-4xx policy; bootstrap/lifespan refactor; `_depot_journey_ended_emitted_for` long-running prune.

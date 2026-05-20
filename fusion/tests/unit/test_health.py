@@ -1,6 +1,8 @@
 """Health endpoints + readiness cache + ramp/door fallback paths — AC1, AC8."""
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import httpx
 import pytest
 import respx
@@ -9,7 +11,7 @@ from fastapi.testclient import TestClient
 from fusion.config import Settings
 from fusion.context_state import ContextState
 from fusion.enrichment import Enrichment
-from fusion.health import _car_id_for_door, _ReadinessCache, build_app
+from fusion.health import _ReadinessCache, build_app
 from fusion.suppression import SuppressionGate
 
 
@@ -18,7 +20,6 @@ def _make_client(ctx: ContextState | None = None) -> TestClient:
         event_store_url="http://event-store-test",
         vehicle_id="OBB-TEST",
         schema_version=1,
-        journey_id="OBB-TEST_t1_20260520",
     )
     if ctx is None:
         ctx = ContextState(journey_id="OBB-TEST_t1_20260520", vehicle_id="OBB-TEST")
@@ -29,12 +30,19 @@ def _make_client(ctx: ContextState | None = None) -> TestClient:
     return TestClient(app)
 
 
+@pytest.fixture
+def cleanup_client() -> Iterator[None]:
+    """No-op fixture that signals tests should clean up TestClient when done."""
+    yield
+
+
 @pytest.mark.unit
 def test_health_live_returns_ok() -> None:
     client = _make_client()
     resp = client.get("/health/live")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
+    client.close()
 
 
 @pytest.mark.unit
@@ -46,6 +54,7 @@ def test_health_ready_returns_200_when_event_store_reachable() -> None:
         )
         resp = client.get("/health/ready")
     assert resp.status_code == 200
+    client.close()
 
 
 @pytest.mark.unit
@@ -58,6 +67,7 @@ def test_health_ready_returns_503_when_event_store_unreachable() -> None:
         resp = client.get("/health/ready")
     assert resp.status_code == 503
     assert resp.json()["reason"] == "event_store_unreachable"
+    client.close()
 
 
 @pytest.mark.unit
@@ -77,7 +87,7 @@ async def test_readiness_cache_serves_cached_result_within_ttl() -> None:
 
 @pytest.mark.unit
 def test_ramp_deployed_with_no_known_door_uses_unknown_car_id() -> None:
-    """Ramp pushed for door not in context.door_state → _car_id_for_door returns 'unknown'."""
+    """Ramp pushed for door not in context.door_state → car_id resolves to 'unknown'."""
     ctx = ContextState(journey_id="OBB-TEST_t1_20260520", vehicle_id="OBB-TEST")
     client = _make_client(ctx)
     with respx.mock(assert_all_called=False) as rmock:
@@ -93,6 +103,7 @@ def test_ramp_deployed_with_no_known_door_uses_unknown_car_id() -> None:
             },
         )
     assert resp.status_code == 200
+    client.close()
 
 
 @pytest.mark.unit
@@ -115,19 +126,43 @@ def test_ramp_emit_failure_is_logged_not_raised() -> None:
             },
         )
     assert resp.status_code == 200
+    client.close()
 
 
 @pytest.mark.unit
 def test_car_id_for_door_resolves_from_door_state() -> None:
     ctx = ContextState()
     ctx.door_state = {"car-3:door-3B": "closing"}
-    assert _car_id_for_door(ctx, "door-3B") == "car-3"
+    assert ctx.car_id_for_door("door-3B") == "car-3"
 
 
 @pytest.mark.unit
-def test_car_id_for_door_returns_unknown_when_no_match() -> None:
+def test_car_id_for_door_returns_none_when_no_match() -> None:
     ctx = ContextState()
-    assert _car_id_for_door(ctx, "door-X") == "unknown"
+    assert ctx.car_id_for_door("door-X") is None
+
+
+@pytest.mark.unit
+def test_car_id_for_door_ambiguous_returns_none() -> None:
+    """Same door_id under multiple cars → ambiguous → None (not first-match)."""
+    ctx = ContextState()
+    ctx.door_state = {
+        "car-1:door-A": "closed",
+        "car-2:door-A": "closed",
+    }
+    # No consist → ambiguous, returns None.
+    assert ctx.car_id_for_door("door-A") is None
+
+
+@pytest.mark.unit
+def test_car_id_for_door_consist_disambiguates() -> None:
+    ctx = ContextState()
+    ctx.door_state = {
+        "car-1:door-A": "closed",
+        "car-2:door-A": "closed",
+    }
+    ctx.consist = {"1": "car-1"}  # only car-1 is in the known consist
+    assert ctx.car_id_for_door("door-A") == "car-1"
 
 
 @pytest.mark.unit
@@ -147,12 +182,63 @@ def test_slip_fall_suppressed_under_maintenance_returns_202() -> None:
             json={
                 "alert_type": "slip_fall",
                 "car_id": "car-1",
-                "track_id": "42",
+                "track_id": 42,
                 "camera_id": "C1_DOOR_01",
             },
         )
     assert resp.status_code == 202
     assert not route.called  # suppressed
+    client.close()
+
+
+@pytest.mark.unit
+def test_slip_fall_emit_failure_returns_202() -> None:
+    """Event-store outage during slip-fall emit must not break the inference caller."""
+    ctx = ContextState(journey_id="OBB-TEST_t1_20260520", vehicle_id="OBB-TEST")
+    client = _make_client(ctx)
+    with respx.mock(assert_all_called=False) as rmock:
+        rmock.post("http://event-store-test/api/v1/events").mock(
+            side_effect=httpx.ConnectError("event-store down")
+        )
+        resp = client.post(
+            "/candidates/alert_raised",
+            json={
+                "alert_type": "slip_fall",
+                "car_id": "car-1",
+                "track_id": 42,
+                "camera_id": "C1_DOOR_01",
+            },
+        )
+    assert resp.status_code == 202
+    client.close()
+
+
+@pytest.mark.unit
+def test_door_obstruction_emit_failure_returns_202() -> None:
+    ctx = ContextState(
+        journey_id="OBB-TEST_t1_20260520",
+        vehicle_id="OBB-TEST",
+        door_state={"car-1:door-1A": "closed"},
+    )
+    client = _make_client(ctx)
+    with respx.mock(assert_all_called=False) as rmock:
+        rmock.post("http://event-store-test/api/v1/events").mock(
+            side_effect=httpx.ConnectError("event-store down")
+        )
+        resp = client.post(
+            "/candidates/door_obstruction",
+            json={
+                "car_id": "car-1",
+                "door_id": "door-1A",
+                "obstruction_type": "person",
+                "track_id": "42",
+                "camera_id": "C1_DOOR_01",
+                "confidence": None,
+                "door_state": "unknown",
+            },
+        )
+    assert resp.status_code == 202
+    client.close()
 
 
 @pytest.mark.unit
@@ -173,3 +259,4 @@ def test_accessibility_candidate_endpoint_updates_ctx_only() -> None:
     )
     assert resp.status_code == 202
     assert ctx.find_recent_accessibility("car-1", "door-1A", window_s=60.0) == "trk-99"
+    client.close()

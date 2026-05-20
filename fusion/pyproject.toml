@@ -21,6 +21,7 @@ dependencies = [
 dev = [
     "pytest>=8.2",
     "pytest-cov>=5.0",
+    "pytest-asyncio>=0.23",
     "anyio[trio]>=4.4",
     "mypy>=1.10",
     "ruff>=0.4",
@@ -37,6 +38,11 @@ markers = [
     "unit: pure logic, no I/O",
     "integration: cross-module with mocked I/O (respx)",
     "contract: payload-shape compatibility with sibling containers",
+]
+filterwarnings = [
+    # httpx.AsyncClient instantiated outside an event loop for FastAPI TestClient
+    # use; the transport is owned by TestClient. Safe to ignore the close warning.
+    "ignore::ResourceWarning",
 ]
 
 [tool.coverage.run]

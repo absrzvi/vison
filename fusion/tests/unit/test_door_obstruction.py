@@ -18,7 +18,6 @@ def _settings() -> Settings:
         event_store_url="http://event-store-test",
         vehicle_id="OBB-TEST",
         schema_version=1,
-        journey_id="OBB-TEST_t1_20260520",
     )
 
 
@@ -154,3 +153,30 @@ async def test_suppressed_candidate_not_posted() -> None:
         gate = SuppressionGate(ctx, enricher)
         await door_obstruction_mod.handle(_payload(), ctx, gate, enricher)
     assert not route.called
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_resolve_car_id_consist_mapping_used_for_lookup() -> None:
+    """R3: when payload.car_id is a consist index (e.g. "1"), door_obstruction
+    must resolve it to the real car_id before looking up door_state.
+    Code-review decision 1 (2026-05-20)."""
+    ctx = ContextState(
+        journey_id="OBB-TEST_t1_20260520",
+        vehicle_id="OBB-TEST",
+        speed_kmh=10.0,
+        door_state={"car-1:door-1A": "closed"},
+        consist={"1": "car-1"},
+    )
+    settings = _settings()
+    route = respx.post("http://event-store-test/api/v1/events").mock(
+        return_value=httpx.Response(201)
+    )
+    async with httpx.AsyncClient() as client:
+        enricher = Enrichment(client, settings, ctx)
+        gate = SuppressionGate(ctx, enricher)
+        # Inference posts car_id="1" (numeric index); consist resolves to "car-1".
+        await door_obstruction_mod.handle(_payload(car_id="1"), ctx, gate, enricher)
+    assert route.called
+    env = EventEnvelope.model_validate_json(route.calls.last.request.content.decode())
+    assert env.payload["car_id"] == "car-1"

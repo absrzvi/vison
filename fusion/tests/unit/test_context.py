@@ -97,6 +97,77 @@ def test_resolve_car_id_passthrough_when_missing() -> None:
 
 
 @pytest.mark.unit
+def test_resolve_car_id_empty_string_passthrough() -> None:
+    """An empty-string value in consist is treated as a passthrough, not as a
+    successful mapping — otherwise downstream door_state keys become ":door-X".
+    """
+    ctx = ContextState()
+    ctx.consist = {"1": ""}
+    assert ctx.resolve_car_id("1") == "1"
+
+
+@pytest.mark.unit
+def test_partial_push_keeps_prior_state_for_omitted_fields() -> None:
+    """New push semantics: absent field == keep prior; explicit value == replace."""
+    ctx = ContextState()
+    initial = ContextPushModel.model_validate(
+        {
+            "maintenance_mode": True,
+            "gps_valid": False,
+            "speed_kmh": 25.0,
+            "door_state": {"car-1:door-1A": "closed"},
+        }
+    )
+    ctx.update_from_push(initial)
+    assert ctx.maintenance_mode is True
+    assert ctx.gps_valid is False
+    assert ctx.speed_kmh == 25.0
+    assert ctx.door_state == {"car-1:door-1A": "closed"}
+
+    # Partial push: only speed_kmh — all other fields preserved.
+    partial = ContextPushModel.model_validate({"speed_kmh": 35.0})
+    ctx.update_from_push(partial)
+    assert ctx.speed_kmh == 35.0
+    assert ctx.maintenance_mode is True
+    assert ctx.gps_valid is False
+    assert ctx.door_state == {"car-1:door-1A": "closed"}
+
+
+@pytest.mark.unit
+def test_explicit_empty_dict_clears_prior_state() -> None:
+    """Empty dict on a dict field explicitly clears (distinct from absent)."""
+    ctx = ContextState()
+    ctx.update_from_push(
+        ContextPushModel.model_validate({"door_state": {"car-1:door-1A": "closed"}})
+    )
+    assert ctx.door_state == {"car-1:door-1A": "closed"}
+
+    ctx.update_from_push(ContextPushModel.model_validate({"door_state": {}}))
+    assert ctx.door_state == {}
+
+
+@pytest.mark.unit
+def test_observe_ramp_signal_edge_trigger() -> None:
+    ctx = ContextState()
+    # false → true: edge fires
+    assert ctx.observe_ramp_signal(True) is True
+    # true → true: no edge
+    assert ctx.observe_ramp_signal(True) is False
+    # true → false: no edge (only false→true fires)
+    assert ctx.observe_ramp_signal(False) is False
+    # false → true again: edge fires
+    assert ctx.observe_ramp_signal(True) is True
+
+
+@pytest.mark.unit
+def test_car_id_for_door_basic() -> None:
+    ctx = ContextState()
+    ctx.door_state = {"car-3:door-3B": "closing"}
+    assert ctx.car_id_for_door("door-3B") == "car-3"
+    assert ctx.car_id_for_door("door-9X") is None
+
+
+@pytest.mark.unit
 def test_accessibility_recency_lookup_within_window() -> None:
     ctx = ContextState()
     ctx.note_accessibility("car-1", "door-1A", "trk-42", now=100.0)

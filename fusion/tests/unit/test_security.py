@@ -131,16 +131,87 @@ def test_slip_fall_candidate_alert_type_literal() -> None:
             {
                 "alert_type": "unknown",
                 "car_id": "car-1",
-                "track_id": "42",
+                "track_id": 42,
                 "camera_id": "C1_DOOR_01",
             }
         )
-    # Correct shape accepted.
+    # Correct shape accepted — track_id is int (matches hailotracker source).
     SlipFallCandidate.model_validate(
         {
             "alert_type": "slip_fall",
             "car_id": "car-1",
-            "track_id": "42",
+            "track_id": 42,
             "camera_id": "C1_DOOR_01",
         }
     )
+    # Non-numeric string track_id MUST be rejected.
+    with pytest.raises(ValidationError):
+        SlipFallCandidate.model_validate(
+            {
+                "alert_type": "slip_fall",
+                "car_id": "car-1",
+                "track_id": "not-a-number",
+                "camera_id": "C1_DOOR_01",
+            }
+        )
+
+
+@pytest.mark.unit
+def test_no_raw_video_or_stream_url_in_envelope() -> None:
+    """Security: no raw video paths, RTSP URLs, or video file references may
+    appear in any envelope emitted by fusion. Fuzz the typical alert paths
+    and confirm payloads stay free of forbidden patterns.
+    """
+    import json
+    import re
+
+    from oebb_shared.events import (
+        AccessibilityDetectedPayload,
+        AlertRaisedPayload,
+        DoorObstructionPayload,
+        RampDeployedPayload,
+    )
+
+    forbidden = re.compile(
+        r"(rtsp://|rtmp://|http(?:s)?://[^\s\"]+\.(?:mp4|mkv|ts|h264|hevc)"
+        r"|/dev/video|/var/lib/cctv|file://|raw_video|\.h264\b|\.hevc\b)",
+        re.IGNORECASE,
+    )
+
+    samples = [
+        AlertRaisedPayload(
+            alert_id="11111111-1111-4111-8111-111111111111",
+            alert_code="door_obstruction",
+            car_id="car-1",
+            description="Door obstruction on door-1A (person)",
+            priority="normal",
+        ).model_dump(),
+        DoorObstructionPayload(
+            car_id="car-1",
+            door_id="door-1A",
+            obstruction_type="person",
+            track_id="42",
+            camera_id="C1_DOOR_01",
+            confidence=None,
+            door_state="closed",
+        ).model_dump(),
+        AccessibilityDetectedPayload(
+            car_id="car-1",
+            zone="door",
+            track_id="trk-7",
+            assistance_type=["wheelchair"],
+            camera_id="C1_DOOR_01",
+            confidence=None,
+            near_door_id="door-1A",
+        ).model_dump(),
+        RampDeployedPayload(
+            car_id="car-1",
+            door_id="door-1A",
+            triggered_by_track_id="trk-7",
+            deployed_by="auto",
+            station_id="VIE-HBF",
+        ).model_dump(),
+    ]
+    for payload in samples:
+        rendered = json.dumps(payload)
+        assert not forbidden.search(rendered), f"forbidden pattern in payload: {rendered}"

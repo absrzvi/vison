@@ -17,7 +17,6 @@ def _settings() -> Settings:
         event_store_url="http://event-store-test",
         vehicle_id="OBB-TEST",
         schema_version=1,
-        journey_id="OBB-TEST_t1_20260520",
         accessibility_recent_window_s=60.0,
     )
 

@@ -3,6 +3,11 @@
 Single severity decision point lives in ``_severity_for``. Single envelope
 constructor lives in ``_build_envelope``. station_approach escalation lives in
 ``emit_alert``. Every outbound envelope has ``source='fusion'``.
+
+Code-review patches (2026-05-20):
+  * ``_severity_for`` fails CLOSED on unknown speed → ``critical`` (decision 3).
+  * ``ctx.journey_id is None`` skips the emit with a WARN log instead of falling
+    back to a config placeholder (decision against `Settings.journey_id`).
 """
 from __future__ import annotations
 
@@ -25,11 +30,16 @@ Severity = Literal["critical", "warning", "info"]
 def _severity_for(alert_code: str, speed_kmh: float | None) -> Severity:
     """FR9: speed-correlated door fault escalation lives here.
 
-    Door-fault alerts at speed > 0 are critical; at 0 (or unknown speed) they
-    are warning. All other alert codes default to warning.
+    Door-fault alerts at speed > 0 are ``critical``. At speed = 0 they are
+    ``warning``. **Unknown speed** (``None``) is treated as ``critical`` — fail
+    closed (code-review decision 3, 2026-05-20). All other alert codes default
+    to ``warning``.
     """
     if alert_code in {"door_obstruction", "door_fault"}:
-        if (speed_kmh or 0.0) > 0.0:
+        if speed_kmh is None:
+            # Fail-closed: stale telemetry on a moving train must not downgrade.
+            return "critical"
+        if speed_kmh > 0.0:
             return "critical"
         return "warning"
     return "warning"
@@ -53,9 +63,21 @@ class Enrichment:
         event_type: EventType,
         payload: dict[str, Any],
         severity: Severity,
-    ) -> EventEnvelope:
+    ) -> EventEnvelope | None:
+        """Construct an envelope or return ``None`` if no journey_id is known.
+
+        Returning ``None`` is preferable to inventing a synthetic journey_id;
+        the caller logs and skips.
+        """
+        if self._ctx.journey_id is None:
+            log.warning(
+                "enrichment.skip_no_journey_id",
+                event_type=str(event_type),
+                severity=severity,
+            )
+            return None
         return EventEnvelope(
-            journey_id=self._ctx.journey_id or self._settings.journey_id,
+            journey_id=self._ctx.journey_id,
             vehicle_id=self._ctx.vehicle_id or self._settings.vehicle_id,
             event_type=event_type,
             severity=severity,
@@ -102,6 +124,8 @@ class Enrichment:
             payload_model.model_dump(),
             severity,
         )
+        if envelope is None:
+            return
         await self._post_envelope(envelope)
         log.info(
             "enrichment.alert_emitted",
@@ -122,6 +146,8 @@ class Enrichment:
         """Generic emit for non-AlertRaised envelopes (RAMP_DEPLOYED, JOURNEY_ENDED)."""
         event_type = EventType(event_type_name)
         envelope = self._build_envelope(event_type, payload, severity)
+        if envelope is None:
+            return
         await self._post_envelope(envelope)
         log.info(
             "enrichment.envelope_emitted",

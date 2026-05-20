@@ -3,6 +3,13 @@
 Holds the latest snapshot pushed by vlan-pollers plus a TTL-bounded record of
 recent ACCESSIBILITY_DETECTED tracks. State is intentionally not persisted —
 fusion restarts pick up the next context push within a few seconds.
+
+Push semantics (code-review 2026-05-20 decisions 2 + 5 + 8):
+  * Each field on ``ContextPushModel`` is ``Optional``. ``None`` means absent
+    in this push → keep current state. An explicit value (including ``{}``)
+    replaces prior state.
+  * ``ramp_deployed`` is tracked here so the FastAPI layer can edge-trigger the
+    RAMP_DEPLOYED emit only on the false→true transition.
 """
 from __future__ import annotations
 
@@ -39,11 +46,20 @@ class ContextState:
     reservations: dict[str, int] = field(default_factory=dict)
     consist: dict[str, str] = field(default_factory=dict)
 
+    # R4: ramp edge-trigger tracking. We record the *previously observed* value
+    # so the FastAPI layer can detect a false→true transition.
+    ramp_deployed: bool = False
+
     # car_id → door_id_or_zone → (track_id, monotonic_timestamp)
     _recent_accessibility: dict[str, dict[str, tuple[str, float]]] = field(default_factory=dict)
 
     def update_from_push(self, model: ContextPushModel) -> None:
-        """Overwrite mutable fields from a validated POST /context body."""
+        """Apply a push using "present replaces, absent keeps" semantics.
+
+        Every field that is not ``None`` is written verbatim (including empty
+        dicts, which explicitly clear prior state). ``None`` fields are left
+        untouched.
+        """
         before = (
             self.maintenance_mode,
             self.depot_mode,
@@ -56,17 +72,21 @@ class ContextState:
             self.vehicle_id = model.vehicle_id
         if model.speed_kmh is not None:
             self.speed_kmh = model.speed_kmh
-        self.station_approach = model.station_approach
-        self.maintenance_mode = model.maintenance_mode
-        self.depot_mode = model.depot_mode
-        self.gps_valid = model.gps_valid
-        if model.door_release:
+        if model.station_approach is not None:
+            self.station_approach = model.station_approach
+        if model.maintenance_mode is not None:
+            self.maintenance_mode = model.maintenance_mode
+        if model.depot_mode is not None:
+            self.depot_mode = model.depot_mode
+        if model.gps_valid is not None:
+            self.gps_valid = model.gps_valid
+        if model.door_release is not None:
             self.door_release = dict(model.door_release)
-        if model.door_state:
+        if model.door_state is not None:
             self.door_state = dict(model.door_state)
-        if model.reservations:
+        if model.reservations is not None:
             self.reservations = dict(model.reservations)
-        if model.consist:
+        if model.consist is not None:
             self.consist = dict(model.consist)
         after = (
             self.maintenance_mode,
@@ -83,19 +103,58 @@ class ContextState:
                 station_approach=self.station_approach,
             )
 
+    def observe_ramp_signal(self, ramp_deployed: bool) -> bool:
+        """Record ``ramp_deployed`` and return True only on a false→true edge.
+
+        Callers use the return value to debounce RAMP_DEPLOYED emits — a stuck
+        ``ramp_deployed=true`` signal repeating across pushes only emits once.
+        """
+        edge = (not self.ramp_deployed) and ramp_deployed
+        self.ramp_deployed = ramp_deployed
+        return edge
+
     def resolve_car_id(self, idx: str | int) -> str:
         """R3 — best-effort coach index resolution. Returns the input unchanged
-        when the consist map is empty or the index is missing.
+        when the consist map is empty, the index is missing, or the mapping is
+        an empty string.
         """
         key = str(idx)
         resolved = self.consist.get(key)
-        if resolved is None:
+        if not resolved:  # None or empty string → passthrough
             log.debug("context_state.resolve_car_id.passthrough", input=key)
             return key
         return resolved
 
     def door_state_for(self, car_id: str, door_id: str) -> str:
         return self.door_state.get(_door_key(car_id, door_id), "unknown")
+
+    def car_id_for_door(self, door_id: str) -> str | None:
+        """Resolve car_id from a door_id using ``consist``-aware logic.
+
+        Strategy: scan ``door_state`` keys looking for an exact ``:door_id``
+        suffix where the *prefix is a known car_id* (either present in
+        ``consist`` values or used as a door_state prefix). Returns ``None``
+        when no deterministic match exists — callers can then default to
+        ``"unknown"`` explicitly rather than relying on first-match heuristics.
+        """
+        suffix = f"{_DOOR_KEY_SEP}{door_id}"
+        candidates = [k[: -len(suffix)] for k in self.door_state if k.endswith(suffix)]
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+        # Multiple cars expose the same door_id — prefer one that is also in
+        # consist values; otherwise log ambiguity and return None.
+        known_cars = set(self.consist.values())
+        narrowed = [c for c in candidates if c in known_cars]
+        if len(narrowed) == 1:
+            return narrowed[0]
+        log.warning(
+            "context_state.car_id_for_door.ambiguous",
+            door_id=door_id,
+            candidates=candidates,
+        )
+        return None
 
     def note_accessibility(
         self,

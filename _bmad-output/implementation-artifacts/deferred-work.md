@@ -322,3 +322,9 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - **D5** — `_REPO_ROOT = parents[3]` fragile if test file moves or package is installed as wheel — acceptable for in-tree dev tests; would need fix if `oebb-shared` is ever published to PyPI.
 - **D6** — `STREAM_PRIORITY` constructable as valid `EventEnvelope` despite ADR-18 "never written to event-store" — enforcement gap at the envelope layer; would require a custom validator that checks ADR-18 semantics.
 - **D7** — Sub-second precision unbounded (`(\.\d+)?` allows nanosecond strings) — no practical issue; Python `datetime` drops anything beyond microseconds on round-trip.
+
+## Deferred from: code review of story 4-6-fusion-alert-correlation-suppression (2026-05-20)
+
+- **`main.py` bootstrap-shell + lifespan route-append pattern is fragile.** OpenAPI/`/docs` ends up empty because the schema is cached from the bare shell before lifespan appends routes. Matches `inference/main.py` verbatim — refactoring needs to land across both containers in a single story. Risk: low (PoC `/docs` not used).
+- **`@DEFAULT_RETRY` retries on 4xx as well as 5xx.** Lives in `shared/src/oebb_shared/http/retry.py`. Changing this policy ripples into every container; needs a coordinated story with a contract test for the desired retry classes.
+- **`SuppressionGate._depot_journey_ended_emitted_for` grows unbounded across journey rotations.** Long-running PoC concern. Correct fix: prune on journey_id transition (clear when entering NORMAL with a new journey_id). Defer until E4 retro / a real long-run test.
