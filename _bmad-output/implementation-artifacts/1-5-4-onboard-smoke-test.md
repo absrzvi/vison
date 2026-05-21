@@ -1,6 +1,6 @@
 # Story 1.5-4: Onboard Smoke Test
 
-Status: review
+Status: done
 
 ## Story
 
@@ -98,6 +98,24 @@ Tier 3 actions require explicit sign-off. This story is approved for Tier 3 exec
 - [x] Validate: `docker compose -f docker-compose.onboard.yml config --quiet` exits 0 (confirmed)
 - [x] Run the smoke test and confirm exit 0
 
+### Review Findings (code-review 2026-05-21, Opus 4.7)
+
+**Patches (7)**
+- [x] [Review][Patch] P1 — Drop `-f` from `curl` in Steps 4 and 5; capture body for diagnostics; status-code case branch unreachable on 422/5xx with `-f` + `set -e` [scripts/smoke-test-onboard.sh]
+- [x] [Review][Patch] P2 — Add `journey_id=SMOKE-TEST_001_20260521` filter to GET (or use larger limit); `?limit=1` without filter returns oldest event in DB — leftover volume state breaks assertion [scripts/smoke-test-onboard.sh]
+- [x] [Review][Patch] P3 — `docker compose config --quiet` validates ALL services including bind mounts; stub `cameras.json` must exist (or validate only event-store) so CI doesn't fail on missing `./cameras.json` and `/opt/hailo/models/yolov8m.hef` [scripts/smoke-test-onboard.sh]
+- [x] [Review][Patch] P4 — Add `docker compose version` to pre-flight; bare `docker` check doesn't catch missing compose v2 plugin [scripts/smoke-test-onboard.sh]
+- [x] [Review][Patch] P5 — Add CWD guard: `cd "$(dirname "$0")/.."` so script works from any directory; `docker-compose.onboard.yml` is a relative path [scripts/smoke-test-onboard.sh]
+- [x] [Review][Patch] P6 — Allow env override: `API_KEY="${EVENT_STORE_API_KEY:-onboard-dev-key}"` so production `.env` auto-load doesn't silently change the key [scripts/smoke-test-onboard.sh]
+- [x] [Review][Patch] P7 — Verified and fixed executable bit to `100755` in git index (`git update-index --chmod=+x`) [scripts/smoke-test-onboard.sh]
+
+**Deferred (5)**
+- [x] [Review][Defer] D1 — AC4/AC5 spec text references `/api/v1/ingest` and `PASSENGER_BOARDED` which don't exist in the API; implementation correctly uses `POST /api/v1/events` + `OCCUPANCY_UPDATE` — spec text is stale; update ACs to match implementation [_bmad-output/implementation-artifacts/1-5-4-onboard-smoke-test.md]
+- [x] [Review][Defer] D2 — `journey_id` in payload hardcodes today's date `20260521`; will silently rot if schema ever adds temporal date validation [scripts/smoke-test-onboard.sh]
+- [x] [Review][Defer] D3 — No CI project-name isolation (`-p`); parallel CI jobs collide on port 8001 and `onboard_event_store_data` volume — deferred, PoC posture [scripts/smoke-test-onboard.sh]
+- [x] [Review][Defer] D4 — No `jq` structured JSON assertion — `grep` is fragile vs error messages echoing vehicle_id back — deferred, acceptable for smoke test [scripts/smoke-test-onboard.sh]
+- [x] [Review][Defer] D5 — Smoke test doesn't exercise event-store cursor pagination or event_type filters — deferred, out of scope for smoke test [scripts/smoke-test-onboard.sh]
+
 ## File List
 
 - `scripts/.gitkeep` — NEW
@@ -107,6 +125,7 @@ Tier 3 actions require explicit sign-off. This story is approved for Tier 3 exec
 ## Change Log
 
 - 2026-05-21: Story created and implemented; smoke test exits 0; status → review
+- 2026-05-21: Code review (Opus 4.7): 7 patches applied (curl -f, GET filter, cameras.json stub, compose v2 check, CWD guard, API_KEY env, executable bit); smoke test exits 0; status → done
 
 ## Dev Agent Record
 
