@@ -118,7 +118,7 @@ development_status:
   4-8-gangway-tripwire-ingest: done  # code-review 2026-05-20 (opus-4.7): APPROVED after D1/D2 + P1-P7 patches; traversal rename, expect_orphan, 141 tests
   4-9-closed-ledger-reconciliation: done  # code-review 2026-05-21 (opus-4.7): 5 decisions resolved, 17 patches applied (enum alias, dedup, AC1 cleanup, AC8 + no-raw-video tests, startup-warn, etc.); 121 fusion tests, 149 inference, 130 shared; fusion cov 94.15%
   4-10-coach-comfort-index: done  # code-review 2026-05-21 (opus-4.7): 4 decisions (D1 accept, D2 accept+snapshot, D3 fix peek/consume, D4 accept), 5 patches (P1 confirm_emit two-phase, P2 journey reset, P3 edge suppression log, P4 clamp-on-store, P5 AC5/AC6 tests); 146 fusion tests cov 94.20%, mypy/ruff clean
-  epic-4-retrospective: done  # phase-1 retro 2026-05-21 covering 4-1 through 4-8 + 4-cs1; phase-2 retro deferred until 4-9 + 4-10 ship
+  epic-4-retrospective: done  # phase-1 retro 2026-05-21 covering 4-1 through 4-8 + 4-cs1; phase-2 retro 2026-05-21 covering 4-9 + 4-10 — epic-4-retro-phase2-2026-05-21.md
 
   # ── Epic 5: Luggage Monitoring — Live Data ──
   epic-5: done
