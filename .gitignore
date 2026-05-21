@@ -65,3 +65,9 @@ env/
 # ── Hailo AI model files (large binary, deployed separately) ──────────────────
 *.hef
 models/
+
+# ── Test & build artifacts ────────────────────────────────────────────────────
+*.log
+.coverage
+*.egg-info/
+test-results/
