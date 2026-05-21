@@ -1,4 +1,8 @@
 # generated: 2026-05-17
+# last_updated: 2026-05-21  # epic-4 phase-1 retrospective complete: 9 of 11 stories shipped; 8 action items A1-A8; phase-2 retro deferred until 4-9 + 4-10 done
+# last_updated: 2026-05-21  # create-story 2026-05-21: 4-10-coach-comfort-index → ready-for-dev (depends on 4-9; no party-mode needed — follows 4-9 precedents)
+# last_updated: 2026-05-21  # party-mode 2026-05-21: 4-9 D1-D5 resolved; LEDGER_DRIFT_ALERT renamed to LEDGER_DRIFT_OBSERVATION; aggregator dropped from scope
+# last_updated: 2026-05-21  # create-story 2026-05-21: 4-9-closed-ledger-reconciliation → ready-for-dev (BLOCKED on D1-D4 checkpoint)
 # last_updated: 2026-05-20  # 4-5-inference-safety-accessibility: review → in-progress (2 test failures + 7 decisions needed)
 # project: oebb-agent
 # project_key: NOKEY
@@ -108,9 +112,9 @@ development_status:
   4-7-event-store-onboard-rest-api-websocket: done
   4-cs1-cloud-sync-container: done
   4-8-gangway-tripwire-ingest: done  # code-review 2026-05-20 (opus-4.7): APPROVED after D1/D2 + P1-P7 patches; traversal rename, expect_orphan, 141 tests
-  4-9-closed-ledger-reconciliation: backlog
-  4-10-coach-comfort-index: backlog
-  epic-4-retrospective: optional
+  4-9-closed-ledger-reconciliation: ready-for-dev  # party-mode 2026-05-21: D1-D5 resolved (D1-A double-POST, D2-A zero-seed+both_seeded gate, D3-A per-coach, D4 hybrid check/emit/surface, D5 OBSERVATION rename); aggregator dropped from scope
+  4-10-coach-comfort-index: ready-for-dev  # create-story 2026-05-21: depends on 4-9; uses shipped CoachComfortIndexPayload shape (not epic-spec divergent); no new endpoints (reuses 4-9 /candidates/occupancy_update)
+  epic-4-retrospective: done  # phase-1 retro 2026-05-21 covering 4-1 through 4-8 + 4-cs1; phase-2 retro deferred until 4-9 + 4-10 ship
 
   # ── Epic 5: Luggage Monitoring — Live Data ──
   epic-5: done

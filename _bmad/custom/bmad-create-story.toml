@@ -19,6 +19,13 @@ persistent_facts = [
   # (use --obb-sev-medium); --obb-sev-danger does not exist (use --obb-sev-critical).
   "STORY CONTEXT RULE — CSS TOKENS: When the story involves any CSS work, include in Dev Notes the complete list of --obb-* tokens from control-centre/src/styles/colors_and_type.css. Call out the common mistakes explicitly: --obb-sev-warning does NOT exist (use --obb-sev-medium); --obb-sev-danger does NOT exist (use --obb-sev-critical). Severity ramp: --obb-sev-critical (red), --obb-sev-high (orange), --obb-sev-medium (amber), --obb-sev-advisory (blue), --obb-sev-normal (green).",
 
+  # E4 retrospective finding A3: epics.md was written upfront in BMAD Phase 3, before
+  # shared/oebb_shared/events/payloads.py shipped. Several stories had payload definitions
+  # in epics.md that diverged from the actually-shipped Pydantic models in shared/. Caught
+  # in 4-9 and 4-10 during create-story (avoided silent re-spec), but only because of
+  # explicit comparison. Codify the check.
+  "STORY CONTEXT RULE — PAYLOAD SPEC AUDIT: Before writing AC text for any story that emits or consumes an event, diff the payload definition in epics.md against the shipped Pydantic model in shared/src/oebb_shared/events/payloads.py. If they diverge in field names, types, or shape, do NOT silently pick one. Surface the divergence in a 'Decisions' section of the story with options (use shipped shape vs change shared/ contract) and the cost of each. The shipped shared/ contract is almost always the right choice — changing it cascades to event-store + cloud-backend + contract tests. epics.md is a snapshot, not a source of truth.",
+
   # Load project-context.md which now contains: async stale-closure patterns (A3),
   # full CSS token reference (A2 backing), ADR-2 + ADR-18 full text, E4 dependency status.
   "file:{project-root}/project-context.md",

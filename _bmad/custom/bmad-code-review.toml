@@ -1,0 +1,17 @@
+# Team overrides for bmad-code-review.
+# Scalars override base, arrays append.
+
+[workflow]
+
+persistent_facts = [
+  # E4 retrospective finding A6: story 4-5 created _bmad-output/implementation-artifacts/
+  # 4-5-code-review-2026-05-20-followup.md as a separate file for round-2 review feedback.
+  # That's review feedback in story shape — a structural anti-pattern. Story 4-8 set the
+  # correct precedent: round-2 and beyond live inside the original story file as additional
+  # "Senior Developer Review (AI) — Round N" sections. One story → one file → many review
+  # rounds. Codify it.
+  "ROUND-2 REVIEWS LIVE IN THE ORIGINAL STORY FILE: When applying review feedback, append a new section to the original story file titled 'Senior Developer Review (AI) — Round N' (where N is the round number). NEVER create a separate <story>-followup.md or <story>-code-review-<date>.md sibling file. Each story has exactly one file across all review rounds. Pattern reference: see 4-8-gangway-tripwire-ingest.md which has 'Round 1' and 'Round 2' sections in the same file.",
+
+  # Load project-context.md so reviews have the same patterns and gotchas the dev agent had.
+  "file:{project-root}/project-context.md",
+]

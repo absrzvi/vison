@@ -11,4 +11,9 @@ persistent_facts = [
   "FOUR E2E PATHS: When the story involves UI, Playwright tests must cover all four paths — happy path, auth failure, validation/error, and edge-case/boundary. Missing any path is a QA checklist FAIL.",
   "QA SCORE GATE: Story cannot be marked DONE unless the QA score (computed by bmad-qa-generate-e2e-tests) is >= 85/100.",
   "SECURITY SENTINEL: Run bmad-security-sentinel in parallel with bmad-code-review on every story before marking DONE. Never skip.",
+
+  # E4 retrospective finding A2: story 4-5 was sent to code-review with `pytest 117 PASS / 2 FAIL`.
+  # Reviewer time was wasted chasing test failures instead of reading code. The "100% pass before
+  # review" discipline in Amelia's role description was violated. Make the gate explicit.
+  "NEVER FLIP STATUS TO REVIEW WITH RED TESTS: Before changing story status from in-progress to review, re-run the full quality gate (pytest, mypy --strict, ruff) and confirm: (a) all tests pass — 0 failures, 0 errors; (b) mypy --strict reports 0 errors; (c) ruff reports 0 violations; (d) coverage gate is met (≥90% per story AC, or whatever the story specifies). If any of these fail, the story stays in-progress. Reviewer time is for reading code, not for chasing test failures. This is non-negotiable.",
 ]
