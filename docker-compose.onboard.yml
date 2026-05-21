@@ -21,14 +21,16 @@ services:
       context: .
       dockerfile: event-store/Dockerfile
     environment:
-      DB_PATH: /data/events.db
-      CURSOR_PAGE_SIZE: "100"
+      # event-store uses env_prefix="EVENT_STORE_" — field db_path → EVENT_STORE_DB_PATH.
+      EVENT_STORE_DB_PATH: /data/events.db
+      EVENT_STORE_CURSOR_PAGE_SIZE: "100"
       # PRODUCTION OVERRIDE REQUIRED: set to a strong secret before fleet deployment.
       EVENT_STORE_API_KEY: onboard-dev-key
     ports:
       - "8001:8001"
     volumes:
       - onboard_event_store_data:/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health/ready')\" || exit 1"]
       interval: 10s
@@ -61,11 +63,15 @@ services:
     depends_on:
       event-store:
         condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health/ready')\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+      # start_period gives GStreamer pipeline time to connect to first P1 RTSP stream.
+      # /health/ready returns 503 until scheduler.active_p1_count() >= 1.
+      start_period: 60s
 
   # ── inference ─────────────────────────────────────────────────────────────────
   # Hailo-8 YOLOv8m detection + tracking. Requires /dev/hailo0 device passthrough.
@@ -105,13 +111,19 @@ services:
     depends_on:
       event-store:
         condition: service_healthy
+      # DEV: service_started allows inference to run before cameras are live.
+      # PRODUCTION: change to service_healthy once real RTSP streams are available.
       rtsp-ingest:
-        condition: service_healthy
+        condition: service_started
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081/health/ready')\" || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 6
+      # start_period allows HailoRT device init + GStreamer pipeline warmup before
+      # healthcheck failures count — inference /health/ready is 503 until ReadinessHolder flips.
+      start_period: 90s
 
 volumes:
   onboard_event_store_data:

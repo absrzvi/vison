@@ -419,4 +419,13 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - P8 — `POST /context` reachable across docker bridge (not just VLAN-isolated pollers); PoC design decision; VLAN isolation is stated auth boundary; add X-API-Key at fleet rollout.
 - P9 — COPY paths require monorepo-root build context; established pattern documented in CLAUDE.md; enforce via docker-compose `context: .` in story 1-5-3.
 
+## Deferred from: code review of 1-5-3-onboard-docker-compose (2026-05-21)
+
+- P8 — `INFERENCE_FUSION_URL: http://fusion:8090` points to non-existent service; fusion not yet containerised; inference fusion calls are optional/guarded; wire fusion in when containerised.
+- P9 — `group_add: video` may not grant Hailo-8 device access; Hailo PCIe driver may use a `hailo` group instead; validate on SYS2 hardware bring-up day.
+- P10 — bind mount `./cameras.json` auto-creates directory if file absent; cannot prevent at compose level without entrypoint guard; document in ops runbook.
+- P11 — no container security hardening (`cap_drop`, `read_only`, `security_opt`); pre-existing PoC posture; harden at fleet rollout.
+- P12 — port 8080 published on all host interfaces; acceptable for PoC; restrict to loopback or internal network at fleet rollout.
+- P13 — no pinned `HAILO_BASE` digest; pin on first SYS2 hardware bring-up when digest is available from Hailo Developer Zone.
+
 

@@ -12,7 +12,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="INFERENCE_", env_file=".env", extra="ignore")
 
     cameras_json_path: str = "cameras.json"
-    event_store_url: str = "http://event-store:8000"
+    event_store_url: str = "http://event-store:8001"
+    event_store_api_key: str = ""
     context_push_port: int = 8081
 
     occupancy_threshold_pct: float = 0.80

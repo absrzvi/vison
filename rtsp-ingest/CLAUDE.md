@@ -102,7 +102,8 @@ All env vars use the `RTSP_INGEST_` prefix (from `env_prefix` in `Settings`).
 |---|---|---|
 | `RTSP_INGEST_CAMERAS_JSON_PATH` | `cameras.json` | Set to `/config/cameras.json` in Dockerfile; bind-mount actual file |
 | `RTSP_INGEST_VEHICLE_ID` | `OBB-TEST` | Override for real train ID |
-| `RTSP_INGEST_EVENT_STORE_URL` | `http://event-store:8000` | Correct for onboard compose stack |
+| `RTSP_INGEST_EVENT_STORE_URL` | `http://event-store:8001` | Port 8001; compose sets this correctly |
+| `RTSP_INGEST_EVENT_STORE_API_KEY` | _(empty)_ | X-API-Key for event-store `/api/v1/*`; all CAMERA_DEGRADED/RECOVERED POSTs return 401 without it |
 | `RTSP_INGEST_CONTEXT_PUSH_PORT` | `8080` | Port uvicorn binds; matches `EXPOSE 8080` |
 | `RTSP_INGEST_TOPS_BUDGET_PCT_THRESHOLD` | `0.90` | Fraction of TOPS at which P2 throttle kicks in |
 | `RTSP_INGEST_TOPS_TOTAL` | `26.0` | Total Hailo-8 TOPS budget |

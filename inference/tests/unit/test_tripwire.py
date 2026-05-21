@@ -49,10 +49,10 @@ def _make_camera(
 
 def _make_settings(**kwargs: Any) -> Settings:
     defaults: dict[str, Any] = {
-        "INFERENCE_EVENT_STORE_URL": "http://event-store:8000",
-        "INFERENCE_FUSION_URL": "http://fusion:8090",
-        "INFERENCE_VEHICLE_ID": "OBB-TEST",
-        "INFERENCE_JOURNEY_ID": "OBB-TEST_001_20260520",
+        "event_store_url": "http://event-store:8000",
+        "fusion_url": "http://fusion:8090",
+        "vehicle_id": "OBB-TEST",
+        "journey_id": "OBB-TEST_001_20260520",
     }
     defaults.update(kwargs)
     return Settings(**defaults)

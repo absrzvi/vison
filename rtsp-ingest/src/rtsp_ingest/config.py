@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     p3_fps: float = 8.0
     station_speed_threshold_kmh: float = 20.0
     door_release_override_s: float = 120.0
-    event_store_url: str = "http://event-store:8000"
+    event_store_url: str = "http://event-store:8001"
+    event_store_api_key: str = ""
     context_push_port: int = 8080
 
 
