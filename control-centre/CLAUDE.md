@@ -41,3 +41,22 @@ No test runner is configured yet. When adding tests, use Vitest (already a Vite 
 Every component that fetches data must handle three states: loading, error, and populated. SSE data flows through `src/ws/` into React context (`src/context/`) — do not fetch directly from components.
 
 CSS custom properties live in `src/index.css`. Adding a new colour means adding a `--var` there, not a hex literal anywhere in component CSS.
+
+## Verification Requirement
+
+Every story that adds or changes a UI feature **must** be verified in the browser before sign-off. This is not optional:
+
+1. Run `npm run dev` (`:5173`)
+2. Use the `verify` skill or Claude Preview tools to confirm the feature renders correctly
+3. Check the golden path AND at least one edge state (loading, error, empty data)
+4. Monitor the browser console for errors during the check
+
+Claiming a story complete without browser verification is not acceptable — type checking and unit tests do not substitute for UI verification.
+
+## Review Failure Scenarios
+
+Every story touching this service must verify these scenarios before sign-off:
+
+- **SSE reconnect:** occupancy panels and alert feeds must recover and re-render correctly after the SSE connection drops and reconnects — no stale data, no blank panels
+- **Loading/error/populated states:** every data-fetching component must render all three states without crashing
+- **Mock isolation:** `src/mock/` imports must never appear in production component trees — verify with `npm run lint` and a grep for mock imports in non-mock files

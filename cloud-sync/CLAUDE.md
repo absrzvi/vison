@@ -72,3 +72,16 @@ tests/
 **Empty-string secret coercion.** `CLOUD_SYNC_EVENT_STORE_API_KEY=`, `CLOUD_SYNC_MQTT_USERNAME=`, `CLOUD_SYNC_MQTT_PASSWORD=` (empty strings) all normalise to `None` at config-load — Docker-compose default placeholder no longer creates a "looks configured but broken" deployment.
 
 **Truncation.** After event-store ACKs a cursor advance, it runs `truncate_old_journeys(retain=3)` — retains the last 3 journeys as a debug buffer on the SQLite WAL file.
+
+## Review Failure Scenarios
+
+Every story touching this service must verify these scenarios before sign-off:
+
+- **72h broker offline:** pull loop must continue accumulating into the local SQLite buffer; no data loss, no crash, no blocking of the event-store client
+- **Cursor gap:** ack loop must not advance the cursor past a gap in the contiguous published prefix — partial publishes must not be acknowledged
+- **Broker reconnect thundering herd:** rate limiter bucket must prevent burst publish after a flapping broker reconnect
+- **Credential misconfiguration:** empty-string env vars (`CLOUD_SYNC_EVENT_STORE_API_KEY=`) must normalise to `None` at config load, not silently pass as a valid key
+
+## Credential Boundary
+
+`CLOUD_SYNC_EVENT_STORE_API_KEY` and MQTT credentials must come from env vars only — never hardcoded, never passed through event payloads. The `payload` field of every envelope is transport-opaque; do not inspect or log it.

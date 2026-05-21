@@ -65,3 +65,16 @@ schema.sql    — authoritative schema; database.py executes this on startup
 **WebSocket fan-out** (story 4-7): `/ws` accepts a `SubscriptionRequest` JSON as the first frame; replays the last `reconnect_replay_depth` events matching the filter; then streams live events as they are written via POST. The broadcaster uses a per-subscriber `asyncio.Queue(maxsize=256)` — slow consumers have events dropped (logged + counter) rather than blocking the writer path.
 
 **Sync cursor endpoint** (story 4-CS1): `POST /api/v1/sync/cursor` advances `sync_state.last_synced_event_id` and triggers `truncate_old_journeys(retain=3)`. Used ONLY by the cloud-sync container. Body `{"last_event_id": "<uuid4>"}`. Auth-gated by `X-API-Key`. Idempotent: re-submitting the same id returns 200 with `truncated_journeys=0`. Unknown event_id → 400 `INVALID_CURSOR` (same ADR-10 envelope shape as the `?after=<unknown>` path).
+
+## Review Failure Scenarios
+
+Every story touching this service must verify these scenarios before sign-off:
+
+- **Cursor gap:** a sequence gap in event IDs (e.g. events 1–5, then 8) — cursor must not advance past the gap; events 6–7 must not be silently dropped
+- **Concurrent duplicate ingest:** two simultaneous `POST /events` with the same natural key — both return without error; exactly one `stored: true`
+- **Stale Hailo results on reconnect:** if the inference pipeline reconnects and replays, idempotent ingest must absorb replayed events without side effects
+- **WS slow consumer:** a subscriber that doesn't drain its queue — events must be dropped with a log entry, not block the writer path
+
+## Untrusted Input Boundary
+
+All event payloads arriving via `POST /events` originate from the Hailo inference pipeline and VLAN pollers — treat them as untrusted. Validate against the Pydantic schema strictly (no extra fields, no raw pass-through to SQLite string interpolation). Do not log raw payload content at INFO level — log event_id and type only.

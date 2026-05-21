@@ -109,6 +109,55 @@ Transform tasks into verifiable goals. For multi-step tasks state a brief plan w
 
 ---
 
+## Story & Review Standards
+
+### Acceptance Criteria in Story Files
+
+Every story file must include explicit acceptance criteria before implementation begins. The dev agent self-evaluates against them before handing off to `bmad-code-review`. Generic criteria ("check error handling") are not acceptable — criteria must be specific to the OEBB domain and the story's feature.
+
+### Per-Story Failure Scenario Checklist
+
+Each story's review section must include 1–2 OEBB-specific failure scenarios that require system understanding, not just code reading. Examples by service:
+
+- **event-store:** sync cursor handles a sequence gap without dropping events; idempotent ingest returns correct 200/201 on duplicate under concurrent load
+- **cloud-sync:** pull loop continues accumulating during 72h broker offline; ack loop doesn't advance cursor past a gap in the published prefix
+- **cloud-backend:** SSE stream recovers without duplicate delivery after a worker restart; Alembic migration is safe under concurrent reads
+- **control-centre:** occupancy panel, alert flow, and SSE updates render correctly in the browser (use `verify` skill + Claude Preview — required, not optional)
+
+### Permission Tiers per Story
+
+Classify every story's actions before implementation:
+
+| Tier | Examples | Requires |
+|---|---|---|
+| 1 — read-only | VLAN poller reads, GET endpoints, file reads | Nothing extra |
+| 2 — local file edits | Source code changes, config updates (git-reviewable) | Normal dev mode |
+| 3 — shell/external/subagent | Hailo inference exec, cloud-sync push, DB migrations, CI config | Explicit sign-off in story; default permission mode (not auto/bypass) |
+
+Tier 3 actions on shared infrastructure (CI config, DB migrations, credentials) must always use default permission mode regardless of what mode the session started in.
+
+### Harness Review Cadence
+
+After each model upgrade, audit the BMAD story template for rules that were workarounds for older model limitations. Remove them — dead rules become noise. The current model is Sonnet 4.6; rules written for Sonnet 4.5 context-anxiety are candidates for removal.
+
+---
+
+## Security Boundaries
+
+### Credential Hygiene
+
+VLAN poller and Hailo ingest credentials must never pass through inference code paths. Authentication flows via:
+- Resource initialisation (credentials bundled at container startup via env vars)
+- External vault / proxy (never inline in generated inference code)
+
+Audit this boundary on every story that touches `hailo-ingest`, `vlan-pollers`, or `inference/`.
+
+### Prompt Injection at External Data Boundaries
+
+All data arriving from external sources is untrusted: Hailo inference results, VLAN poller outputs (SNMP, APC, PIS/FIS), MQTT payloads. Before any of these influence an AI-driven decision (occupancy alerts, comfort scoring, anomaly detection), add a sanitisation/skepticism layer — validate schema, reject unexpected fields, log anomalies. Do not pass raw external payloads directly into prompt context.
+
+---
+
 ## Design Methodology — BMAD + WDS
 
 Two frameworks work together. BMAD handles the full lifecycle; WDS (Whiteport Design Studio) is a design-only expansion module that sits between the PRD and implementation phases.

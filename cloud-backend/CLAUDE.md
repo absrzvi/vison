@@ -57,3 +57,16 @@ SSE push: the `/events` endpoint streams from an asyncio queue populated by the 
 Auth: every protected endpoint uses `Depends(get_current_user)`. The `get_current_user` dependency validates the JWT and extracts role. Role checks happen inside the route, not in middleware.
 
 Error shape: all 4xx/5xx responses use `{"detail": "..."}` — never return raw exception messages to clients.
+
+## Review Failure Scenarios
+
+Every story touching this service must verify these scenarios before sign-off:
+
+- **SSE worker restart:** stream must recover without duplicate event delivery to connected clients
+- **Migration safety:** every Alembic migration must be safe under concurrent reads — no full-table locks on the `events` or `alerts` tables
+- **JWT edge cases:** expired token, tampered signature, and missing role claim must all return 401/403 — never a 500
+- **SSE queue backpressure:** a slow SSE client must not block the ingest worker — drop or bound the per-client queue
+
+## Untrusted Input Boundary
+
+MQTT payloads arriving from cloud-sync originate from onboard sensors — treat as untrusted at the landside boundary. Validate against the shared event schema before persisting to PostgreSQL. Do not pass raw MQTT payload fields into SQL queries or SSE frames without schema validation.
