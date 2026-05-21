@@ -26,6 +26,13 @@ persistent_facts = [
   # explicit comparison. Codify the check.
   "STORY CONTEXT RULE — PAYLOAD SPEC AUDIT: Before writing AC text for any story that emits or consumes an event, diff the payload definition in epics.md against the shipped Pydantic model in shared/src/oebb_shared/events/payloads.py. If they diverge in field names, types, or shape, do NOT silently pick one. Surface the divergence in a 'Decisions' section of the story with options (use shipped shape vs change shared/ contract) and the cost of each. The shipped shared/ contract is almost always the right choice — changing it cascades to event-store + cloud-backend + contract tests. epics.md is a snapshot, not a source of truth.",
 
+  # E4 phase-2 retrospective finding A5: when a story's changes contradict an existing ADR
+  # (rename an event type, change a payload shape, add a new ingest endpoint), the story
+  # MUST include a task checkbox to update that ADR. Forgetting this leaves the ADR actively
+  # misleading future developers. Example: 4-9 renamed LEDGER_DRIFT_ALERT → OBSERVATION
+  # but ADR-17 was not updated until the phase-2 retro.
+  "STORY CONTEXT RULE — ADR FRESHNESS: Before writing tasks, search architecture.md for any ADR that describes the event types, payload shapes, or architectural patterns this story changes. If any ADR is contradicted by the story's changes, add an explicit checkbox to the story's task list: '[ ] Update ADR-X in _bmad-output/planning-artifacts/architecture.md to reflect [specific change]'. This must be done in the same commit that ships the story. Cross-reference: stories touching EventType enum, payload classes in shared/, or fusion ingest endpoints will almost always need an ADR update.",
+
   # Load project-context.md which now contains: async stale-closure patterns (A3),
   # full CSS token reference (A2 backing), ADR-2 + ADR-18 full text, E4 dependency status.
   "file:{project-root}/project-context.md",

@@ -1,5 +1,26 @@
 # Deferred Work
 
+## Triage — 2026-05-21 (post-Epic-4 phase-2 retro)
+
+Items reviewed before next epic planning. Items from E4 stories only (E1–E3/E5 items remain as-is).
+
+| Item | Source | Decision | Notes |
+|------|--------|----------|-------|
+| `unreconciled_exits` monotonic growth | 4-9 deferred | **next-epic backlog** | Journey-lifecycle hook needed in `CoachLedger`; tracked in 4-9 deferred section below |
+| Process-lifetime hidden state (`_last_drift_bucket` etc.) | 4-9 deferred | **next-epic backlog** | Same journey-lifecycle hook; bundle with above |
+| `gate.should_emit()` called twice per handler | 4-10 deferred | **next-epic backlog** | Becomes real when gate is stateful; create story when that happens |
+| `asyncio.TimeoutError`/`ValidationError` not caught in handler | 4-10 deferred | **next-epic backlog** | Pre-existing pattern across all `/candidates/*`; bundle into one hardening story |
+| Unbounded `_observed_coaches`/`_last_emitted_pct` | 4-10 deferred | **post-PoC** | No eviction needed until multi-journey long-running process; revisit at fleet rollout |
+| Float boundary straddling at exact pct_threshold | 4-10 deferred | **dismiss** | `<=` is deterministic, acceptable PoC tolerance, not a correctness bug |
+| Drift bucket consumed during suppression | 4-9 deferred | **post-PoC** | Revisit when OBSERVATION is promoted to ALERT; operator playbook first |
+| `mkdir` masks permission failures | 4-9 deferred | **post-PoC** | Tie to docker-compose volume mount config; infra concern |
+| `_last_side` committed before HTTP emit (W3) | 4-8 deferred | **next-epic backlog** | Bundle with idempotency key work (W1) in one inference hardening story |
+| `@DEFAULT_RETRY` retries on 4xx (W1/shared) | 4-8 deferred | **next-epic backlog** | Cross-container; needs coordinated story with contract test |
+| `SuppressionGate._depot_journey_ended_emitted_for` unbounded | 4-6 deferred | **next-epic backlog** | Prune on journey_id transition; small fix, can be part of journey-lifecycle story |
+| All other E4 deferred items | various | **post-PoC or dismiss** | See sections below for detail |
+
+---
+
 ## Deferred from: code review of 4-8-gangway-tripwire-ingest round 2 (2026-05-20, opus)
 
 - **W3** — `_last_side` committed before HTTP emit — if emit fails after retries, crossing is lost AND side is already flipped, preventing re-trigger. Pre-existing emit-then-commit pattern shared with ZoneCounter; idempotency key work tracked as W1. [tripwire.py:_handle_detection]

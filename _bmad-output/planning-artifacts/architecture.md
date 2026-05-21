@@ -393,7 +393,7 @@ class EventType(StrEnum):
     # Inter-wagon movement (ADR-17)
     WAGON_EXIT = "WAGON_EXIT"
     WAGON_ENTRY = "WAGON_ENTRY"
-    LEDGER_DRIFT_ALERT = "LEDGER_DRIFT_ALERT"
+    LEDGER_DRIFT_OBSERVATION = "LEDGER_DRIFT_OBSERVATION"  # renamed from LEDGER_DRIFT_ALERT in story 4-9 (2026-05-21)
     # Comfort (ADR-18)
     COACH_COMFORT_INDEX = "COACH_COMFORT_INDEX"
     # Internal commands (not persisted to SQLite, not published via MQTT)
@@ -441,36 +441,73 @@ tests/unit/test_occupancy_primary.py
 ---
 
 #### ADR-17: Inter-Wagon Movement Ledger Reconciliation (2026-05-17)
+**Current as of: 2026-05-21 (updated after story 4-9 shipped)**
 
 **Decision:** Passenger movement between coaches (wagons) is tracked via virtual directional tripwires at P1 gangway cameras, using a closed-ledger accounting model.
 
 **Mechanism:**
 1. Each gangway camera is configured with two tripwire polygons: one facing Coach N, one facing Coach N+1.
-2. When a track ID crosses the Coach N exit polygon → `WAGON_EXIT` event emitted: `{ track_id, coach_from, coach_to, direction }`.
-3. When the same track ID crosses the Coach N+1 entry polygon → `WAGON_ENTRY` event emitted.
-4. The `local-fusion-engine` maintains a `coach_ledger` table in SQLite tracking net movement per coach per journey.
-5. **Closed-ledger invariant:** The sum of all coach passenger counts must remain constant between station stops (no passengers appear or disappear mid-journey). Any variance triggers a `LEDGER_DRIFT_ALERT` event.
-6. Before each station arrival (triggered by GPS/HAFAS proximity signal), the fusion engine reconciles ledger drift against seat zone mask counts and emits a corrected `OCCUPANCY_UPDATE` if the delta exceeds 2 passengers.
+2. When a track ID crosses the Coach N exit polygon → `WAGON_EXIT` event emitted: `{ track_id, coach_from, coach_to, expect_orphan }`.
+3. When the same track ID crosses the Coach N+1 entry polygon within 10 s → `WAGON_ENTRY` event emitted; the pair is reconciled.
+4. The `local-fusion-engine` (`fusion/src/fusion/ledger.py`) maintains a `coach_ledger` SQLite table (WAL mode) tracking per-coach: `ledger_count`, `unreconciled_exits`, `last_reconciled_utc`. The table lives at `/var/lib/fusion/coach_ledger.db`.
+5. **Closed-ledger invariant:** Any variance between camera `occupancy_pct` and `ledger_count` triggers a `LEDGER_DRIFT_OBSERVATION` event (per-coach payload: `{ car_id, camera_count, ledger_count, delta, threshold, surface_to_operator }`). `surface_to_operator` is `True` only on `station_approach`; default `False` — this is diagnostic telemetry, not an operator alert.
+6. **Cold-start gating:** Drift checks are gated on `both_seeded[car_id]` — both the first `OCCUPANCY_UPDATE` AND the first ledger-modifying event must have arrived for a coach before drift is reported.
+7. **Drift-bucket emit discipline:** Drift is checked on every `OCCUPANCY_UPDATE` (cheap), but `LEDGER_DRIFT_OBSERVATION` is emitted only on drift-bucket state transitions (bucket = `sign(delta) * (|delta| // bucket_size)`, default `bucket_size=3`). On transition to zero, a "drift cleared" observation fires.
+8. **Ledger correction (ADR-15 camera-primary):** On drift-bucket transition, `ledger_count[car_id]` is corrected to match `camera_count` and a structured INFO log fires.
 
-**PoC scope:** Gangway cameras must be identified in `cameras.json` with `"zone": "gangway"` and `"priority": "P1"`. Tripwire configs must exist in `config/zones/gangway.json`. The closed-ledger reconciliation logic is a **Phase 1 PoC deliverable** — it is required for accurate coach-level counts on long journeys.
+**Event-ingest path (story 4-9 D1-A — current PoC approach):**
+`inference` POSTs to `event-store` first (existing path), then fire-and-forgets to `fusion POST /candidates/wagon_exit` and `/candidates/wagon_entry`. Same double-POST pattern as `/candidates/door_obstruction`. Fusion POST failures are logged at WARNING but do not block the inference handler. The WS-subscription alternative (D1-B) is the correct production approach and should be revisited when multiple onboard consumers need the same stream.
 
-**Schema additions:** `WAGON_EXIT`, `WAGON_ENTRY`, `LEDGER_DRIFT_ALERT` added to `EventType` enum.
+**PoC scope:** Gangway cameras must be identified in `cameras.json` with `"zone": "gangway"` and `"priority": "P1"`. Tripwire configs must exist in `config/zones/gangway.json`.
+
+**Schema additions (shipped):** `WAGON_EXIT`, `WAGON_ENTRY`, `LEDGER_DRIFT_OBSERVATION` in `EventType` enum. Payload class: `LedgerDriftObservationPayload` (per-coach, not aggregate).
+
+**Supersedes (original spec, replaced in story 4-9):** The original ADR described an aggregate `LEDGER_DRIFT_ALERT` event with shape `{ expected_total, actual_total, delta, coach_breakdown, reconciliation_applied }` and a reconciliation-corrected `OCCUPANCY_UPDATE` on station approach. The shipped design uses per-coach `LEDGER_DRIFT_OBSERVATION` (diagnostic telemetry), drift-bucket transition emit, and ADR-15-compliant camera-primary ledger correction. The operator-alert promotion path is deferred until an operator playbook is validated (story 4-9 D5).
+
+---
+
+#### ADR-19: Fusion Event-Ingest Pattern (2026-05-21)
+**Current as of: 2026-05-21**
+
+**Decision:** Onboard containers that need to deliver events to `fusion` use the **double-POST pattern** (D1-A). The producing container (inference, vlan-pollers) POSTs to `event-store` first (existing path), then fire-and-forgets a second POST to `fusion POST /candidates/<event_type>`. HTTP errors on the fusion POST are logged at WARNING but do not raise — fusion is non-blocking from the producer's perspective.
+
+**Canonical endpoint list (as of story 4-10):**
+- `POST /candidates/wagon_exit` — from `inference/tripwire.py` (story 4-9)
+- `POST /candidates/wagon_entry` — from `inference/tripwire.py` (story 4-9)
+- `POST /candidates/occupancy_update` — from `inference/zone_counter.py` (story 4-9)
+- `POST /candidates/door_obstruction` — from `inference/callback.py` (story 4-6)
+- `POST /candidates/alert_raised` — from `inference/callback.py` (story 4-6)
+
+**Rationale for PoC:** Shortest path. No new infrastructure. Pattern is consistent with the `/candidates/door_obstruction` precedent established in story 4-6. Inference producers are authoritative sources that already hold the event data — a direct POST is lower-latency and simpler than a round-trip through event-store WS fan-out.
+
+**Known limitation (D1-B — deferred):** Double-POST means fusion is a point-to-point consumer. If a second onboard container ever needs the same event stream, each producer must POST to both. The correct production-grade architecture is **WS-subscription**: fusion subscribes to the event-store WebSocket fan-out (`event-store` story 4-7), eliminating producer coupling. Revisit when:
+- A second onboard container (e.g. maintenance diagnostics) needs `OCCUPANCY_UPDATE` or `WAGON_EXIT/ENTRY`.
+- The number of double-POST calls per inference frame becomes a latency concern.
+
+**Adding a new fusion consumer endpoint:** Follow the pattern in `fusion/health.py` — add a `POST /candidates/<event>` handler that: accepts the typed Pydantic payload, calls the relevant state-machine method, gates emits through `SuppressionGate`, wraps downstream errors to always return 202. See `fusion/CLAUDE.md` for the handler fail-safe pattern.
 
 ---
 
 #### ADR-18: Operational Telemetry Fusion Rules (2026-05-17)
+**Current as of: 2026-05-21 (Trigger 2 updated after story 4-10 shipped)**
 
 **Decision:** The `local-fusion-engine` applies three operational triggers that cross-correlate VLAN telemetry with camera pipeline state:
 
 **Trigger 1 — Door Release → Platform Camera Optimization:**
 When VLAN 2/7 reports `doors_released = true` for a coach, `fusion` issues a `STREAM_PRIORITY` command to `rtsp-ingest` nominating the platform-facing cameras for that coach as high-priority for the duration of the dwell window. `rtsp-ingest` adjusts frame buffer allocation accordingly. `STREAM_PRIORITY` is an internal command — it is not written to `event-store` or published via MQTT.
 
-**Trigger 2 — Coach Comfort Index:**
-On each station approach (and on significant occupancy change), `fusion` computes a Coach Comfort Index per coach by joining:
-- Camera-derived `occupied_seats` and `standing_count` (from zone mask counts)
-- Reservation data from VLAN 6 (`reserved_seats` per coach via `vlan-pollers`)
+**Trigger 2 — Coach Comfort Index (updated 2026-05-21):**
+Two emission triggers:
+- **Delta-driven:** When `|occupancy_pct - last_emitted_pct[car_id]| > comfort_index_pct_threshold` (default 10%), `fusion` emits `COACH_COMFORT_INDEX` for that coach. First OCCUPANCY_UPDATE per coach seeds baseline without emitting (cold-start gate mirrors 4-9 `both_seeded` pattern).
+- **Station-approach edge:** When `ContextState.station_approach` transitions `False → True`, `fusion` emits one `COACH_COMFORT_INDEX` per observed coach regardless of delta threshold.
 
-The result is emitted as a `COACH_COMFORT_INDEX` event with payload: `{ car_id, reserved_seats, occupied_seats, standing_count, comfort_score }` where `comfort_score` is a float 0.0–1.0 (1.0 = all reserved seats occupied, no standing). Primary consumer: Control Centre Dashboard analytics. Phase 2: Conductor App.
+Payload (shipped `CoachComfortIndexPayload`): `{ car_id, comfort_score, occupancy_pct, temperature_c, noise_db }`. `comfort_score = 1.0 - occupancy_pct`, clamped `[0.0, 1.0]`. `temperature_c` and `noise_db` are `None` at PoC (no environmental sensors). Severity: `info` — informational telemetry, not an alert.
+
+**Suppression:** Both emit paths respect `SuppressionGate.should_emit()`. Under suppression, `_last_emitted_pct` is NOT advanced (two-phase baseline advance — see `confirm_emit()` in `fusion/comfort_index.py`).
+
+**Supersedes (original spec, replaced in story 4-10):** The original ADR described a join with `occupied_seats`, `standing_count`, and `reserved_seats` from VLAN 6 reservation data. The shipped design uses `comfort_score = 1.0 - occupancy_pct` (camera-primary per ADR-15). Reservation join and `standing_count` decomposition are post-PoC when environmental sensor data and reservation VLAN feeds are confirmed.
+
+Primary consumer: Control Centre Dashboard analytics. Phase 2: Conductor App.
 
 **Trigger 3 — GPS/HAFAS Proximity Alert Escalation:**
 When VLAN 7 GPS + HAFAS timetable data indicates the train is within 2 minutes of a scheduled station stop, any `ALERT_RAISED` event generated in that window receives `"priority": "escalated"` in its payload. This signals the Control Centre Dashboard to surface the alert with elevated urgency. The `priority` field is added to the `ALERT_RAISED` payload schema.
