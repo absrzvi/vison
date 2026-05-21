@@ -43,7 +43,11 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-20  # dev-story 2026-05-20: story 4-8 → review (134 tests, 90.78% cov, mypy/ruff clean)
+last_updated: 2026-05-21  # dev-story 2026-05-21: 1-5-2-rtsp-ingest-dockerfile → review (Dockerfile + CLAUDE.md; docker build --check clean)
+# code-review 2026-05-21 (opus-4.7): 1-5-1-inference-dockerfile → done; 5 patches applied, 2 decisions resolved, 7 deferred; 149 unit tests pass
+# dev-story 2026-05-21: 1-5-1-inference-dockerfile → review (Dockerfile + CLAUDE.md; docker build --check clean)
+# create-story 2026-05-21: 1-5-1-inference-dockerfile → ready-for-dev (Hailo base image, CLAUDE.md, env-var config, CMD python -m inference.main)
+# sprint-planning 2026-05-21: Phase 1.5 epic added (epic-1-5, 4 stories: inference/rtsp Dockerfiles + onboard compose + smoke test)
 # create-story 2026-05-20: story 4-8 → ready-for-dev (gangway tripwire ingest); epic-5 → done
 # bmad-code-review 2026-05-20 (opus-4.7): story 4-cs1 → done (2 BLOCKERs + 24 patches applied; 98 tests, 92.11% coverage; gates green)
 # code-review 2026-05-20: story 4-5 → in-progress (BLOCKER: 2 tests fail; 6 patches + 7 decisions)
@@ -71,18 +75,20 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # ── Epic 1: Foundation & Shared Infrastructure ──
-  epic-1: in-progress
+  epic-1: done
   1-1-e2e-skeleton-mvp: done
   1-2-event-envelope-pydantic-models: done
   1-3-postgresql-schema-alembic: done
   1-4-sqlite-event-store: done
   1-5-apc-adapter: done
+  1-6-ws-subscription-spec: backlog  # E1-S6 absorbed into E4-S7 (event-store onboard WS); no standalone story file
   1-7-rest-api-sse-fleet: done
   1-8-shared-contract-enforcement: done
+  1-l1-landside-mqtt-ingestion: backlog  # MQTT ingestor deferred; 4-cs1 covers cloud-sync transport; full broker story pending
   epic-1-retrospective: done
 
   # ── Epic 2: Control Centre Dashboard — Live Operations ──
-  epic-2: in-progress
+  epic-2: done
   2-1-real-ws-client: done
   2-2-kpi-strip-filter-tap-wiring: done
   2-3-fleet-list-passenger-count-sort: done
@@ -106,7 +112,7 @@ development_status:
   epic-3-retrospective: done
 
   # ── Epic 4: Onboard Edge Pipeline ──
-  epic-4: in-progress
+  epic-4: done
   4-1-vlan-pollers-snmp-context-state: done
   4-2-vlan-pollers-apc-pis-reservation: done
   4-3-rtsp-ingest-camera-pipeline: done
@@ -127,3 +133,11 @@ development_status:
   5-3-luggage-kpi-live-monitoring: done
   5-4-luggage-iso-timestamps: done
   epic-5-retrospective: done
+
+  # ── Epic 1.5: Onboard Containerised Infrastructure (Phase 1.5 bridge) ──
+  epic-1-5: in-progress
+  1-5-1-inference-dockerfile: done          # containerise inference service; 5 patches applied (P1 uvicorn host, P3 API key docs, P4 device docs, P5 VOLUME, P7 py assertion); D1/D2 decisions documented
+  1-5-2-rtsp-ingest-dockerfile: review      # containerise rtsp-ingest service; Dockerfile + CLAUDE.md; docker build --check clean
+  1-5-3-onboard-docker-compose: backlog     # docker-compose.onboard.yml — standalone onboard stack
+  1-5-4-onboard-smoke-test: backlog         # verify full onboard stack comes up healthy end-to-end
+  epic-1-5-retrospective: optional
