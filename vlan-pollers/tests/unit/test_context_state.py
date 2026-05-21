@@ -251,9 +251,10 @@ async def test_update_reservations_suppresses_on_no_change() -> None:
 @respx.mock
 async def test_state_to_dict_includes_occupancy_and_reservations() -> None:
     """AC2/4: _state_to_dict serializes occupancy and reservations fields."""
+    from oebb_shared.adapters.apc.adapter import OccupancyReading
+
     from vlan_pollers.context_state import _state_to_dict
     from vlan_pollers.models import ContextState
-    from oebb_shared.adapters.apc.adapter import OccupancyReading
 
     state = ContextState()
     state.occupancy = {

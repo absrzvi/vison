@@ -134,6 +134,25 @@ class ContextState:
         self._prev_station_approach = self.station_approach
         return edge
 
+    def peek_station_approach_edge(self) -> bool:
+        """Return True if a false→true edge is pending WITHOUT consuming it.
+
+        D3 fix: separates edge detection from state commitment. The caller
+        checks the edge, consults the suppression gate, and only calls
+        :meth:`consume_station_approach_edge` if the gate allows the emit.
+        Under suppression the prior is not advanced, so the edge re-fires on
+        the next /context push after the gate re-opens.
+        """
+        return (not self._prev_station_approach) and self.station_approach
+
+    def consume_station_approach_edge(self) -> None:
+        """Commit the edge by advancing ``_prev_station_approach``.
+
+        Must be called after a successful station-edge emit. Do NOT call under
+        suppression — leave the prior unchanged so the edge re-fires.
+        """
+        self._prev_station_approach = self.station_approach
+
     def resolve_car_id(self, idx: str | int) -> str:
         """R3 — best-effort coach index resolution. Returns the input unchanged
         when the consist map is empty, the index is missing, or the mapping is

@@ -8,7 +8,7 @@ src/oebb_shared.egg-info/requires.txt
 src/oebb_shared.egg-info/top_level.txt
 src/oebb_shared/adapters/__init__.py
 src/oebb_shared/adapters/apc/__init__.py
-src/oebb_shared/adapters/apc/base.py
+src/oebb_shared/adapters/apc/adapter.py
 src/oebb_shared/adapters/apc/mock.py
 src/oebb_shared/adapters/pis/__init__.py
 src/oebb_shared/adapters/pis/base.py

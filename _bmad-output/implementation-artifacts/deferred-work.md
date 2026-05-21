@@ -365,6 +365,13 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 -  masks permission failures on writable-parent-of-unwritable directories. Tie to docker-compose volume mount for . [fusion/src/fusion/ledger.py:121-124]
 
 
+## Deferred from: code review of 4-10-coach-comfort-index (2026-05-21)
+
+- `gate.should_emit()` called twice per `/candidates/occupancy_update` handler (ledger + comfort blocks) — double call if gate becomes stateful. [fusion/src/fusion/health.py]
+- Only `httpx.HTTPError` caught on `emit_envelope` calls — `asyncio.TimeoutError`/`pydantic.ValidationError` can 500 the handler. Pre-existing pattern. [fusion/src/fusion/health.py]
+- Float boundary straddling at exact `pct_threshold` (e.g. `0.3 - 0.2 == 0.09999...` in IEEE 754) — threshold comparison is `<=` not `<`, so exact-boundary inputs deterministically do not emit. Acceptable PoC tolerance. [fusion/src/fusion/comfort_index.py:90]
+- Unbounded `_observed_coaches`/`_last_emitted_pct` growth across long-running process (no eviction on coach departure/train reconfiguration). [fusion/src/fusion/comfort_index.py]
+
 ## Deferred from: code review of 4-9-closed-ledger-reconciliation (2026-05-21)
 
 - `unreconciled_exits` monotonically grows on timeout (AC5 + AC3 compliant). Needs reset on journey change. [fusion/src/fusion/ledger.py:240-251]

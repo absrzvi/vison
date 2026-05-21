@@ -70,30 +70,58 @@ class ComfortIndexState:
     ) -> CoachComfortIndexPayload | None:
         """Return a payload to emit, or ``None`` for cold-start / sub-threshold.
 
-        Mutates state ONLY in the "return payload" path:
-          * AC4 cold-start: seeds ``_last_emitted_pct`` + ``_observed_coaches``,
-            returns ``None``.
-          * AC1 delta-crossed: updates ``_last_emitted_pct`` and returns the
-            new payload. The handler layer is responsible for the AC5 invariant
-            (do NOT call this method when suppression is active; or roll back
-            the state if the emit fails).
+        State is NOT mutated until ``confirm_emit`` is called with the returned
+        payload. This two-phase design upholds the AC5 invariant: if the
+        downstream emit fails, the baseline never advances and the next delta
+        check runs against the last truly-published value.
+
+          * AC4 cold-start: seeds ``_last_emitted_pct`` + ``_observed_coaches``
+            immediately (no emit), returns ``None``.
+          * AC1 delta-crossed: returns a payload WITHOUT advancing the baseline.
+            The caller must call ``confirm_emit(car_id, occupancy_pct)`` after a
+            successful event-store POST.
         """
         car_id = payload.car_id
         self._observed_coaches.add(car_id)
 
+        # P4 — clamp on store so _last_emitted_pct never holds an out-of-range
+        # value that would produce spurious large deltas on subsequent updates.
+        pct = max(0.0, min(1.0, payload.occupancy_pct))
+
         prior = self._last_emitted_pct.get(car_id)
         if prior is None:
             # AC4 — first OCCUPANCY for this coach seeds the baseline.
-            self._last_emitted_pct[car_id] = payload.occupancy_pct
+            self._last_emitted_pct[car_id] = pct
             return None
 
-        if abs(payload.occupancy_pct - prior) <= self._pct_threshold:
+        if abs(pct - prior) <= self._pct_threshold:
             # Sub-threshold — no emit.
             return None
 
-        # AC1 — delta crossed the threshold; emit and advance baseline.
-        self._last_emitted_pct[car_id] = payload.occupancy_pct
-        return self._compute_payload(car_id, payload.occupancy_pct)
+        # AC1 — delta crossed; return payload but do NOT advance baseline yet.
+        return self._compute_payload(car_id, pct)
+
+    def confirm_emit(self, car_id: str, occupancy_pct: float) -> None:
+        """Advance ``_last_emitted_pct`` after a successful AC1 emit.
+
+        Called by the handler only when event-store POST succeeds. Keeps the
+        baseline in sync with what was actually published (AC5 invariant).
+        """
+        self._last_emitted_pct[car_id] = max(0.0, min(1.0, occupancy_pct))
+
+    def observed_coaches(self) -> list[str]:
+        """Return a sorted snapshot of all coaches seen this journey."""
+        return sorted(self._observed_coaches)
+
+    def reset(self) -> None:
+        """Clear all per-journey state on journey_id transition.
+
+        Called by the /context handler when journey_id changes so that stale
+        coach baselines from a prior journey do not leak into AC2 edge emits
+        on the new journey.
+        """
+        self._last_emitted_pct.clear()
+        self._observed_coaches.clear()
 
     def on_station_approach_edge(self) -> list[CoachComfortIndexPayload]:
         """AC2 — return one payload per observed coach on a station_approach edge.
@@ -102,9 +130,14 @@ class ComfortIndexState:
         independent trigger from the delta-driven path; mixing them would
         cause the next legitimate delta-emit to compute against a stale
         baseline.
+
+        Iterates a snapshot of ``_observed_coaches`` so a concurrent
+        ``on_occupancy_update`` adding a new coach mid-iteration cannot corrupt
+        the loop (single event-loop, but await points inside the loop mean
+        coroutines can interleave).
         """
         out: list[CoachComfortIndexPayload] = []
-        for car_id in sorted(self._observed_coaches):
+        for car_id in sorted(list(self._observed_coaches)):
             pct = self._last_emitted_pct.get(car_id)
             if pct is None:
                 # Defensive: a coach in _observed_coaches should always also

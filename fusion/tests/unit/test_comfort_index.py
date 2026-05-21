@@ -73,7 +73,9 @@ def test_above_threshold_delta_emits_and_advances_baseline() -> None:
     assert out.occupancy_pct == pytest.approx(0.55)
     # comfort_score = 1.0 - 0.55 = 0.45
     assert out.comfort_score == pytest.approx(0.45)
-    # Baseline advances on emit.
+    # Baseline does NOT advance until confirm_emit is called (P1 two-phase).
+    assert state._last_emitted_pct["car-1"] == pytest.approx(0.40)
+    state.confirm_emit("car-1", out.occupancy_pct)
     assert state._last_emitted_pct["car-1"] == pytest.approx(0.55)
 
 
@@ -173,5 +175,59 @@ def test_station_approach_edge_with_no_observed_coaches_returns_empty() -> None:
 
 
 # ---------------------------------------------------------------------------
-# AC5 verified at handler layer; AC6 verified by Enrichment (existing tests).
+# AC5 — suppression: baseline must not advance when emit is skipped
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_suppression_does_not_advance_baseline() -> None:
+    """AC5 — if the caller skips the emit (suppressed), confirm_emit is not
+    called and _last_emitted_pct stays at the seed value."""
+    state = ComfortIndexState(_settings())
+    state.on_occupancy_update(_occupancy("car-1", 0.30))  # seed baseline → 0.30
+    # Simulate suppression: on_occupancy_update is called, payload returned,
+    # but confirm_emit is NOT called (handler dropped the emit).
+    comfort_payload = state.on_occupancy_update(_occupancy("car-1", 0.60))
+    assert comfort_payload is not None
+    # Baseline must still be 0.30 — the emit was not confirmed.
+    assert state._last_emitted_pct["car-1"] == pytest.approx(0.30)
+
+
+@pytest.mark.unit
+def test_confirm_emit_advances_baseline() -> None:
+    """AC5 — after confirm_emit, baseline advances to the emitted value."""
+    state = ComfortIndexState(_settings())
+    state.on_occupancy_update(_occupancy("car-1", 0.30))  # seed
+    comfort_payload = state.on_occupancy_update(_occupancy("car-1", 0.60))
+    assert comfort_payload is not None
+    state.confirm_emit("car-1", comfort_payload.occupancy_pct)
+    assert state._last_emitted_pct["car-1"] == pytest.approx(0.60)
+
+
+@pytest.mark.unit
+def test_reset_clears_all_state() -> None:
+    """Journey reset clears both _last_emitted_pct and _observed_coaches."""
+    state = ComfortIndexState(_settings())
+    state.on_occupancy_update(_occupancy("car-1", 0.30))
+    state.on_occupancy_update(_occupancy("car-2", 0.50))
+    state.reset()
+    assert state._last_emitted_pct == {}
+    assert state._observed_coaches == set()
+    assert state.on_station_approach_edge() == []
+
+
+# ---------------------------------------------------------------------------
+# AC6 — no-journey-id: Enrichment._build_envelope returns None (smoke test)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_ac6_no_journey_id_state_still_updates() -> None:
+    """AC6 is handled by Enrichment (existing tests). Verify ComfortIndexState
+    itself still seeds/updates correctly regardless of journey_id — the guard
+    lives upstream, not here."""
+    state = ComfortIndexState(_settings())
+    # Without journey_id context, the state machine still tracks coaches.
+    result = state.on_occupancy_update(_occupancy("car-1", 0.40))
+    assert result is None  # cold-start seed
+    assert "car-1" in state._observed_coaches

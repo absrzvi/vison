@@ -97,7 +97,12 @@ def build_app(
 
     @app.post("/context")
     async def context_push(payload: ContextPushModel) -> dict[str, str]:
+        prev_journey_id = ctx.journey_id
         ctx.update_from_push(payload)
+        # P2 — reset comfort state when journey_id changes so prior-journey
+        # coach baselines do not appear in AC2 edge emits on the new journey.
+        if ctx.journey_id != prev_journey_id:
+            comfort.reset()
         await gate.on_context_changed()
         # R4: edge-trigger ramp emit — only when ramp_deployed transitions
         # from false→true. ``ramp_deployed=None`` (absent) doesn't touch the
@@ -136,14 +141,23 @@ def build_app(
         # E4-S10 AC2: station_approach false→true edge — emit one
         # COACH_COMFORT_INDEX per observed coach. Suppression-gated;
         # downstream errors logged but do not break the /context handler.
-        if ctx.observe_station_approach_edge():
+        #
+        # D3 fix: compute the edge WITHOUT committing _prev_station_approach
+        # yet. Only advance the prior after the gate clears so the edge is
+        # preserved if suppression is active — it will re-fire on the next
+        # /context push when the gate re-opens.
+        station_edge = ctx.peek_station_approach_edge()
+        if station_edge:
             if not gate.should_emit():
-                log.debug(
-                    "context.comfort_index_suppressed",
-                    reason="comfort_index_suppressed",
-                    trigger="station_approach_edge",
-                )
+                for car_id in comfort.observed_coaches():
+                    log.debug(
+                        "context.comfort_index_suppressed",
+                        reason="comfort_index_suppressed",
+                        trigger="station_approach_edge",
+                        car_id=car_id,
+                    )
             else:
+                ctx.consume_station_approach_edge()
                 for comfort_payload in comfort.on_station_approach_edge():
                     try:
                         await enricher.emit_envelope(
@@ -301,6 +315,9 @@ def build_app(
                         payload=comfort_payload.model_dump(),
                         severity="info",
                     )
+                    # P1 — advance baseline only after successful emit (AC5
+                    # invariant: failed emit must not move the comparison point).
+                    comfort.confirm_emit(payload.car_id, comfort_payload.occupancy_pct)
                 except httpx.HTTPError as exc:
                     log.warning(
                         "candidate.comfort_index_emit_failed",

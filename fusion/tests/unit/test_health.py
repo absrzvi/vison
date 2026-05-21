@@ -550,3 +550,39 @@ def test_comfort_index_station_approach_steady_state_no_emit() -> None:
         client.post("/context", json={"station_approach": True})  # steady — no edge
     assert not envelope_route.called
     client.close()
+
+
+@pytest.mark.unit
+def test_comfort_index_station_edge_preserved_under_suppression() -> None:
+    """D3 fix — edge is NOT consumed when gate is closed; re-fires on next push
+    after suppression clears.
+
+    Scenario:
+    1. Seed a coach while gate is open (normal state).
+    2. Push maintenance_mode=True + station_approach=True in same push —
+       edge fires but gate is closed → edge preserved (prev not advanced).
+    3. Clear maintenance_mode, push station_approach=True again (steady) —
+       because prev was never advanced, peek sees it as a fresh edge → emit.
+    """
+    client = _make_client()
+    with respx.mock(assert_all_called=False) as rmock:
+        envelope_route = rmock.post("http://event-store-test/api/v1/events").mock(
+            return_value=httpx.Response(201)
+        )
+        # Step 1: seed a coach while gate is open.
+        client.post("/candidates/occupancy_update", json=_valid_occupancy_body(pct=0.40))
+        envelope_route.reset()
+
+        # Step 2: enter maintenance + station_approach=True in same push.
+        # Edge fires (prev=False, current=True), gate closed → edge not consumed.
+        client.post("/context", json={"station_approach": True, "maintenance_mode": True})
+        assert not envelope_route.called
+
+        # Step 3: clear maintenance, push station_approach=True again.
+        # prev is still False → peek returns True → gate open → emit fires.
+        client.post("/context", json={"station_approach": True, "maintenance_mode": False})
+
+    bodies = [json.loads(c.request.content) for c in envelope_route.calls]
+    comfort_envelopes = [b for b in bodies if b["event_type"] == "COACH_COMFORT_INDEX"]
+    assert len(comfort_envelopes) >= 1
+    client.close()

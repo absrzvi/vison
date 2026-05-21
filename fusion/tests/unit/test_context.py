@@ -179,6 +179,26 @@ def test_observe_station_approach_edge_trigger() -> None:
 
 
 @pytest.mark.unit
+def test_peek_station_approach_edge_does_not_consume() -> None:
+    """D3 fix — peek returns True without advancing _prev_station_approach."""
+    ctx = ContextState()
+    ctx.station_approach = True
+    assert ctx.peek_station_approach_edge() is True
+    # Calling peek again still returns True — prev was not advanced.
+    assert ctx.peek_station_approach_edge() is True
+
+
+@pytest.mark.unit
+def test_consume_station_approach_edge_advances_prev() -> None:
+    """D3 fix — consume advances _prev so next peek returns False."""
+    ctx = ContextState()
+    ctx.station_approach = True
+    assert ctx.peek_station_approach_edge() is True
+    ctx.consume_station_approach_edge()
+    assert ctx.peek_station_approach_edge() is False
+
+
+@pytest.mark.unit
 def test_car_id_for_door_basic() -> None:
     ctx = ContextState()
     ctx.door_state = {"car-3:door-3B": "closing"}

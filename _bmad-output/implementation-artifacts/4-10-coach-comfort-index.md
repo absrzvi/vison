@@ -269,6 +269,32 @@ claude-opus-4-7[1m] (bmad-dev-story workflow), 2026-05-21.
 - `fusion/tests/contract/test_candidate_payload_contract.py` — fixture passes comfort
 - `fusion/tests/integration/test_fusion_pipeline.py` — fixture passes comfort
 
+### Senior Developer Review (AI) — Round 1
+
+Three-layer adversarial review (Blind Hunter, Edge Case Hunter, Acceptance Auditor) on commit `c7aeac8`, 2026-05-21.
+
+#### Decision-needed
+
+- [ ] [Review][Decision] **D1 — Station-edge pct source: `_last_emitted_pct` vs latest-observed pct** — `on_station_approach_edge()` emits using `_last_emitted_pct` (the last value that triggered a delta emit, or the cold-start seed). For a coach whose occupancy drifted +0.09 above baseline (below threshold, so no delta emit), the edge publishes a stale value, not the latest reading. Is this acceptable, or should a separate `_last_observed_pct` track the freshest value for AC2? [`fusion/src/fusion/comfort_index.py`]
+- [ ] [Review][Decision] **D2 — Concurrency: `asyncio.Lock` on `ComfortIndexState` state** — FastAPI serves `/candidates/occupancy_update` and `/context` concurrently. `_last_emitted_pct` / `_observed_coaches` are mutated without a lock. Two concurrent updates for the same `car_id` can both see `prior=None` and double-seed; a station-edge iteration can race an add to `_observed_coaches`. Should an `asyncio.Lock` be added? [`fusion/src/fusion/comfort_index.py`]
+- [ ] [Review][Decision] **D3 — Station-edge suppression: edge consumed before gate check** — `ctx.observe_station_approach_edge()` flips `_prev_station_approach` unconditionally before the `gate.should_emit()` check. If suppression is active, the edge is silently dropped and the next false→true cycle must re-fire it. Is this the intended conservative behaviour, or should the edge be preserved for replay when suppression clears? [`fusion/src/fusion/health.py`]
+- [ ] [Review][Decision] **D4 — `car_id` key space: raw vs `resolve_car_id`** — Comfort state is keyed on `payload.car_id` directly (e.g. raw index "1" from inference), while other modules (e.g. `/candidates/alert_raised`) route through `ctx.resolve_car_id`. This could create two separate state entries for the same physical coach. Should comfort routing also call `resolve_car_id`? [`fusion/src/fusion/health.py`]
+
+#### Patches
+
+- [ ] [Review][Patch] **P1 — Baseline advanced before emit; failed emit leaves stale `_last_emitted_pct`** — `on_occupancy_update` updates `_last_emitted_pct[car_id]` at line 94 then returns the payload; the handler emits and catches `httpx.HTTPError`. If the emit fails, the baseline has already advanced — the next delta is measured from a value that was never delivered, violating the AC5 invariant. Fix: compute payload without mutating state, emit, then update baseline only on success. [`fusion/src/fusion/comfort_index.py:94`]
+- [ ] [Review][Patch] **P2 — Journey reset never clears comfort state** — `ComfortIndexState._observed_coaches` and `_last_emitted_pct` are never reset when `journey_id` changes (new journey push via `/context`). The first station-edge on a new journey emits AC2 for all prior-journey coaches with stale pct values tagged under the new `journey_id`. Add a `reset()` call when `ctx.journey_id` transitions. [`fusion/src/fusion/health.py`, `fusion/src/fusion/comfort_index.py`]
+- [ ] [Review][Patch] **P3 — Station-edge suppression log missing per-coach fields** — `log.debug("context.comfort_index_suppressed", ...)` on the station-edge suppression branch does not include `car_id` or `occupancy_pct`, which AC5 requires for the suppression debug log. [`fusion/src/fusion/health.py:144`]
+- [ ] [Review][Patch] **P4 — `occupancy_pct` stored unclamped in `_last_emitted_pct`** — `_compute_payload` clamps `occupancy_pct` in the emitted payload, but `_last_emitted_pct[car_id] = payload.occupancy_pct` (lines 87, 94) stores the raw value. A malformed `occupancy_pct=1.5` poisons the baseline so subsequent legitimate values near 0.9 appear as large deltas. Clamp on store. [`fusion/src/fusion/comfort_index.py:87,94`]
+- [ ] [Review][Patch] **P5 — AC7: `test_comfort_index.py` missing explicit AC5 suppression and AC6 no-journey-id tests** — AC7 requires both in this test file; both are currently delegated elsewhere (`test_health.py` for AC5, existing Enrichment tests for AC6). Add at least smoke-level assertions here. [`fusion/tests/unit/test_comfort_index.py`]
+
+#### Deferred
+
+- [x] [Review][Defer] `gate.should_emit()` called twice per `/candidates/occupancy_update` (ledger + comfort) — deferred, pre-existing [`fusion/src/fusion/health.py`]
+- [x] [Review][Defer] Only `httpx.HTTPError` caught on emit — `asyncio.TimeoutError`/`pydantic.ValidationError` can 500 the handler — deferred, pre-existing pattern [`fusion/src/fusion/health.py`]
+- [x] [Review][Defer] Float boundary straddling at exact `pct_threshold` (0.3-0.2 IEEE arithmetic) — deferred, PoC tolerance acceptable [`fusion/src/fusion/comfort_index.py:90`]
+- [x] [Review][Defer] Unbounded `_observed_coaches`/`_last_emitted_pct` growth across long-running process — deferred, PoC lifecycle acceptable [`fusion/src/fusion/comfort_index.py`]
+
 ### Change Log
 
 - 2026-05-21 — Implemented Coach Comfort Index per Story 4-10 D1–D5. Added `ComfortIndexState` with delta-driven emit (AC1) and station-approach-edge multi-coach emit (AC2). Reused 4-9's `/candidates/occupancy_update` ingest path. Shipped `CoachComfortIndexPayload` shape (D1) with `temperature_c`/`noise_db=None` (D2). Suppression skips both emit and baseline advance (AC5 invariant). 139 fusion tests, fusion cov 94.03%, mypy/ruff clean. Inference (149) + shared (130) unaffected.
