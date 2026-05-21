@@ -212,6 +212,21 @@ class ZoneCounter:
             json=envelope.model_dump(mode="json"),
         )
         resp.raise_for_status()
+        # E4-S9 AC10: fire-and-forget OCCUPANCY_UPDATE payload (NOT the wrapping
+        # envelope) to fusion for closed-ledger reconciliation. Non-blocking.
+        try:
+            fresp = await self._client.post(
+                f"{self._settings.fusion_url}/candidates/occupancy_update",
+                json=payload.model_dump(mode="json"),
+            )
+            fresp.raise_for_status()
+        except Exception as exc:  # noqa: BLE001 — fire-forget
+            log.warning(
+                "zone_counter.fusion_unreachable",
+                car_id=state.car_id,
+                reason="fusion_unreachable",
+                error=str(exc),
+            )
 
     async def _check_threshold(
         self, car_id: str, prev_count: int, new_count: int

@@ -195,12 +195,13 @@ _MINIMAL_PAYLOADS: dict[str, dict] = {
         "traversal": "from_to",
         "confidence": 0.91,
     },
-    "LEDGER_DRIFT_ALERT": {
+    "LEDGER_DRIFT_OBSERVATION": {
         "car_id": "car-1",
         "camera_count": 50,
         "ledger_count": 55,
         "delta": 5,
         "threshold": 10,
+        "surface_to_operator": False,
     },
     "CALIBRATION_DRIFT": {
         "car_id": "car-3",

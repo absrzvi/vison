@@ -30,7 +30,7 @@ class EventType(StrEnum):
     # Inter-wagon movement (ADR-17)
     WAGON_EXIT = "WAGON_EXIT"
     WAGON_ENTRY = "WAGON_ENTRY"
-    LEDGER_DRIFT_ALERT = "LEDGER_DRIFT_ALERT"
+    LEDGER_DRIFT_OBSERVATION = "LEDGER_DRIFT_OBSERVATION"
     # APC calibration drift (ADR-15)
     CALIBRATION_DRIFT = "CALIBRATION_DRIFT"
     # Comfort scoring (ADR-18)

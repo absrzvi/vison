@@ -19,6 +19,7 @@ MODULES = (
     "enrichment.py",
     "health.py",
     "main.py",
+    "ledger.py",
 )
 
 
@@ -41,6 +42,36 @@ def _has_env_get(path: Path) -> bool:
 @pytest.mark.parametrize("module", MODULES)
 def test_no_env_get_in_module(module: str) -> None:
     assert not _has_env_get(SRC / module), f"{module} must not call os.environ.get (Rule 8)"
+
+
+def _has_sql_injection_risk(path: Path) -> list[str]:
+    """Return offending source lines where Connection/Cursor.execute is called
+    with an f-string or % formatted string (parameterised queries only — AC11).
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    offenders: list[str] = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        if node.func.attr not in {"execute", "executemany", "executescript"}:
+            continue
+        if not node.args:
+            continue
+        first = node.args[0]
+        if isinstance(first, ast.JoinedStr):  # f-string
+            offenders.append(f"line {node.lineno}: f-string in {node.func.attr}()")
+        elif isinstance(first, ast.BinOp) and isinstance(first.op, (ast.Mod, ast.Add)):
+            offenders.append(
+                f"line {node.lineno}: {type(first.op).__name__} string build in {node.func.attr}()"
+            )
+    return offenders
+
+
+@pytest.mark.unit
+def test_ledger_uses_parameterised_sql_only() -> None:
+    """AC11 + Security Tests: no SQL string-building inside .execute() calls."""
+    offenders = _has_sql_injection_risk(SRC / "ledger.py")
+    assert not offenders, f"ledger.py contains SQL-injection risks: {offenders}"
 
 
 @pytest.mark.unit

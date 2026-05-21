@@ -426,3 +426,48 @@ async def test_multi_coach_each_tracked(settings: Settings, client: httpx.AsyncC
     assert set(zc._states.keys()) == {"car-1", "car-2", "car-3"}
     assert zc._states["car-2"].capacity == 180
     assert zc._states["car-3"].capacity == 50
+
+
+# ---------------------------------------------------------------------------
+# E4-S9 AC10 — fire-and-forget OCCUPANCY_UPDATE payload to fusion
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_occupancy_update_fires_to_fusion_candidate(
+    settings: Settings, cameras: list[dict[str, Any]], client: httpx.AsyncClient
+) -> None:
+    from inference.zone_counter import ZoneCounter
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.post("http://event-store.test/api/v1/events").mock(return_value=httpx.Response(201))
+        fusion_route = mock.post("http://fusion:8090/candidates/occupancy_update").mock(
+            return_value=httpx.Response(202, json={"received": True})
+        )
+        zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
+        await zc.update("car-1", [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}])
+        assert fusion_route.called
+        import json
+        sent = json.loads(fusion_route.calls[0].request.content)
+        assert sent["car_id"] == "car-1"
+        assert "service_tier" in sent
+
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_occupancy_update_fusion_unreachable_logs_warning(
+    settings: Settings, cameras: list[dict[str, Any]], client: httpx.AsyncClient
+) -> None:
+    import structlog.testing
+
+    from inference.zone_counter import ZoneCounter
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.post("http://event-store.test/api/v1/events").mock(return_value=httpx.Response(201))
+        mock.post("http://fusion:8090/candidates/occupancy_update").mock(
+            return_value=httpx.Response(503)
+        )
+        zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
+        with structlog.testing.capture_logs() as captured:
+            await zc.update("car-1", [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}])
+    assert any(e.get("reason") == "fusion_unreachable" for e in captured)

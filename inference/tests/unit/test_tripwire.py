@@ -457,3 +457,75 @@ async def test_last_side_eviction_on_overflow() -> None:
             handler._maybe_evict_last_side()
 
         assert len(handler._last_side) <= _LAST_SIDE_MAX_SIZE
+
+
+# ---------------------------------------------------------------------------
+# E4-S9 AC10 — fire-and-forget POST to fusion candidates after event-store POST
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_wagon_exit_fires_to_fusion_candidate_endpoint() -> None:
+    """After event-store success, payload is POSTed to fusion /candidates/wagon_exit."""
+    async with httpx.AsyncClient() as client:
+        handler = _make_handler(event_store_client=client)
+
+        with respx.mock() as mock:
+            mock.post("http://event-store:8000/api/v1/events").respond(
+                201, json={"data": {"event_id": "e1", "stored": True}}
+            )
+            fusion_route = mock.post(
+                "http://fusion:8090/candidates/wagon_exit"
+            ).respond(202, json={"received": True})
+
+            await handler._handle_detection(track_id=900, bbox=_BBOX_FROM_SIDE, confidence=0.9)
+            await handler._handle_detection(track_id=900, bbox=_BBOX_TO_SIDE, confidence=0.9)
+
+        assert fusion_route.called
+        sent = json.loads(fusion_route.calls[0].request.content)
+        assert sent["track_id"] == 900
+        assert sent["coach_from"] == "car-3"
+        assert sent["coach_to"] == "car-4"
+
+
+@pytest.mark.asyncio
+async def test_wagon_exit_fusion_unreachable_logs_warning_only() -> None:
+    """Fusion candidate POST 5xx is logged WARNING; does not raise."""
+    import structlog.testing
+
+    async with httpx.AsyncClient() as client:
+        handler = _make_handler(event_store_client=client)
+
+        with respx.mock() as mock:
+            mock.post("http://event-store:8000/api/v1/events").respond(
+                201, json={"data": {"event_id": "e1", "stored": True}}
+            )
+            mock.post("http://fusion:8090/candidates/wagon_exit").respond(503)
+
+            with structlog.testing.capture_logs() as captured:
+                await handler._handle_detection(track_id=901, bbox=_BBOX_FROM_SIDE, confidence=0.9)
+                await handler._handle_detection(track_id=901, bbox=_BBOX_TO_SIDE, confidence=0.9)
+
+    assert any(
+        e.get("reason") == "fusion_unreachable" for e in captured
+    )
+
+
+@pytest.mark.asyncio
+async def test_wagon_entry_fires_to_fusion_candidate_endpoint() -> None:
+    async with httpx.AsyncClient() as client:
+        aft_cam = _make_camera(zone="gangway-aft")
+        aft_cam["camera_id"] = "C4_GANGWAY_AFT"
+        handler = _make_handler(camera=aft_cam, event_store_client=client)
+
+        with respx.mock() as mock:
+            mock.post("http://event-store:8000/api/v1/events").respond(
+                201, json={"data": {"event_id": "e2", "stored": True}}
+            )
+            fusion_route = mock.post(
+                "http://fusion:8090/candidates/wagon_entry"
+            ).respond(202, json={"received": True})
+
+            await handler._handle_detection(track_id=910, bbox=_BBOX_FROM_SIDE, confidence=0.9)
+            await handler._handle_detection(track_id=910, bbox=_BBOX_TO_SIDE, confidence=0.9)
+
+        assert fusion_route.called

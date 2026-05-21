@@ -356,6 +356,23 @@ class TripwireHandler:
             traversal=traversal,
             expect_orphan=expect_orphan,
         )
+        # E4-S9 AC10: fire-and-forget to fusion. Non-blocking — fusion-unreachable
+        # is a WARNING log, not a retry or failure condition (deliberate: no
+        # DEFAULT_RETRY here).
+        try:
+            fresp = await self._client.post(
+                f"{self._settings.fusion_url}/candidates/wagon_exit",
+                json=payload.model_dump(mode="json"),
+            )
+            fresp.raise_for_status()
+        except Exception as exc:  # noqa: BLE001 — fire-forget
+            log.warning(
+                "tripwire.fusion_unreachable",
+                kind="wagon_exit",
+                track_id=track_id,
+                reason="fusion_unreachable",
+                error=str(exc),
+            )
 
     @DEFAULT_RETRY
     async def _emit_wagon_entry(
@@ -388,6 +405,21 @@ class TripwireHandler:
             camera_id=self._camera_id,
             traversal=traversal,
         )
+        # E4-S9 AC10: fire-and-forget to fusion.
+        try:
+            fresp = await self._client.post(
+                f"{self._settings.fusion_url}/candidates/wagon_entry",
+                json=payload.model_dump(mode="json"),
+            )
+            fresp.raise_for_status()
+        except Exception as exc:  # noqa: BLE001 — fire-forget
+            log.warning(
+                "tripwire.fusion_unreachable",
+                kind="wagon_entry",
+                track_id=track_id,
+                reason="fusion_unreachable",
+                error=str(exc),
+            )
 
     async def _handle_orphaned_exit(
         self, track_id: int, coach_from: str, coach_to: str

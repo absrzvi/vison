@@ -12,21 +12,36 @@ from fusion.config import Settings
 from fusion.context_state import ContextState
 from fusion.enrichment import Enrichment
 from fusion.health import _ReadinessCache, build_app
+from fusion.ledger import CoachLedger
 from fusion.suppression import SuppressionGate
 
 
-def _make_client(ctx: ContextState | None = None) -> TestClient:
+def _make_client(
+    ctx: ContextState | None = None,
+    *,
+    tmp_path: object = None,
+) -> TestClient:
     settings = Settings(
         event_store_url="http://event-store-test",
         vehicle_id="OBB-TEST",
         schema_version=1,
+        ledger_db_path=":memory:",
+        ledger_pending_timeout_s=0.05,
     )
     if ctx is None:
         ctx = ContextState(journey_id="OBB-TEST_t1_20260520", vehicle_id="OBB-TEST")
     client = httpx.AsyncClient()
     enricher = Enrichment(client, settings, ctx)
     gate = SuppressionGate(ctx, enricher)
-    app = build_app(settings=settings, ctx=ctx, gate=gate, enricher=enricher, client=client)
+    ledger = CoachLedger(settings)
+    app = build_app(
+        settings=settings,
+        ctx=ctx,
+        gate=gate,
+        enricher=enricher,
+        client=client,
+        ledger=ledger,
+    )
     return TestClient(app)
 
 
@@ -259,4 +274,102 @@ def test_accessibility_candidate_endpoint_updates_ctx_only() -> None:
     )
     assert resp.status_code == 202
     assert ctx.find_recent_accessibility("car-1", "door-1A", window_s=60.0) == "trk-99"
+    client.close()
+
+
+# ---------------------------------------------------------------------------
+# E4-S9 — closed-ledger candidate endpoints + malformed-payload security
+# ---------------------------------------------------------------------------
+
+
+def _valid_wagon_exit_body(track_id: int = 42) -> dict[str, object]:
+    return {
+        "track_id": track_id,
+        "coach_from": "car-1",
+        "coach_to": "car-2",
+        "camera_id": "C1_GANGWAY_FWD",
+        "traversal": "from_to",
+        "confidence": 0.9,
+        "expect_orphan": False,
+    }
+
+
+def _valid_wagon_entry_body(track_id: int = 42) -> dict[str, object]:
+    return {
+        "track_id": track_id,
+        "coach_from": "car-1",
+        "coach_to": "car-2",
+        "camera_id": "C2_GANGWAY_AFT",
+        "traversal": "from_to",
+        "confidence": 0.9,
+    }
+
+
+def _valid_occupancy_body(car_id: str = "car-1", count: int = 50) -> dict[str, object]:
+    return {
+        "car_id": car_id,
+        "zone": None,
+        "occupancy_count": count,
+        "occupancy_pct": count / 200.0,
+        "capacity": 200,
+        "service_tier": "standard",
+    }
+
+
+@pytest.mark.unit
+def test_wagon_exit_candidate_returns_202() -> None:
+    client = _make_client()
+    resp = client.post("/candidates/wagon_exit", json=_valid_wagon_exit_body())
+    assert resp.status_code == 202
+    client.close()
+
+
+@pytest.mark.unit
+def test_wagon_entry_candidate_returns_202() -> None:
+    client = _make_client()
+    # Pre-seed with an exit so the entry has something to reconcile.
+    client.post("/candidates/wagon_exit", json=_valid_wagon_exit_body())
+    resp = client.post("/candidates/wagon_entry", json=_valid_wagon_entry_body())
+    assert resp.status_code == 202
+    client.close()
+
+
+@pytest.mark.unit
+def test_occupancy_update_candidate_returns_202_without_emit_when_gated() -> None:
+    """First OCCUPANCY_UPDATE alone (no WAGON_*) must not emit — AC1 gate."""
+    client = _make_client()
+    with respx.mock(assert_all_called=False) as rmock:
+        route = rmock.post("http://event-store-test/api/v1/events").mock(
+            return_value=httpx.Response(201)
+        )
+        resp = client.post("/candidates/occupancy_update", json=_valid_occupancy_body())
+    assert resp.status_code == 202
+    assert not route.called
+    client.close()
+
+
+@pytest.mark.unit
+def test_malformed_payload_wagon_exit_returns_422() -> None:
+    client = _make_client()
+    resp = client.post("/candidates/wagon_exit", json={"track_id": "not-an-int"})
+    assert resp.status_code == 422
+    client.close()
+
+
+@pytest.mark.unit
+def test_malformed_payload_wagon_entry_returns_422() -> None:
+    client = _make_client()
+    resp = client.post("/candidates/wagon_entry", json={"coach_from": "car-1"})
+    assert resp.status_code == 422
+    client.close()
+
+
+@pytest.mark.unit
+def test_malformed_payload_occupancy_update_returns_422() -> None:
+    client = _make_client()
+    resp = client.post(
+        "/candidates/occupancy_update",
+        json={"car_id": "", "occupancy_count": -1},
+    )
+    assert resp.status_code == 422
     client.close()

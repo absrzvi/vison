@@ -28,3 +28,9 @@ class Settings(BaseSettings):
 
     # ADR-15: camera is authoritative. APC drift > threshold logs WARNING only.
     calibration_drift_threshold: float = 0.10
+
+    # E4-S9: closed-ledger reconciliation (ADR-17).
+    ledger_drift_threshold: int = 3
+    ledger_drift_bucket_size: int = 3
+    ledger_db_path: str = "/var/lib/fusion/coach_ledger.db"
+    ledger_pending_timeout_s: float = 10.0

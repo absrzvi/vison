@@ -28,13 +28,20 @@ import httpx
 import structlog
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from oebb_shared.events import AccessibilityDetectedPayload, DoorObstructionPayload
+from oebb_shared.events import (
+    AccessibilityDetectedPayload,
+    DoorObstructionPayload,
+    WagonEntryPayload,
+    WagonExitPayload,
+)
+from oebb_shared.events.payloads import OccupancyUpdatePayload
 
 from fusion import accessibility as accessibility_mod
 from fusion import door_obstruction as door_obstruction_mod
 from fusion.config import Settings
 from fusion.context_state import ContextState
 from fusion.enrichment import Enrichment
+from fusion.ledger import CoachLedger
 from fusion.models import ContextPushModel, SlipFallCandidate
 from fusion.suppression import SuppressionGate
 
@@ -67,6 +74,7 @@ def build_app(
     gate: SuppressionGate,
     enricher: Enrichment,
     client: httpx.AsyncClient,
+    ledger: CoachLedger,
 ) -> FastAPI:
     app = FastAPI(title="fusion")
     readiness = _ReadinessCache()
@@ -169,6 +177,80 @@ def build_app(
     ) -> dict[str, bool]:
         # Update fusion's recent-track log; never re-emits to event-store (R4).
         await accessibility_mod.note_accessibility_candidate(payload, ctx)
+        return {"received": True}
+
+    # ------------------------------------------------------------------
+    # E4-S9 — Closed-ledger reconciliation candidate endpoints.
+    # Pattern mirrors /candidates/door_obstruction: handler returns 202 even
+    # when downstream emit fails, so inference is never blocked.
+    # ------------------------------------------------------------------
+
+    @app.post("/candidates/wagon_exit", status_code=202)
+    async def candidate_wagon_exit(payload: WagonExitPayload) -> dict[str, bool]:
+        try:
+            await ledger.on_wagon_exit(payload)
+        except Exception as exc:  # noqa: BLE001 — handler must never raise
+            log.warning(
+                "candidate.wagon_exit.failed",
+                track_id=payload.track_id,
+                coach_from=payload.coach_from,
+                error=str(exc),
+            )
+        return {"received": True}
+
+    @app.post("/candidates/wagon_entry", status_code=202)
+    async def candidate_wagon_entry(payload: WagonEntryPayload) -> dict[str, bool]:
+        try:
+            await ledger.on_wagon_entry(payload)
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "candidate.wagon_entry.failed",
+                track_id=payload.track_id,
+                coach_to=payload.coach_to,
+                error=str(exc),
+            )
+        return {"received": True}
+
+    @app.post("/candidates/occupancy_update", status_code=202)
+    async def candidate_occupancy_update(
+        payload: OccupancyUpdatePayload,
+    ) -> dict[str, bool]:
+        try:
+            observation = ledger.check_drift(
+                payload, station_approach=ctx.station_approach
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "candidate.occupancy_update.failed",
+                car_id=payload.car_id,
+                error=str(exc),
+            )
+            return {"received": True}
+
+        if observation is None:
+            return {"received": True}
+
+        if not gate.should_emit():
+            log.debug(
+                "ledger.drift_suppressed",
+                car_id=payload.car_id,
+                delta=observation.delta,
+                reason="ledger_drift_suppressed",
+            )
+            return {"received": True}
+
+        try:
+            await enricher.emit_envelope(
+                event_type_name="LEDGER_DRIFT_OBSERVATION",
+                payload=observation.model_dump(),
+                severity="info",
+            )
+        except httpx.HTTPError as exc:
+            log.warning(
+                "candidate.occupancy_update.emit_failed",
+                car_id=payload.car_id,
+                error=str(exc),
+            )
         return {"received": True}
 
     return app

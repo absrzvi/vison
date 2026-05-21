@@ -76,7 +76,7 @@ def test_event_type_has_23_members() -> None:
         # ADR-17
         "WAGON_EXIT",
         "WAGON_ENTRY",
-        "LEDGER_DRIFT_ALERT",
+        "LEDGER_DRIFT_OBSERVATION",
         # ADR-15
         "CALIBRATION_DRIFT",
         # ADR-18

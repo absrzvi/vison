@@ -1,6 +1,6 @@
 # Story 4.9: `fusion` Closed-Ledger Reconciliation Engine
 
-Status: ready-for-dev
+Status: review
 
 <!-- Created 2026-05-21 by bmad-create-story.
      D1–D5 resolved 2026-05-21 via party-mode roundtable (Winston, Amelia, Saga, Freya).
@@ -64,19 +64,19 @@ Resolved 2026-05-21 in party-mode roundtable. Recorded here so future readers se
 
 ### `shared/` — rename (D5)
 
-- [ ] `shared/src/oebb_shared/events/types.py`: rename `LEDGER_DRIFT_ALERT = "LEDGER_DRIFT_ALERT"` → `LEDGER_DRIFT_OBSERVATION = "LEDGER_DRIFT_OBSERVATION"`
-- [ ] `shared/src/oebb_shared/events/payloads.py:367`: rename class `LedgerDriftAlertPayload` → `LedgerDriftObservationPayload`; add `surface_to_operator: bool = False` field at the end (default false → safe for any non-fusion producer)
-- [ ] `shared/src/oebb_shared/events/payloads.py:441`: update `PAYLOAD_MODELS` registry key
-- [ ] `shared/src/oebb_shared/events/__init__.py`: update export
-- [ ] `shared/tests/contract/test_envelope_contract.py` + `shared/tests/unit/test_event_envelope.py`: update references (grep for `LEDGER_DRIFT_ALERT` and `LedgerDriftAlertPayload`)
+- [x] `shared/src/oebb_shared/events/types.py`: rename `LEDGER_DRIFT_ALERT = "LEDGER_DRIFT_ALERT"` → `LEDGER_DRIFT_OBSERVATION = "LEDGER_DRIFT_OBSERVATION"`
+- [x] `shared/src/oebb_shared/events/payloads.py:367`: rename class `LedgerDriftAlertPayload` → `LedgerDriftObservationPayload`; add `surface_to_operator: bool = False` field at the end (default false → safe for any non-fusion producer)
+- [x] `shared/src/oebb_shared/events/payloads.py:441`: update `PAYLOAD_MODELS` registry key
+- [x] `shared/src/oebb_shared/events/__init__.py`: update export
+- [x] `shared/tests/contract/test_envelope_contract.py` + `shared/tests/unit/test_event_envelope.py`: update references (grep for `LEDGER_DRIFT_ALERT` and `LedgerDriftAlertPayload`)
 
 ### `fusion/` — config (AC6, AC9)
 
-- [ ] `fusion/src/fusion/config.py`: add `ledger_drift_threshold: int = 3`, `ledger_drift_bucket_size: int = 3`, `ledger_db_path: str = "/var/lib/fusion/coach_ledger.db"`, `ledger_pending_timeout_s: float = 10.0` (last one for testability)
+- [x] `fusion/src/fusion/config.py`: add `ledger_drift_threshold: int = 3`, `ledger_drift_bucket_size: int = 3`, `ledger_db_path: str = "/var/lib/fusion/coach_ledger.db"`, `ledger_pending_timeout_s: float = 10.0` (last one for testability)
 
 ### `fusion/` — new `ledger.py` (AC1–AC9)
 
-- [ ] Create `fusion/src/fusion/ledger.py`
+- [x] Create `fusion/src/fusion/ledger.py`
   - [ ] `CoachLedgerRow` dataclass: `coach_id`, `ledger_count`, `last_reconciled_utc`, `unreconciled_exits`
   - [ ] `_PendingExit` dataclass: `track_id`, `coach_from`, `coach_to`, `ts_utc`, `timer_handle`
   - [ ] `CoachLedger` class with single owned `sqlite3.Connection` (WAL mode set on `__init__`, `isolation_level=None`)
@@ -90,8 +90,8 @@ Resolved 2026-05-21 in party-mode roundtable. Recorded here so future readers se
 
 ### `fusion/` — wire into lifespan + health (AC1, AC9)
 
-- [ ] `fusion/src/fusion/main.py` `lifespan`: construct `CoachLedger(settings.ledger_db_path)` inside `async with httpx.AsyncClient(...)`; pass to `build_app`; close connection in the `finally` block
-- [ ] `fusion/src/fusion/health.py` `build_app(...)`:
+- [x] `fusion/src/fusion/main.py` `lifespan`: construct `CoachLedger(settings.ledger_db_path)` inside `async with httpx.AsyncClient(...)`; pass to `build_app`; close connection in the `finally` block
+- [x] `fusion/src/fusion/health.py` `build_app(...)`:
   - [ ] Add `ledger: CoachLedger` parameter
   - [ ] `POST /candidates/wagon_exit` — accept `WagonExitPayload`, call `ledger.on_wagon_exit`, wrap downstream errors so the handler always returns 202 (mirror `/candidates/door_obstruction`)
   - [ ] `POST /candidates/wagon_entry` — accept `WagonEntryPayload`, call `ledger.on_wagon_entry`
@@ -99,25 +99,25 @@ Resolved 2026-05-21 in party-mode roundtable. Recorded here so future readers se
 
 ### `inference/` — fire-and-forget to fusion (AC10)
 
-- [ ] `inference/src/inference/config.py`: add `fusion_url: str = "http://fusion:8090"`
-- [ ] `inference/src/inference/tripwire.py`: after the successful event-store POST in `_emit_wagon_exit` and `_emit_wagon_entry`, fire `client.post(f"{settings.fusion_url}/candidates/wagon_exit | wagon_entry", json=envelope.payload.model_dump(mode="json"))` wrapped in `try/except httpx.HTTPError` with WARNING log; do NOT wrap in `DEFAULT_RETRY` (fire-and-forget — fusion is non-critical)
-- [ ] `inference/src/inference/zone_counter.py`: same pattern after successful OCCUPANCY_UPDATE POST to event-store; post payload only (not envelope wrapper)
+- [x] `inference/src/inference/config.py`: add `fusion_url: str = "http://fusion:8090"`
+- [x] `inference/src/inference/tripwire.py`: after the successful event-store POST in `_emit_wagon_exit` and `_emit_wagon_entry`, fire `client.post(f"{settings.fusion_url}/candidates/wagon_exit | wagon_entry", json=envelope.payload.model_dump(mode="json"))` wrapped in `try/except httpx.HTTPError` with WARNING log; do NOT wrap in `DEFAULT_RETRY` (fire-and-forget — fusion is non-critical)
+- [x] `inference/src/inference/zone_counter.py`: same pattern after successful OCCUPANCY_UPDATE POST to event-store; post payload only (not envelope wrapper)
 
 ### Tests
 
-- [ ] `fusion/tests/unit/test_ledger.py` — cover all branches of AC11; use `tmp_path` for DB file (NOT `:memory:`); `respx.mock` for event-store POSTs; `structlog.testing.capture_logs` for log assertions; `Settings(ledger_pending_timeout_s=0.05)` for fast timer tests
-- [ ] `fusion/tests/unit/test_security.py` — extend module list to include `ledger`; add SQL-injection AST check (no f-strings in `cursor.execute` calls)
-- [ ] `fusion/tests/unit/test_health.py` — add cases for the three new candidate endpoints (success path + downstream error → still 202)
-- [ ] `inference/tests/unit/test_tripwire.py` — extend existing emit tests with `respx.mock` for fusion endpoint; assert WARNING log on fusion HTTP error, no exception raised
-- [ ] `inference/tests/unit/test_zone_counter.py` — same extension for OCCUPANCY_UPDATE
-- [ ] `shared/tests/contract/test_envelope_contract.py` — update contract assertion for renamed event type
+- [x] `fusion/tests/unit/test_ledger.py` — cover all branches of AC11; use `tmp_path` for DB file (NOT `:memory:`); `respx.mock` for event-store POSTs; `structlog.testing.capture_logs` for log assertions; `Settings(ledger_pending_timeout_s=0.05)` for fast timer tests
+- [x] `fusion/tests/unit/test_security.py` — extend module list to include `ledger`; add SQL-injection AST check (no f-strings in `cursor.execute` calls)
+- [x] `fusion/tests/unit/test_health.py` — add cases for the three new candidate endpoints (success path + downstream error → still 202)
+- [x] `inference/tests/unit/test_tripwire.py` — extend existing emit tests with `respx.mock` for fusion endpoint; assert WARNING log on fusion HTTP error, no exception raised
+- [x] `inference/tests/unit/test_zone_counter.py` — same extension for OCCUPANCY_UPDATE
+- [x] `shared/tests/contract/test_envelope_contract.py` — update contract assertion for renamed event type
 
 ### Quality gates green
 
-- [ ] `cd fusion && pytest --strict-markers --cov=src/fusion --cov-fail-under=90 -q`
-- [ ] `cd fusion && mypy --strict src/ && ruff check src/ tests/`
-- [ ] `cd inference && pytest -q && mypy --strict src/ && ruff check src/ tests/`
-- [ ] `cd shared && pytest -m contract && mypy --strict src/`
+- [x] `cd fusion && pytest --strict-markers --cov=src/fusion --cov-fail-under=90 -q`
+- [x] `cd fusion && mypy --strict src/ && ruff check src/ tests/`
+- [x] `cd inference && pytest -q && mypy --strict src/ && ruff check src/ tests/`
+- [x] `cd shared && pytest -m contract && mypy --strict src/`
 
 ### Follow-up (NOT in this story)
 
@@ -313,10 +313,53 @@ pytest -m contract && mypy --strict src/
 
 ### Agent Model Used
 
-_to be filled by dev agent_
+claude-opus-4-7[1m] (Amelia / bmad-dev-story workflow), 2026-05-21.
 
 ### Debug Log References
 
+- Initial run: `test_close_is_idempotent_for_safety` failed because `sqlite3.Connection.close()` is idempotent in Python 3.11 — reworked the test to verify the connection releases the DB file by re-opening on the same path.
+- Initial tripwire/zone_counter test failures: `structlog` reserves the `event` keyword argument; renamed the fire-forget WARNING field to `kind=` to avoid `meth() got multiple values for argument 'event'`.
+
 ### Completion Notes List
 
+- **AC1** — `coach_ledger` table created with WAL mode; zero-seed via `seed_coach`; AC1 gate implemented as two-set design (`_seen_occupancy`, `_seen_wagon`) — drift checks no-op until BOTH signals seen for a given `car_id`. The story's `both_seeded[car_id]` dict semantics are equivalent (`car_id in _seen_occupancy AND car_id in _seen_wagon`).
+- **AC2/AC3** — `on_wagon_exit` decrements ledger; arms timer + `unreconciled_exits++` only when `expect_orphan=False`.
+- **AC4** — `on_wagon_entry` cancels the pending timer FIRST (P10), then mutates state; orphan WAGON_ENTRY still increments destination ledger and logs `reason="orphan_entry"`.
+- **AC5** — `_handle_pending_timeout` retains decrement, drops pending entry, logs `reason="exit_unreconciled"`.
+- **AC6** — Drift bucket = `sign(delta) * (|delta| // bucket_size)`; emit only on bucket transition. ADR-15 ledger correction applied AFTER snapshotting `ledger_count` into the observation payload. Drift-cleared transition emits one final observation with `delta=0` and `ledger_count=camera_count`.
+- **AC7** — `surface_to_operator` populated from the `station_approach` argument passed by `health.py` handler.
+- **AC8** — Suppression check happens at handler layer (`candidate_occupancy_update`) after `check_drift` returns a payload but before `enricher.emit_envelope`. Ledger state continues to mutate regardless (per AC8).
+- **AC9** — Single owned `sqlite3.Connection` in `__init__`; `isolation_level=None`, `check_same_thread=False`, WAL pragma; all SQL uses placeholders. AST test enforces no f-string / `%`-format inside `.execute()` calls.
+- **AC10** — `tripwire.py._emit_wagon_exit` / `_emit_wagon_entry` fire-and-forget POST to `{fusion_url}/candidates/wagon_exit | wagon_entry` (no `DEFAULT_RETRY`); errors logged at WARNING with `reason="fusion_unreachable"`. `zone_counter.py._post_occupancy_update` does the same for `OCCUPANCY_UPDATE`. Payload (not envelope) is sent — payload model matches the fusion candidate handler.
+- **AC11 quality gates** — `pytest --cov=src/fusion --cov-fail-under=90` → 119 passed, 94.66% (gate ≥90). `mypy --strict` clean across `fusion/src/` (12 files), `inference/src/` (11 files), `shared/src/` (17 files). `ruff check src/ tests/` clean for `fusion` and `inference`. `shared` ruff has 9 pre-existing violations unrelated to this story (verified against baseline by stash). `shared` contract suite (61 tests) green with renamed `LEDGER_DRIFT_OBSERVATION`.
+
+**Deployment note (out of scope to author):** `docker-compose.dev.yml` needs a volume mount for `/var/lib/fusion/coach_ledger.db` so the SQLite file survives container restarts. Flagged here per architecture line 297.
+
+**ADR-17 update needed (out of scope):** ADR-17 §line 452 still references `LEDGER_DRIFT_ALERT` and aggregate sum-across-coaches reconciliation. After this story it should be updated to reflect the per-coach OBSERVATION shape — track via the follow-up section.
+
 ### File List
+
+**Added:**
+- `fusion/src/fusion/ledger.py`
+- `fusion/tests/unit/test_ledger.py`
+
+**Modified:**
+- `shared/src/oebb_shared/events/types.py` — `LEDGER_DRIFT_ALERT` → `LEDGER_DRIFT_OBSERVATION`
+- `shared/src/oebb_shared/events/payloads.py` — class rename + `surface_to_operator: bool = False` field + registry key
+- `shared/tests/contract/test_envelope_contract.py` — fixture key rename, added `surface_to_operator` field
+- `shared/tests/unit/test_event_envelope.py` — expected EventType set
+- `fusion/src/fusion/config.py` — added `ledger_drift_threshold`, `ledger_drift_bucket_size`, `ledger_db_path`, `ledger_pending_timeout_s`
+- `fusion/src/fusion/health.py` — `build_app(ledger=...)` param + three new candidate endpoints
+- `fusion/src/fusion/main.py` — construct + pass + close `CoachLedger` in lifespan
+- `fusion/tests/unit/test_health.py` — `_make_client` passes ledger; 6 new tests for candidate endpoints + malformed-payload security
+- `fusion/tests/unit/test_security.py` — `ledger.py` added to MODULES; new AST test for SQL injection in `.execute()` calls
+- `fusion/tests/contract/test_candidate_payload_contract.py` — fixture passes ledger to `build_app`
+- `fusion/tests/integration/test_fusion_pipeline.py` — fixture passes ledger to `build_app`
+- `inference/src/inference/tripwire.py` — fire-forget POST to fusion after both event-store posts (`_emit_wagon_exit`, `_emit_wagon_entry`)
+- `inference/src/inference/zone_counter.py` — fire-forget POST to fusion after `_post_occupancy_update`
+- `inference/tests/unit/test_tripwire.py` — three AC10 tests (success, 503 logs WARNING, wagon_entry counterpart)
+- `inference/tests/unit/test_zone_counter.py` — two AC10 tests (success, 503 logs WARNING)
+
+### Change Log
+
+- 2026-05-21 — Implemented closed-ledger reconciliation engine per Story 4-9 D1–D5. Renamed `LEDGER_DRIFT_ALERT` → `LEDGER_DRIFT_OBSERVATION` and added `surface_to_operator` field. Added per-coach `CoachLedger` with WAL-mode SQLite, drift-bucket state-transition emit, ADR-15 camera-authoritative correction, and AC1 two-set seeding gate. Three new fusion candidate endpoints (`wagon_exit`, `wagon_entry`, `occupancy_update`). Inference now double-POSTs to fusion via fire-and-forget after event-store. 119 fusion tests, 148 inference tests, 130 shared tests — all green. Fusion coverage 94.66% (gate ≥90%).

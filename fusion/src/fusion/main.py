@@ -20,6 +20,7 @@ from fusion.config import Settings
 from fusion.context_state import ContextState
 from fusion.enrichment import Enrichment
 from fusion.health import build_app
+from fusion.ledger import CoachLedger
 from fusion.suppression import SuppressionGate
 
 log = structlog.get_logger(__name__)
@@ -34,12 +35,14 @@ def main() -> None:  # pragma: no cover — integration entry point
             ctx = ContextState()
             enricher = Enrichment(client, settings, ctx)
             gate = SuppressionGate(ctx, enricher)
+            ledger = CoachLedger(settings)
             wired_app = build_app(
                 settings=settings,
                 ctx=ctx,
                 gate=gate,
                 enricher=enricher,
                 client=client,
+                ledger=ledger,
             )
             for route in wired_app.routes:
                 app.router.routes.append(route)
@@ -47,10 +50,12 @@ def main() -> None:  # pragma: no cover — integration entry point
             app.state.ctx = ctx
             app.state.gate = gate
             app.state.enricher = enricher
+            app.state.ledger = ledger
             log.info("fusion.started", port=settings.port)
             try:
                 yield
             finally:
+                ledger.close()
                 log.info("fusion.shutting_down")
 
     # Bootstrap shell: real routes are appended in lifespan.

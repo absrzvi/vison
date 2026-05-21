@@ -364,14 +364,20 @@ class WagonEntryPayload(_BasePayload):
     confidence: Annotated[float, Field(ge=0.0, le=1.0)]
 
 
-class LedgerDriftAlertPayload(_BasePayload):
-    """LEDGER_DRIFT_ALERT — closed-ledger reconciliation variance exceeded."""
+class LedgerDriftObservationPayload(_BasePayload):
+    """LEDGER_DRIFT_OBSERVATION — diagnostic telemetry; ledger vs camera disagreement.
+
+    Renamed from LEDGER_DRIFT_ALERT (party-mode 2026-05-21 D5) — no validated
+    operator playbook exists yet. surface_to_operator gates future promotion to
+    an operator-visible alert without changing this payload contract.
+    """
 
     car_id: _NonEmptyStr
     camera_count: int
     ledger_count: int
     delta: int
     threshold: int
+    surface_to_operator: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -438,7 +444,7 @@ PAYLOAD_MODELS: dict[EventType, type[_BasePayload]] = {
     # ADR-17
     EventType.WAGON_EXIT: WagonExitPayload,
     EventType.WAGON_ENTRY: WagonEntryPayload,
-    EventType.LEDGER_DRIFT_ALERT: LedgerDriftAlertPayload,
+    EventType.LEDGER_DRIFT_OBSERVATION: LedgerDriftObservationPayload,
     # ADR-15
     EventType.CALIBRATION_DRIFT: CalibrationDriftPayload,
     # ADR-18

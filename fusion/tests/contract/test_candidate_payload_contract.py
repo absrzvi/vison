@@ -24,6 +24,7 @@ from fusion.config import Settings
 from fusion.context_state import ContextState
 from fusion.enrichment import Enrichment
 from fusion.health import build_app
+from fusion.ledger import CoachLedger
 from fusion.suppression import SuppressionGate
 
 
@@ -32,6 +33,7 @@ def _settings() -> Settings:
         event_store_url="http://event-store-test",
         vehicle_id="OBB-TEST",
         schema_version=1,
+        ledger_db_path=":memory:",
     )
 
 
@@ -42,8 +44,10 @@ def client() -> Iterator[TestClient]:
     http_client = httpx.AsyncClient()
     enricher = Enrichment(http_client, settings, ctx)
     gate = SuppressionGate(ctx, enricher)
+    ledger = CoachLedger(settings)
     app = build_app(
-        settings=settings, ctx=ctx, gate=gate, enricher=enricher, client=http_client
+        settings=settings, ctx=ctx, gate=gate, enricher=enricher, client=http_client,
+        ledger=ledger,
     )
     test_client = TestClient(app)
     try:
