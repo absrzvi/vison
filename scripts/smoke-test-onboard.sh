@@ -18,8 +18,11 @@ EVENT_STORE_URL="http://localhost:8001"
 # Allow env override so a production .env that sets EVENT_STORE_API_KEY doesn't silently
 # break auth (the hardcoded default matches docker-compose.onboard.yml's dev placeholder).
 API_KEY="${EVENT_STORE_API_KEY:-onboard-dev-key}"
+SMOKE_DATE="$(date -u +%Y%m%d)"
+SMOKE_JOURNEY_ID="SMOKE-TEST_001_${SMOKE_DATE}"
 HEALTH_TIMEOUT=30
 HEALTH_INTERVAL=3
+BUILD_TIMEOUT=120  # separate from health poll; cold-image build can exceed HEALTH_TIMEOUT
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -71,6 +74,16 @@ log "  compose YAML valid"
 
 log "Step 2: Starting event-store (no Hailo hardware required)"
 docker compose -f "$COMPOSE_FILE" up -d --build event-store
+# Wait for container to reach "running" state before starting health poll timer,
+# so BUILD_TIMEOUT absorbs image build time and HEALTH_TIMEOUT measures only startup.
+BUILD_ELAPSED=0
+until [ "$(docker inspect --format='{{.State.Status}}' "$(docker compose -f "$COMPOSE_FILE" ps -q event-store 2>/dev/null)" 2>/dev/null)" = "running" ]; do
+  if [ "$BUILD_ELAPSED" -ge "$BUILD_TIMEOUT" ]; then
+    fail "event-store container did not reach running state within ${BUILD_TIMEOUT}s"
+  fi
+  sleep 3
+  BUILD_ELAPSED=$((BUILD_ELAPSED + 3))
+done
 log "  event-store container started"
 
 # ── step 3: wait for /health/ready ───────────────────────────────────────────
@@ -98,7 +111,7 @@ POST_BODY=$(curl -s -o /tmp/smoke-post-body.txt -w "%{http_code}" \
   -d '{
     "event_type": "OCCUPANCY_UPDATE",
     "vehicle_id": "SMOKE-TEST",
-    "journey_id": "SMOKE-TEST_001_20260521",
+    "journey_id": "${SMOKE_JOURNEY_ID}",
     "source": "inference",
     "severity": "info",
     "payload": {
@@ -125,7 +138,7 @@ log "Step 5: GET /api/v1/events filtered by journey_id and verify SMOKE-TEST eve
 # false positives from leftover events in a non-freshly-wiped volume.
 RESPONSE=$(curl -s \
   -H "X-API-Key: ${API_KEY}" \
-  "${EVENT_STORE_URL}/api/v1/events?journey_id=SMOKE-TEST_001_20260521&limit=1"
+  "${EVENT_STORE_URL}/api/v1/events?journey_id=${SMOKE_JOURNEY_ID}&limit=1"
 )
 # journey_id filter raises JOURNEY_NOT_FOUND if journey table has no record — use
 # unfiltered GET as fallback to verify the event exists regardless.

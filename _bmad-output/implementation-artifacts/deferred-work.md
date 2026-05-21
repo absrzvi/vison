@@ -432,8 +432,8 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 
 ## Deferred from: code review of 1-5-4-onboard-smoke-test (2026-05-21)
 
-- **D1** — AC4/AC5 in story spec reference `/api/v1/ingest` and `PASSENGER_BOARDED` which don't exist; implementation correctly uses `POST /api/v1/events` + `OCCUPANCY_UPDATE` — update AC text to match actual API before next reader
-- **D2** — `journey_id` in POST payload hardcodes `20260521` date; if schema ever adds temporal date validation this silently rots — use `$(date -u +%Y%m%d)` in a future pass
+- ~~**D1** — AC4/AC5 in story spec reference `/api/v1/ingest` and `PASSENGER_BOARDED` which don't exist; implementation correctly uses `POST /api/v1/events` + `OCCUPANCY_UPDATE` — update AC text to match actual API before next reader~~ **CLOSED 2026-05-21** — AC4/AC5 updated in story file.
+- ~~**D2** — `journey_id` in POST payload hardcodes `20260521` date; if schema ever adds temporal date validation this silently rots — use `$(date -u +%Y%m%d)` in a future pass~~ **CLOSED 2026-05-21** — smoke test now uses `$(date -u +%Y%m%d)` via `SMOKE_JOURNEY_ID`.
 - **D3** — No CI project-name isolation (`-p` flag on compose); parallel CI runs collide on port 8001 and `onboard_event_store_data` volume — PoC posture, revisit before fleet CI
 - **D4** — GET assertion uses `grep -q "SMOKE-TEST"` not structured jq validation — acceptable for smoke test, upgrade if false positives emerge
 - **D5** — Smoke test doesn't exercise event-store cursor pagination or event_type/severity filters — deferred, out of smoke scope

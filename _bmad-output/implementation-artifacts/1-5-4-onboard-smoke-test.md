@@ -16,9 +16,9 @@ so that every push can confirm the containerisation layer works without requirin
 
 3. **Smoke test waits for event-store to become healthy** by polling `GET /health/ready` on `http://localhost:8001` up to 30 seconds (3s interval × 10 attempts), failing with a non-zero exit code if the timeout is exceeded.
 
-4. **Smoke test posts a test event** via `POST /api/v1/ingest` with a well-formed `PASSENGER_BOARDED` event envelope and the `X-API-Key: onboard-dev-key` header, and asserts HTTP 200 or 201.
+4. **Smoke test posts a test event** via `POST /api/v1/events` with a well-formed `OCCUPANCY_UPDATE` event envelope (`source: inference`, `severity: info`) and the `X-API-Key: onboard-dev-key` header, and asserts HTTP 200 or 201.
 
-5. **Smoke test queries the event** via `GET /api/v1/events?vehicle_id=SMOKE-TEST&limit=1` with the API key header and asserts HTTP 200 and that the response body contains `SMOKE-TEST`.
+5. **Smoke test queries the event** via `GET /api/v1/events?journey_id=SMOKE-TEST_001_{YYYYMMDD}&limit=1` (falling back to `?limit=10` if `JOURNEY_NOT_FOUND`) with the API key header, and asserts that the response body contains `SMOKE-TEST`.
 
 6. **Smoke test tears down cleanly** — `docker compose -f docker-compose.onboard.yml down -v` runs in a `trap` so containers are removed even on failure.
 
