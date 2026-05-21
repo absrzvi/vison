@@ -358,14 +358,15 @@ class TripwireHandler:
         )
         # E4-S9 AC10: fire-and-forget to fusion. Non-blocking — fusion-unreachable
         # is a WARNING log, not a retry or failure condition (deliberate: no
-        # DEFAULT_RETRY here).
+        # DEFAULT_RETRY here). Catch httpx.HTTPError per story spec — covers
+        # both transport errors and raise_for_status' HTTPStatusError.
         try:
             fresp = await self._client.post(
                 f"{self._settings.fusion_url}/candidates/wagon_exit",
                 json=payload.model_dump(mode="json"),
             )
             fresp.raise_for_status()
-        except Exception as exc:  # noqa: BLE001 — fire-forget
+        except httpx.HTTPError as exc:
             log.warning(
                 "tripwire.fusion_unreachable",
                 kind="wagon_exit",
@@ -405,14 +406,14 @@ class TripwireHandler:
             camera_id=self._camera_id,
             traversal=traversal,
         )
-        # E4-S9 AC10: fire-and-forget to fusion.
+        # E4-S9 AC10: fire-and-forget to fusion. See _emit_wagon_exit note.
         try:
             fresp = await self._client.post(
                 f"{self._settings.fusion_url}/candidates/wagon_entry",
                 json=payload.model_dump(mode="json"),
             )
             fresp.raise_for_status()
-        except Exception as exc:  # noqa: BLE001 — fire-forget
+        except httpx.HTTPError as exc:
             log.warning(
                 "tripwire.fusion_unreachable",
                 kind="wagon_entry",

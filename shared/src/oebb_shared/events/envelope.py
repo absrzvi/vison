@@ -76,6 +76,16 @@ class EventEnvelope(BaseModel):
 
     model_config = {"use_enum_values": True, "extra": "forbid"}
 
+    @field_validator("event_type", mode="before")
+    @classmethod
+    def _coerce_legacy_event_type(cls, v: object) -> object:
+        # Story 4-9 D5: LEDGER_DRIFT_ALERT renamed to LEDGER_DRIFT_OBSERVATION.
+        # Accept the legacy string on input so persisted envelopes still parse.
+        # Remove this shim once all stored events are re-encoded under the new name.
+        if v == "LEDGER_DRIFT_ALERT":
+            return EventType.LEDGER_DRIFT_OBSERVATION.value
+        return v
+
     @field_validator("journey_id")
     @classmethod
     def _validate_journey_id(cls, v: str) -> str:

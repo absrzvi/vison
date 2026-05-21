@@ -1,6 +1,6 @@
 # Story 4.9: `fusion` Closed-Ledger Reconciliation Engine
 
-Status: review
+Status: done
 
 <!-- Created 2026-05-21 by bmad-create-story.
      D1–D5 resolved 2026-05-21 via party-mode roundtable (Winston, Amelia, Saga, Freya).
@@ -363,3 +363,52 @@ claude-opus-4-7[1m] (Amelia / bmad-dev-story workflow), 2026-05-21.
 ### Change Log
 
 - 2026-05-21 — Implemented closed-ledger reconciliation engine per Story 4-9 D1–D5. Renamed `LEDGER_DRIFT_ALERT` → `LEDGER_DRIFT_OBSERVATION` and added `surface_to_operator` field. Added per-coach `CoachLedger` with WAL-mode SQLite, drift-bucket state-transition emit, ADR-15 camera-authoritative correction, and AC1 two-set seeding gate. Three new fusion candidate endpoints (`wagon_exit`, `wagon_entry`, `occupancy_update`). Inference now double-POSTs to fusion via fire-and-forget after event-store. 119 fusion tests, 148 inference tests, 130 shared tests — all green. Fusion coverage 94.66% (gate ≥90%).
+
+## Senior Developer Review (AI) — Round 1
+
+**Reviewer:** Opus 4.7 via `bmad-code-review` workflow, 2026-05-21.
+**Layers:** Blind Hunter (24 findings) + Acceptance Auditor (10) + Edge Case Hunter (30 walks, 10 unhandled).
+**Triage outcome:** 5 decision-needed, 14 patch, 5 defer, 5 dismissed.
+
+### Review Findings
+
+#### Decision needed
+
+- [x] [Review][Decision] **`LEDGER_DRIFT_ALERT` enum-rename ships with no backwards-compat alias** — Wire-protocol rename of a `StrEnum` value with no dual-registration. Any persisted events or in-flight queue items will fail enum parsing. PoC may have no live consumers, but the story does not state this. Options: (a) accept PoC scope and ship; (b) add temporary alias in `EventType` and `PAYLOAD_MODELS`; (c) write a migration for any persisted events. [shared/src/oebb_shared/events/types.py, payloads.py]
+- [x] [Review][Decision] **Inference "fire-and-forget" actually `await`s fusion POST** — `tripwire.py` and `zone_counter.py` `await self._client.post(fusion_url/...)`; fusion latency is added to inference critical path. True fire-and-forget would be `asyncio.create_task`. Story copy says "non-blocking" but the implementation blocks. Options: (a) ship as-is — matches existing `/candidates/door_obstruction` pattern; (b) wrap in `asyncio.create_task` (need to track tasks for shutdown). [inference/src/inference/tripwire.py:434, 472; zone_counter.py:215]
+- [x] [Review][Decision] **`CoachLedger` has no `asyncio.Lock`; concurrent same-`track_id` fires can double-mutate** — methods are sync internally so single-coro interleaving is safe, but two coroutines hitting `on_wagon_exit(track_id=5)` back-to-back will double-decrement and bump `unreconciled_exits` twice. Inference is supposed to fire unique track_ids per crossing — collision plausible only on retries. Options: (a) ship without lock (PoC); (b) add `asyncio.Lock` per-coach; (c) dedup `track_id` already-pending at the ledger layer (see Patch finding for the duplicate-decrement fix). [fusion/src/fusion/ledger.py — class-level]
+- [x] [Review][Decision] **`_pending_exits` keyed by global `track_id` only — cross-camera collisions unhandled** — Tripwire trackers reset on stream restart; two cameras can assign track_id=1 to different physical people. Composite key `(camera_id, track_id)` is correct but requires schema/contract change. Options: (a) PoC scope — ship; (b) extend `_pending_exits` key to `(camera_id, track_id)` (need to plumb camera_id into payloads — already present on `WagonExitPayload.camera_id`). [fusion/src/fusion/ledger.py:418]
+- [x] [Review][Decision] **Restart loses `_pending_exits`; post-restart paired ENTRY treated as `orphan_entry` → phantom +1 passenger** — `_load_rows` only loads `coach_ledger` table. After a crash, in-flight pending EXITs lose timer + state. A subsequent matching ENTRY increments destination ledger (already incremented by the persisted EXIT-side decrement on the source coach). Net: phantom +1. Options: (a) PoC accept — flag in deferred follow-up; (b) persist `_pending_exits` to a sibling SQLite table; (c) log a startup warning that pre-restart pendings are lost and zero `unreconciled_exits` columns. [fusion/src/fusion/ledger.py:111-122 (`_load_rows`)]
+
+#### Patch (unresolved)
+
+- [x] [Review][Patch] **AC1 `_seen_occupancy` is dead state — gate only checks `_seen_wagon`** [fusion/src/fusion/ledger.py:323] — Three reviewers agree. Dev notes claim "two-set design"; code only reads `_seen_wagon`. Fix: either actually check both, or remove `_seen_occupancy` and update the Completion Notes. (Currently functional only because `check_drift` is the only call site.)
+- [x] [Review][Patch] **Duplicate WAGON_EXIT for same `track_id` double-decrements ledger** [fusion/src/fusion/ledger.py:177-179] — At-least-once delivery (fire-forget pattern admits this) corrupts ledger. Add dedup: if `track_id` already in `_pending_exits`, return early (and log).
+- [x] [Review][Patch] **`LedgerDriftObservationPayload` not exported from `shared/.../events/__init__.py`** [shared/src/oebb_shared/events/__init__.py] — Spec task line was marked `[x]` but the file is unchanged. Add the export and `__all__` entry. Functional today only because `fusion/ledger.py` imports via the deep path.
+- [x] [Review][Patch] **`except Exception` in inference fire-forget violates spec `except httpx.HTTPError`** [inference/src/inference/tripwire.py:438-446, 472-481; zone_counter.py:217-224] — Spec explicitly says `except httpx.HTTPError`. Current `except Exception` masks programming errors (bad JSON, attribute errors) as "fusion_unreachable". Tighten the except clause.
+- [x] [Review][Patch] **`_handle_pending_timeout` has no closed-flag check; timer firing after `close()` is implicitly safe but undefended** [fusion/src/fusion/ledger.py:240-251] — Add a `_closed` flag and early-return at top of `_handle_pending_timeout`. Defends against future evolution where the handler touches `_conn`.
+- [x] [Review][Patch] **`asyncio.get_running_loop()` captured in `on_wagon_exit` may fire on a closed loop** [fusion/src/fusion/ledger.py:196-202] — Wrap the `loop.create_task` lambda in try/except so a closed-loop fire logs instead of raising.
+- [x] [Review][Patch] **`ledger_drift_threshold` not validated; 0 or negative silently misbehaves** [fusion/src/fusion/config.py] — Add pydantic `ge=0` (or sensible minimum) on the field.
+- [x] [Review][Patch] **`PRAGMA journal_mode=WAL` return value discarded; silent fallback on tmpfs/NFS** [fusion/src/fusion/ledger.py:104] — Read the PRAGMA return value; log WARNING if not `"wal"`.
+- [x] [Review][Patch] **Missing test — AC8 suppression-gate `should_emit=False` branch** [fusion/tests/unit/test_health.py] — AC11 explicitly lists "suppression-gate behaviour (AC8)" as a required test. Add a test where `gate.should_emit()` is False and assert the envelope POST does not happen but ledger state still mutates.
+- [x] [Review][Patch] **Missing test — Security Tests claim "no raw video / CCTV URL in ledger payload or log line"** [fusion/tests/unit/test_security.py] — Mirror existing `test_no_raw_video_or_stream_url_in_envelope` for `LedgerDriftObservationPayload`.
+- [x] [Review][Patch] **`test_wagon_exit_fires_to_fusion_candidate_endpoint` does not verify ordering** [inference/tests/unit/test_tripwire.py] — AC10 says "AFTER successful event-store POST". Add a test: mock event-store 500 → assert fusion never POSTed.
+- [x] [Review][Patch] **Drift-cleared test has stream-of-consciousness comments** [fusion/tests/unit/test_ledger.py — `test_drift_cleared_emits_once_with_delta_zero`] — Strip "We need to drive bucket back to 0 explicitly..." prose; tighten the assertion to also check `_last_drift_bucket` is 0.
+- [x] [Review][Patch] **Three log-assertion tests use permissive `reason OR event` matchers** [fusion/tests/unit/test_ledger.py — `test_orphan_wagon_entry_increments_and_logs`, `test_pending_exit_timeout_decrement_not_reverted`, `test_entry_cancels_timer_before_state_mutation`] — Tighten to `entry.get("reason") == "<expected>"` only; will silently pass if the implementation drops the `reason` field.
+- [x] [Review][Patch] **Pending-timeout test relies on 3× wall-clock margin (`asyncio.sleep(0.15)` vs 0.05s timeout)** [fusion/tests/unit/test_ledger.py — `test_pending_exit_timeout_decrement_not_reverted`] — Bump margin to ~10× or use `asyncio.Event` driven by the timeout handler for deterministic completion.
+
+#### Deferred (pre-existing or out of scope)
+
+- [x] [Review][Defer] **`unreconciled_exits` monotonically grows; never decremented on timeout** [fusion/src/fusion/ledger.py:240-251] — AC3 + AC5 explicitly say don't decrement on `expect_orphan` exits or on timeout. Per spec, but counter has no reset on journey change. Track for journey-lifecycle follow-up.
+- [x] [Review][Defer] **`ledger_count` can go arbitrarily negative pre-reconciliation** [fusion/src/fusion/ledger.py:177] — ADR-15 design accepts negatives until next drift transition. Spec-deferred.
+- [x] [Review][Defer] **`_last_drift_bucket`, `_seen_wagon`, `_seen_occupancy` never reset on journey change** [fusion/src/fusion/ledger.py:295-298] — Process-lifetime hidden state survives journey transitions. No journey-change hook in fusion today. Real concern; out of scope for 4-9.
+- [x] [Review][Defer] **Drift bucket transition consumed during suppression — observation entirely within suppression window never reported** [fusion/src/fusion/health.py:218-247] — Dev-note interpretation of AC8 (state mutates regardless). User may want a different policy when promoting OBSERVATION to ALERT post-D5. Track for the operator-playbook follow-up.
+- [x] [Review][Defer] **`mkdir parents=True, exist_ok=True` masks permission failures on writable-parent-of-unwritable directories** [fusion/src/fusion/ledger.py:121-124] — Deployment concern; story already flags compose volume mount as out-of-scope.
+
+#### Dismissed
+
+- `except Exception` in candidate handlers — mirrors existing `/candidates/door_obstruction` pattern, explicit in dev notes.
+- DEFAULT_RETRY duplicating fusion POSTs — walked by Edge Case Hunter; `raise_for_status` for event-store happens BEFORE fusion POST, so fusion only fires on event-store success (exactly one POST per crossing).
+- `test_malformed_payload_occupancy_update_returns_422` ambiguous — Edge F27 verified `_NonNegInt` rejects negative at pydantic layer; behaviour correct, test is just imprecise.
+- `inference/config.py fusion_url` task checkbox bookkeeping — field already existed pre-story at `inference/src/inference/config.py:28`; box correctly checked because nothing needed to be added.
+- Drift-cleared `ledger_count = camera_count` — defensible reading of "same payload, delta=0"; tested.

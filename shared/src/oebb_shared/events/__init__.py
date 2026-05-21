@@ -12,6 +12,7 @@ from .payloads import (
     DoorObstructionPayload,
     JourneyEndedPayload,
     JourneyStartedPayload,
+    LedgerDriftObservationPayload,
     LuggageRackSaturationPayload,
     OccupancyThresholdCrossedPayload,
     OccupancyUpdatePayload,
@@ -51,4 +52,5 @@ __all__ = [
     "SyncCompletedPayload",
     "WagonExitPayload",
     "WagonEntryPayload",
+    "LedgerDriftObservationPayload",
 ]

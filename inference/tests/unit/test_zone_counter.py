@@ -51,6 +51,7 @@ async def test_update_posts_occupancy_event(
 
     with respx.mock(base_url="http://event-store.test") as mock:
         route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        mock.post("http://fusion:8090/candidates/occupancy_update").mock(return_value=httpx.Response(202))
         zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
         await zc.update("car-1", [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}])
         assert route.called
@@ -77,6 +78,7 @@ async def test_rate_limit_1hz(
 
     with respx.mock(base_url="http://event-store.test") as mock:
         route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        mock.post("http://fusion:8090/candidates/occupancy_update").mock(return_value=httpx.Response(202))
         zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
         d = [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}]
         await zc.update("car-1", d)
@@ -98,6 +100,7 @@ async def test_rate_limit_independent_per_car(
     ]
     with respx.mock(base_url="http://event-store.test") as mock:
         route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        mock.post("http://fusion:8090/candidates/occupancy_update").mock(return_value=httpx.Response(202))
         zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
         d = [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}]
         await zc.update("car-1", d)
@@ -118,6 +121,7 @@ async def test_threshold_rising_emits_event(
 
     with respx.mock(base_url="http://event-store.test") as mock:
         route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        mock.post("http://fusion:8090/candidates/occupancy_update").mock(return_value=httpx.Response(202))
         zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
         zc._last_emit = {"car-1": 0.0}
         # 163 people — exactly threshold_count + deadband, crosses the rising line.
@@ -145,6 +149,7 @@ async def test_threshold_deadband_suppresses_flap(
 
     with respx.mock(base_url="http://event-store.test") as mock:
         route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        mock.post("http://fusion:8090/candidates/occupancy_update").mock(return_value=httpx.Response(202))
         zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
         zc._last_emit = {"car-1": 0.0}
 
@@ -173,6 +178,7 @@ async def test_threshold_no_duplicate_same_direction(
 
     with respx.mock(base_url="http://event-store.test") as mock:
         route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        mock.post("http://fusion:8090/candidates/occupancy_update").mock(return_value=httpx.Response(202))
         zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
         zc._last_emit = {"car-1": 0.0}
 
@@ -208,6 +214,7 @@ async def test_threshold_falling_emits_event(
 
     with respx.mock(base_url="http://event-store.test") as mock:
         route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        mock.post("http://fusion:8090/candidates/occupancy_update").mock(return_value=httpx.Response(202))
         zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
         # Start above threshold so falling can fire.
         zc._states["car-1"].occupancy_count = 170
@@ -232,6 +239,7 @@ async def test_update_unknown_car_id_is_noop(
 
     with respx.mock(base_url="http://event-store.test", assert_all_called=False) as mock:
         route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        mock.post("http://fusion:8090/candidates/occupancy_update").mock(return_value=httpx.Response(202))
         zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
         await zc.update("car-999", [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}])
         assert not route.called
@@ -247,6 +255,7 @@ async def test_none_track_id_filtered(
 
     with respx.mock(base_url="http://event-store.test") as mock:
         route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        mock.post("http://fusion:8090/candidates/occupancy_update").mock(return_value=httpx.Response(202))
         zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
         # Three detections, none with valid track_ids — count must be zero.
         await zc.update(
@@ -274,8 +283,10 @@ async def test_5xx_response_raises_after_retry(
     """
     from inference.zone_counter import ZoneCounter
 
-    with respx.mock(base_url="http://event-store.test") as mock:
+    with respx.mock(base_url="http://event-store.test", assert_all_called=False) as mock:
         route = mock.post("/api/v1/events").mock(return_value=httpx.Response(500))
+        # Fusion route mocked but never reached because event-store raises first.
+        mock.post("http://fusion:8090/candidates/occupancy_update").mock(return_value=httpx.Response(202))
         zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
         with pytest.raises(httpx.HTTPStatusError):
             await zc.update("car-1", [{"track_id": 1, "label": "person", "bbox": (0, 0, 10, 10)}])
@@ -334,6 +345,7 @@ async def test_journey_holder_updates_envelope(
     holder = JourneyHolder(journey_id="OBB-TEST_t1_20260519")
     with respx.mock(base_url="http://event-store.test") as mock:
         route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        mock.post("http://fusion:8090/candidates/occupancy_update").mock(return_value=httpx.Response(202))
         zc = ZoneCounter(
             cameras=cameras,
             settings=settings,
@@ -366,6 +378,7 @@ async def test_in_flight_skip_during_retries(
 
     with respx.mock(base_url="http://event-store.test", assert_all_called=False) as mock:
         route = mock.post("/api/v1/events").mock(return_value=httpx.Response(201))
+        mock.post("http://fusion:8090/candidates/occupancy_update").mock(return_value=httpx.Response(202))
         zc = ZoneCounter(cameras=cameras, settings=settings, event_store_client=client)
         # Force in_flight True without an actual POST in progress.
         zc._in_flight["car-1"] = True

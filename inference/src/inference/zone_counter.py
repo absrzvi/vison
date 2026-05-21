@@ -214,13 +214,14 @@ class ZoneCounter:
         resp.raise_for_status()
         # E4-S9 AC10: fire-and-forget OCCUPANCY_UPDATE payload (NOT the wrapping
         # envelope) to fusion for closed-ledger reconciliation. Non-blocking.
+        # Catch httpx.HTTPError per story spec.
         try:
             fresp = await self._client.post(
                 f"{self._settings.fusion_url}/candidates/occupancy_update",
                 json=payload.model_dump(mode="json"),
             )
             fresp.raise_for_status()
-        except Exception as exc:  # noqa: BLE001 — fire-forget
+        except httpx.HTTPError as exc:
             log.warning(
                 "zone_counter.fusion_unreachable",
                 car_id=state.car_id,

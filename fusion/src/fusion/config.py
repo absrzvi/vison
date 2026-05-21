@@ -10,6 +10,7 @@ is ``None``, emits are skipped with a WARN log.
 """
 from __future__ import annotations
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,7 +31,9 @@ class Settings(BaseSettings):
     calibration_drift_threshold: float = 0.10
 
     # E4-S9: closed-ledger reconciliation (ADR-17).
-    ledger_drift_threshold: int = 3
-    ledger_drift_bucket_size: int = 3
+    # Threshold must be >= 0 — negative values silently disable drift detection
+    # by making the within-threshold check unsatisfiable (review P10).
+    ledger_drift_threshold: int = Field(default=3, ge=0)
+    ledger_drift_bucket_size: int = Field(default=3, ge=1)
     ledger_db_path: str = "/var/lib/fusion/coach_ledger.db"
-    ledger_pending_timeout_s: float = 10.0
+    ledger_pending_timeout_s: float = Field(default=10.0, gt=0.0)

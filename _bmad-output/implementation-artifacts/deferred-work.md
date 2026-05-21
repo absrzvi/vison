@@ -354,3 +354,21 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - **No jitter on MQTT reconnect schedule** — single-train PoC has only one cloud-sync, so no thundering-herd risk. Add jitter when the fleet scales (multiple cloud-sync replicas reconnecting after a Mosquitto bounce).
 - **`truncate_old_journeys` is synchronous inside the event-store route handler** — blocks the uvicorn worker on multi-thousand-row deletes. Offload to a background task or run in a thread-pool executor in a follow-up.
 - **`pull_loop` cursor monotonicity check** — defence in depth against event-store re-emitting an older id; not needed today.
+
+
+## Deferred from: code review of 4-9-closed-ledger-reconciliation (2026-05-21)
+
+-  monotonically grows on timeout (AC5 + AC3 compliant). Needs reset on journey change. [fusion/src/fusion/ledger.py:240-251]
+-  may go arbitrarily negative pre-reconciliation; ADR-15 corrects only on drift bucket transition. [fusion/src/fusion/ledger.py:177]
+- Process-lifetime hidden state (, , ) does not reset on journey change. Implement journey-lifecycle hook in fusion. [fusion/src/fusion/ledger.py:295-298]
+- Drift bucket transition consumed during suppression — observation entirely within a suppression window is never reported. Revisit when D5 OBSERVATION is promoted to ALERT and operator playbook exists. [fusion/src/fusion/health.py:218-247]
+-  masks permission failures on writable-parent-of-unwritable directories. Tie to docker-compose volume mount for . [fusion/src/fusion/ledger.py:121-124]
+
+
+## Deferred from: code review of 4-9-closed-ledger-reconciliation (2026-05-21)
+
+- `unreconciled_exits` monotonically grows on timeout (AC5 + AC3 compliant). Needs reset on journey change. [fusion/src/fusion/ledger.py:240-251]
+- `ledger_count` may go arbitrarily negative pre-reconciliation; ADR-15 corrects only on drift bucket transition. [fusion/src/fusion/ledger.py:177]
+- Process-lifetime hidden state (`_last_drift_bucket`, `_seen_wagon`, `_seen_occupancy`) does not reset on journey change. Implement journey-lifecycle hook in fusion. [fusion/src/fusion/ledger.py:295-298]
+- Drift bucket transition consumed during suppression — observation entirely within a suppression window is never reported. Revisit when D5 OBSERVATION is promoted to ALERT and operator playbook exists. [fusion/src/fusion/health.py:218-247]
+- `mkdir parents=True, exist_ok=True` masks permission failures on writable-parent-of-unwritable directories. Tie to docker-compose volume mount for `/var/lib/fusion/coach_ledger.db`. [fusion/src/fusion/ledger.py:121-124]

@@ -373,3 +373,54 @@ def test_malformed_payload_occupancy_update_returns_422() -> None:
     )
     assert resp.status_code == 422
     client.close()
+
+
+@pytest.mark.unit
+def test_occupancy_update_suppressed_when_gate_closed_but_ledger_mutates() -> None:
+    """AC8 — when SuppressionGate.should_emit() is False, no envelope is POSTed
+    but ledger state (incl. drift-bucket transition + ADR-15 correction) still
+    mutates. Round-1 review P12."""
+    ctx = ContextState(
+        journey_id="OBB-TEST_t1_20260520",
+        vehicle_id="OBB-TEST",
+        maintenance_mode=True,  # suppression-active
+    )
+    client = _make_client(ctx)
+    # Reach into app.state to seed ledger state before the OCCUPANCY arrives:
+    # we need _seen_wagon populated for car-1 and a non-zero ledger_count so
+    # the camera count triggers a drift-bucket transition.
+    # Easiest way: call the wagon_exit endpoint first (it does not depend on
+    # the gate; ledger always mutates on WAGON_EXIT).
+    client.post(
+        "/candidates/wagon_exit",
+        json={
+            "track_id": 1,
+            "coach_from": "car-1",
+            "coach_to": "car-2",
+            "camera_id": "C1_FWD",
+            "traversal": "from_to",
+            "confidence": 0.9,
+            "expect_orphan": True,  # avoid arming a timer the TestClient won't drain
+        },
+    )
+
+    with respx.mock(assert_all_called=False) as rmock:
+        envelope_route = rmock.post("http://event-store-test/api/v1/events").mock(
+            return_value=httpx.Response(201)
+        )
+        resp = client.post(
+            "/candidates/occupancy_update",
+            json={
+                "car_id": "car-1",
+                "zone": None,
+                "occupancy_count": 50,
+                "occupancy_pct": 0.25,
+                "capacity": 200,
+                "service_tier": "standard",
+            },
+        )
+
+    assert resp.status_code == 202
+    # No envelope POSTed because SuppressionGate is closed under maintenance_mode.
+    assert not envelope_route.called
+    client.close()

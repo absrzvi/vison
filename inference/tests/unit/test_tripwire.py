@@ -116,7 +116,9 @@ async def test_wagon_exit_emitted_on_crossing() -> None:
     async with httpx.AsyncClient() as client:
         handler = _make_handler(event_store_client=client)
 
-        with respx.mock() as mock:
+        with respx.mock(assert_all_called=False) as mock:
+            mock.post("http://fusion:8090/candidates/wagon_exit").respond(202, json={})
+            mock.post("http://fusion:8090/candidates/wagon_entry").respond(202, json={})
             exit_route = mock.post("http://event-store:8000/api/v1/events").respond(
                 201, json={"data": {"event_id": "abc", "stored": True}}
             )
@@ -150,6 +152,7 @@ async def test_to_from_crossing_expect_orphan_no_timer() -> None:
                 201, json={"data": {"event_id": "e1", "stored": True}}
             )
             fusion_route = mock.post("http://fusion:8090/context").respond(200, json={})
+            mock.post("http://fusion:8090/candidates/wagon_exit").respond(202, json={})
             # to-side first (no crossing), then from-side → to_from crossing
             await handler._handle_detection(track_id=10, bbox=_BBOX_TO_SIDE, confidence=0.90)
             await handler._handle_detection(track_id=10, bbox=_BBOX_FROM_SIDE, confidence=0.90)
@@ -181,7 +184,9 @@ async def test_wagon_entry_emitted_on_adjacent_camera() -> None:
         aft_cam["camera_id"] = "C4_GANGWAY_AFT"
         aft_handler = _make_handler(camera=aft_cam, settings=settings, event_store_client=client)
 
-        with respx.mock() as mock:
+        with respx.mock(assert_all_called=False) as mock:
+            mock.post("http://fusion:8090/candidates/wagon_exit").respond(202, json={})
+            mock.post("http://fusion:8090/candidates/wagon_entry").respond(202, json={})
             route = mock.post("http://event-store:8000/api/v1/events").respond(
                 201, json={"data": {"event_id": "xyz", "stored": True}}
             )
@@ -241,7 +246,9 @@ async def test_orphaned_exit_logs_warning_and_notifies_fusion() -> None:
         handler = _make_handler(event_store_client=client)
         handler._orphan_timeout_s = 0.05
 
-        with respx.mock() as mock:
+        with respx.mock(assert_all_called=False) as mock:
+            mock.post("http://fusion:8090/candidates/wagon_exit").respond(202, json={})
+            mock.post("http://fusion:8090/candidates/wagon_entry").respond(202, json={})
             mock.post("http://event-store:8000/api/v1/events").respond(
                 201, json={"data": {"event_id": "e1", "stored": True}}
             )
@@ -272,7 +279,9 @@ async def test_recrossing_cancels_prior_orphan_timer() -> None:
         handler = _make_handler(event_store_client=client)
         handler._orphan_timeout_s = 0.10
 
-        with respx.mock() as mock:
+        with respx.mock(assert_all_called=False) as mock:
+            mock.post("http://fusion:8090/candidates/wagon_exit").respond(202, json={})
+            mock.post("http://fusion:8090/candidates/wagon_entry").respond(202, json={})
             mock.post("http://event-store:8000/api/v1/events").respond(
                 201, json={"data": {"event_id": "e1", "stored": True}}
             )
@@ -400,7 +409,9 @@ async def test_orphan_fusion_failure_logged() -> None:
         handler = _make_handler(event_store_client=client)
         handler._orphan_timeout_s = 0.05
 
-        with respx.mock() as mock:
+        with respx.mock(assert_all_called=False) as mock:
+            mock.post("http://fusion:8090/candidates/wagon_exit").respond(202, json={})
+            mock.post("http://fusion:8090/candidates/wagon_entry").respond(202, json={})
             mock.post("http://event-store:8000/api/v1/events").respond(
                 201, json={"data": {"event_id": "e1", "stored": True}}
             )
@@ -424,7 +435,9 @@ async def test_to_from_crossing_emits_wagon_exit_backward() -> None:
     async with httpx.AsyncClient() as client:
         handler = _make_handler(event_store_client=client)
 
-        with respx.mock() as mock:
+        with respx.mock(assert_all_called=False) as mock:
+            mock.post("http://fusion:8090/candidates/wagon_exit").respond(202, json={})
+            mock.post("http://fusion:8090/candidates/wagon_entry").respond(202, json={})
             route = mock.post("http://event-store:8000/api/v1/events").respond(
                 201, json={"data": {"event_id": "b1", "stored": True}}
             )
@@ -469,7 +482,8 @@ async def test_wagon_exit_fires_to_fusion_candidate_endpoint() -> None:
     async with httpx.AsyncClient() as client:
         handler = _make_handler(event_store_client=client)
 
-        with respx.mock() as mock:
+        with respx.mock(assert_all_called=False) as mock:
+            mock.post("http://fusion:8090/candidates/wagon_entry").respond(202, json={})
             mock.post("http://event-store:8000/api/v1/events").respond(
                 201, json={"data": {"event_id": "e1", "stored": True}}
             )
@@ -495,7 +509,8 @@ async def test_wagon_exit_fusion_unreachable_logs_warning_only() -> None:
     async with httpx.AsyncClient() as client:
         handler = _make_handler(event_store_client=client)
 
-        with respx.mock() as mock:
+        with respx.mock(assert_all_called=False) as mock:
+            mock.post("http://fusion:8090/candidates/wagon_entry").respond(202, json={})
             mock.post("http://event-store:8000/api/v1/events").respond(
                 201, json={"data": {"event_id": "e1", "stored": True}}
             )
@@ -517,7 +532,8 @@ async def test_wagon_entry_fires_to_fusion_candidate_endpoint() -> None:
         aft_cam["camera_id"] = "C4_GANGWAY_AFT"
         handler = _make_handler(camera=aft_cam, event_store_client=client)
 
-        with respx.mock() as mock:
+        with respx.mock(assert_all_called=False) as mock:
+            mock.post("http://fusion:8090/candidates/wagon_exit").respond(202, json={})
             mock.post("http://event-store:8000/api/v1/events").respond(
                 201, json={"data": {"event_id": "e2", "stored": True}}
             )
@@ -529,3 +545,26 @@ async def test_wagon_entry_fires_to_fusion_candidate_endpoint() -> None:
             await handler._handle_detection(track_id=910, bbox=_BBOX_TO_SIDE, confidence=0.9)
 
         assert fusion_route.called
+
+
+
+@pytest.mark.asyncio
+async def test_fusion_not_posted_when_event_store_fails() -> None:
+    """AC10 ordering: if event-store fails, the fusion fire-forget POST must
+    never fire (raise_for_status raises before the fusion block). Round-1 review P14."""
+    async with httpx.AsyncClient() as client:
+        handler = _make_handler(event_store_client=client)
+
+        with respx.mock(assert_all_called=False) as mock:
+            mock.post("http://event-store:8000/api/v1/events").respond(500)
+            fusion_route = mock.post("http://fusion:8090/candidates/wagon_exit").respond(202, json={})
+
+            with pytest.raises(httpx.HTTPStatusError):
+                await handler._handle_detection(
+                    track_id=920, bbox=_BBOX_FROM_SIDE, confidence=0.9
+                )
+                await handler._handle_detection(
+                    track_id=920, bbox=_BBOX_TO_SIDE, confidence=0.9
+                )
+
+            assert not fusion_route.called

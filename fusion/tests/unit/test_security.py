@@ -246,3 +246,83 @@ def test_no_raw_video_or_stream_url_in_envelope() -> None:
     for payload in samples:
         rendered = json.dumps(payload)
         assert not forbidden.search(rendered), f"forbidden pattern in payload: {rendered}"
+
+
+@pytest.mark.unit
+def test_no_raw_video_in_ledger_drift_observation_payload_or_logs(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Story 4-9 Security Tests: no raw video / CCTV URL / Hailo frame data may
+    appear in any LedgerDriftObservationPayload field or in ledger log lines.
+    Round-1 review P13."""
+    import json
+    import re
+
+    import structlog.testing
+    from oebb_shared.events.payloads import (
+        LedgerDriftObservationPayload,
+        OccupancyUpdatePayload,
+        WagonExitPayload,
+    )
+
+    from fusion.config import Settings
+    from fusion.ledger import CoachLedger
+
+    forbidden = re.compile(
+        r"(rtsp://|rtmp://|http(?:s)?://[^\s\"]+\.(?:mp4|mkv|ts|h264|hevc)"
+        r"|/dev/video|/var/lib/cctv|file://|raw_video|\.h264\b|\.hevc\b)",
+        re.IGNORECASE,
+    )
+
+    # Payload field check.
+    payload = LedgerDriftObservationPayload(
+        car_id="car-1",
+        camera_count=50,
+        ledger_count=55,
+        delta=5,
+        threshold=3,
+        surface_to_operator=False,
+    ).model_dump()
+    assert not forbidden.search(json.dumps(payload))
+
+    # Log-line check — exercise the ledger paths and confirm nothing forbidden
+    # appears in captured structlog events.
+    settings = Settings(
+        event_store_url="http://event-store-test",
+        ledger_db_path=str(tmp_path / "ledger.db"),
+        ledger_pending_timeout_s=0.05,
+    )
+    import asyncio
+
+    async def _drive() -> list[dict[str, object]]:
+        ledger = CoachLedger(settings)
+        try:
+            with structlog.testing.capture_logs() as captured:
+                await ledger.on_wagon_exit(
+                    WagonExitPayload(
+                        track_id=1,
+                        coach_from="car-1",
+                        coach_to="car-2",
+                        camera_id="C1_FWD",
+                        traversal="from_to",
+                        confidence=0.9,
+                        expect_orphan=True,
+                    )
+                )
+                ledger._rows["car-1"].ledger_count = 50
+                ledger.check_drift(
+                    OccupancyUpdatePayload(
+                        car_id="car-1",
+                        zone=None,
+                        occupancy_count=10,
+                        occupancy_pct=0.05,
+                        capacity=200,
+                        service_tier="standard",
+                    ),
+                    station_approach=False,
+                )
+            return list(captured)
+        finally:
+            ledger.close()
+
+    logs = asyncio.run(_drive())
+    rendered = json.dumps(logs, default=str)
+    assert not forbidden.search(rendered), f"forbidden pattern in ledger logs: {rendered}"

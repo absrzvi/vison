@@ -179,11 +179,7 @@ async def test_orphan_wagon_entry_increments_and_logs(tmp_path: Path) -> None:
         with structlog.testing.capture_logs() as logs:
             await ledger.on_wagon_entry(_wagon_entry(track_id=99))
         assert ledger._rows["car-2"].ledger_count == 1
-        assert any(
-            entry.get("reason") == "orphan_entry"
-            or "wagon_entry_orphan" in str(entry.get("event", ""))
-            for entry in logs
-        )
+        assert any(entry.get("reason") == "orphan_entry" for entry in logs)
     finally:
         ledger.close()
 
@@ -200,16 +196,19 @@ async def test_pending_exit_timeout_decrement_not_reverted(tmp_path: Path) -> No
     try:
         with structlog.testing.capture_logs() as logs:
             await ledger.on_wagon_exit(_wagon_exit(track_id=77))
-            await asyncio.sleep(0.15)
+            # Poll deterministically rather than sleep a fixed margin (review P17).
+            # Timeout in fixture is 0.05s; allow up to 2.0s before failing.
+            for _ in range(40):
+                if not ledger._pending_exits:
+                    break
+                await asyncio.sleep(0.05)
+            else:
+                raise AssertionError("pending exit timer did not fire")
         # Decrement stays; pending dropped; log emitted.
         assert ledger._rows["car-1"].ledger_count == -1
         assert ledger._rows["car-1"].unreconciled_exits == 1
-        assert 77 not in ledger._pending_exits
-        assert any(
-            entry.get("reason") == "exit_unreconciled"
-            or "exit_unreconciled" in str(entry.get("event", ""))
-            for entry in logs
-        )
+        assert not ledger._pending_exits
+        assert any(entry.get("reason") == "exit_unreconciled" for entry in logs)
     finally:
         ledger.close()
 
@@ -275,21 +274,23 @@ async def test_drift_bucket_change_emits_again(tmp_path: Path) -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_drift_cleared_emits_once_with_delta_zero(tmp_path: Path) -> None:
+    """Drift bucket transitioning back to 0 emits one cleared observation,
+    then subsequent same-bucket ticks are silent. Also pins
+    ``_last_drift_bucket`` to 0 after the cleared emit."""
     ledger = CoachLedger(_settings(tmp_path))
     try:
         await ledger.on_wagon_exit(_wagon_exit())
         ledger._rows["car-1"].ledger_count = 50
+        # Tick 1: enters drift bucket +13, ledger corrected to 10.
         obs1 = ledger.check_drift(_occupancy("car-1", 10), station_approach=False)
         assert obs1 is not None
-        # Now ledger == camera == 10. Next tick stays at 10 → bucket 0, but
-        # we already transitioned at obs1? No — obs1 transitioned to bucket +13.
-        # We need to drive bucket back to 0 explicitly.
-        # ledger now = 10 (corrected). camera = 10 → delta 0 → bucket 0 →
-        # transition from +13 → 0: emits cleared.
+        assert ledger._last_drift_bucket["car-1"] != 0
+        # Tick 2: ledger==camera==10 → bucket 0 → transition emits cleared.
         obs2 = ledger.check_drift(_occupancy("car-1", 10), station_approach=False)
         assert obs2 is not None
         assert obs2.delta == 0
-        # No-change next tick — should not emit.
+        assert ledger._last_drift_bucket["car-1"] == 0
+        # Tick 3: still bucket 0 → no emit.
         obs3 = ledger.check_drift(_occupancy("car-1", 10), station_approach=False)
         assert obs3 is None
     finally:
