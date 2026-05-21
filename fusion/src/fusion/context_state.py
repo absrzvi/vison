@@ -50,6 +50,12 @@ class ContextState:
     # so the FastAPI layer can detect a false→true transition.
     ramp_deployed: bool = False
 
+    # E4-S10: station_approach edge tracking — mirrors ramp_deployed pattern.
+    # Set by observe_station_approach_edge after the field has been updated by
+    # update_from_push, so callers always observe transitions against the
+    # PRIOR value.
+    _prev_station_approach: bool = False
+
     # car_id → door_id_or_zone → (track_id, monotonic_timestamp)
     _recent_accessibility: dict[str, dict[str, tuple[str, float]]] = field(default_factory=dict)
 
@@ -111,6 +117,21 @@ class ContextState:
         """
         edge = (not self.ramp_deployed) and ramp_deployed
         self.ramp_deployed = ramp_deployed
+        return edge
+
+    def observe_station_approach_edge(self) -> bool:
+        """Return True only on a false→true transition of ``station_approach``.
+
+        Mirrors :meth:`observe_ramp_signal`. The caller invokes this AFTER
+        :meth:`update_from_push` has applied the new ``station_approach`` value;
+        the method then compares against ``_prev_station_approach`` and updates
+        the prior so the next call sees the new baseline.
+
+        E4-S10: used by the /context handler to drive the station_approach
+        COACH_COMFORT_INDEX emit (AC2).
+        """
+        edge = (not self._prev_station_approach) and self.station_approach
+        self._prev_station_approach = self.station_approach
         return edge
 
     def resolve_car_id(self, idx: str | int) -> str:

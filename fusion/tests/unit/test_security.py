@@ -20,6 +20,7 @@ MODULES = (
     "health.py",
     "main.py",
     "ledger.py",
+    "comfort_index.py",
 )
 
 

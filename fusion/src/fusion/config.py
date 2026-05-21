@@ -37,3 +37,7 @@ class Settings(BaseSettings):
     ledger_drift_bucket_size: int = Field(default=3, ge=1)
     ledger_db_path: str = "/var/lib/fusion/coach_ledger.db"
     ledger_pending_timeout_s: float = Field(default=10.0, gt=0.0)
+
+    # E4-S10: Coach Comfort Index — emit on |Δoccupancy_pct| > threshold or
+    # on station_approach false→true edge.
+    comfort_index_pct_threshold: float = Field(default=0.10, ge=0.0, le=1.0)

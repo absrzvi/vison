@@ -160,6 +160,25 @@ def test_observe_ramp_signal_edge_trigger() -> None:
 
 
 @pytest.mark.unit
+def test_observe_station_approach_edge_trigger() -> None:
+    """E4-S10 AC2 — mirror of observe_ramp_signal for station_approach."""
+    ctx = ContextState()
+    # Default: station_approach=False, _prev_station_approach=False → no edge.
+    assert ctx.observe_station_approach_edge() is False
+    # Simulate ContextPushModel applying station_approach=True.
+    ctx.station_approach = True
+    assert ctx.observe_station_approach_edge() is True
+    # Steady True — no further edge.
+    assert ctx.observe_station_approach_edge() is False
+    # True → False: no edge (only false→true fires).
+    ctx.station_approach = False
+    assert ctx.observe_station_approach_edge() is False
+    # False → True again: edge fires.
+    ctx.station_approach = True
+    assert ctx.observe_station_approach_edge() is True
+
+
+@pytest.mark.unit
 def test_car_id_for_door_basic() -> None:
     ctx = ContextState()
     ctx.door_state = {"car-3:door-3B": "closing"}

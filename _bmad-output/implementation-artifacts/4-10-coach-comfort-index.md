@@ -1,6 +1,6 @@
 # Story 4.10: `fusion` Coach Comfort Index
 
-Status: ready-for-dev
+Status: review
 
 <!-- Created 2026-05-21 by bmad-create-story.
      DEPENDS ON Story 4-9 (closed-ledger): reuses fusion's `/candidates/occupancy_update`
@@ -52,55 +52,55 @@ Recorded inline rather than as a blocking checkpoint — both follow the precede
 
 ### `fusion/` — config
 
-- [ ] `fusion/src/fusion/config.py`: add `comfort_index_pct_threshold: float = 0.10`
+- [x] `fusion/src/fusion/config.py`: add `comfort_index_pct_threshold: float = 0.10`
 
 ### `fusion/` — new `comfort_index.py`
 
-- [ ] Create `fusion/src/fusion/comfort_index.py`
-  - [ ] `ComfortIndexState` class with `_last_emitted_pct: dict[str, float]` and `_observed_coaches: set[str]` (AC2 needs the set to know which coaches to emit on station_approach edge)
-  - [ ] `on_occupancy_update(payload: OccupancyUpdatePayload) -> CoachComfortIndexPayload | None` — AC1, AC4; returns payload to emit, or `None` if no emit; mutates `_last_emitted_pct[car_id]` only when a payload is returned (AC5 invariant)
-  - [ ] `on_station_approach_edge() -> list[CoachComfortIndexPayload]` — AC2; returns one payload per coach in `_observed_coaches`; does NOT mutate `_last_emitted_pct` (station-edge emits are a separate trigger from delta-based emits)
-  - [ ] `_compute_payload(car_id, occupancy_pct) -> CoachComfortIndexPayload` — `comfort_score = max(0.0, min(1.0, 1.0 - occupancy_pct))`; `temperature_c=None`, `noise_db=None`
+- [x] Create `fusion/src/fusion/comfort_index.py`
+  - [x] `ComfortIndexState` class with `_last_emitted_pct: dict[str, float]` and `_observed_coaches: set[str]` (AC2 needs the set to know which coaches to emit on station_approach edge)
+  - [x] `on_occupancy_update(payload: OccupancyUpdatePayload) -> CoachComfortIndexPayload | None` — AC1, AC4; returns payload to emit, or `None` if no emit; mutates `_last_emitted_pct[car_id]` only when a payload is returned (AC5 invariant)
+  - [x] `on_station_approach_edge() -> list[CoachComfortIndexPayload]` — AC2; returns one payload per coach in `_observed_coaches`; does NOT mutate `_last_emitted_pct` (station-edge emits are a separate trigger from delta-based emits)
+  - [x] `_compute_payload(car_id, occupancy_pct) -> CoachComfortIndexPayload` — `comfort_score = max(0.0, min(1.0, 1.0 - occupancy_pct))`; `temperature_c=None`, `noise_db=None`
 
 ### `fusion/` — wire into health handlers
 
-- [ ] `fusion/src/fusion/health.py`:
-  - [ ] Extend `build_app` signature with `comfort: ComfortIndexState`
-  - [ ] In the `/candidates/occupancy_update` handler added by 4-9: after `ledger.check_drift(...)`, call `comfort.on_occupancy_update(payload)`; if it returns a payload, gate through `gate.should_emit()` → `enricher.emit_envelope(event_type_name="COACH_COMFORT_INDEX", payload=..., severity="info")`; wrap downstream errors so the handler still returns 202
-  - [ ] In the `/context` handler: detect station_approach false→true edge via `ContextState.observe_station_approach_edge()` (new method — see ContextState task below); if edge fires, dispatch `comfort.on_station_approach_edge()` and emit each returned payload through the same `gate → emit_envelope` pipeline
+- [x] `fusion/src/fusion/health.py`:
+  - [x] Extend `build_app` signature with `comfort: ComfortIndexState`
+  - [x] In the `/candidates/occupancy_update` handler added by 4-9: after `ledger.check_drift(...)`, call `comfort.on_occupancy_update(payload)`; if it returns a payload, gate through `gate.should_emit()` → `enricher.emit_envelope(event_type_name="COACH_COMFORT_INDEX", payload=..., severity="info")`; wrap downstream errors so the handler still returns 202
+  - [x] In the `/context` handler: detect station_approach false→true edge via `ContextState.observe_station_approach_edge()` (new method — see ContextState task below); if edge fires, dispatch `comfort.on_station_approach_edge()` and emit each returned payload through the same `gate → emit_envelope` pipeline
 
 ### `fusion/` — extend `ContextState`
 
-- [ ] `fusion/src/fusion/context_state.py`:
-  - [ ] Add `_prev_station_approach: bool = False` field
-  - [ ] Add `observe_station_approach_edge() -> bool` method — returns `True` only on `False → True` transitions, mirrors existing `observe_ramp_signal` pattern (architecture line ~106)
-  - [ ] Call this from `update_from_push` — set `_prev_station_approach` AFTER the existing `station_approach` field update so the next call sees the new prior
+- [x] `fusion/src/fusion/context_state.py`:
+  - [x] Add `_prev_station_approach: bool = False` field
+  - [x] Add `observe_station_approach_edge() -> bool` method — returns `True` only on `False → True` transitions, mirrors existing `observe_ramp_signal` pattern (architecture line ~106)
+  - [x] Call this from `update_from_push` — set `_prev_station_approach` AFTER the existing `station_approach` field update so the next call sees the new prior
 
 ### `fusion/` — wire into lifespan
 
-- [ ] `fusion/src/fusion/main.py`: construct `ComfortIndexState()` in `lifespan`; pass to `build_app`
+- [x] `fusion/src/fusion/main.py`: construct `ComfortIndexState()` in `lifespan`; pass to `build_app`
 
 ### Tests
 
-- [ ] `fusion/tests/unit/test_comfort_index.py` — cover all AC11 branches; `respx.mock` for event-store POSTs; `structlog.testing.capture_logs` for log assertions
-- [ ] `fusion/tests/unit/test_security.py` — extend module scan list to include `comfort_index`
-- [ ] `fusion/tests/unit/test_health.py` — add cases for comfort-index emit on `/candidates/occupancy_update` (success + downstream error → still 202) and on `/context` station_approach edge
-- [ ] `fusion/tests/unit/test_context.py` — add cases for `observe_station_approach_edge` mirroring existing `observe_ramp_signal` test cases
+- [x] `fusion/tests/unit/test_comfort_index.py` — cover all AC11 branches; `respx.mock` for event-store POSTs; `structlog.testing.capture_logs` for log assertions
+- [x] `fusion/tests/unit/test_security.py` — extend module scan list to include `comfort_index`
+- [x] `fusion/tests/unit/test_health.py` — add cases for comfort-index emit on `/candidates/occupancy_update` (success + downstream error → still 202) and on `/context` station_approach edge
+- [x] `fusion/tests/unit/test_context.py` — add cases for `observe_station_approach_edge` mirroring existing `observe_ramp_signal` test cases
 
 ### Quality gates green
 
-- [ ] `cd fusion && pytest --strict-markers --cov=src/fusion --cov-fail-under=90 -q`
-- [ ] `cd fusion && mypy --strict src/ && ruff check src/ tests/`
+- [x] `cd fusion && pytest --strict-markers --cov=src/fusion --cov-fail-under=90 -q`
+- [x] `cd fusion && mypy --strict src/ && ruff check src/ tests/`
 
 ## Security Tests
 
 **fusion endpoints (no new endpoints — reuses 4-9's `/candidates/occupancy_update` and existing `/context`):**
-- [ ] No new auth surface added; existing 4-9 + `/context` 422 malformed-payload tests cover the input validation surface.
+- [x] No new auth surface added; existing 4-9 + `/context` 422 malformed-payload tests cover the input validation surface.
 
 **OEBB-specific:**
-- [ ] No raw video, CCTV URL, or Hailo inference frame data appears in any comfort-index payload or log line.
-- [ ] `CoachComfortIndexPayload` is schema-validated via Pydantic v2 before POST (already enforced by `Enrichment.emit_envelope`).
-- [ ] No escalation state machine concern — this is informational telemetry, not an alert.
+- [x] No raw video, CCTV URL, or Hailo inference frame data appears in any comfort-index payload or log line.
+- [x] `CoachComfortIndexPayload` is schema-validated via Pydantic v2 before POST (already enforced by `Enrichment.emit_envelope`).
+- [x] No escalation state machine concern — this is informational telemetry, not an alert.
 
 ## Dev Notes
 
@@ -236,10 +236,39 @@ ruff check src/ tests/
 
 ### Agent Model Used
 
-_to be filled by dev agent_
+claude-opus-4-7[1m] (bmad-dev-story workflow), 2026-05-21.
 
 ### Debug Log References
 
+- One ruff `I001` fix (import ordering after `json` was inserted between `from __future__` and the rest of the imports in `test_health.py`).
+
 ### Completion Notes List
 
+- **AC1** — `on_occupancy_update` returns a payload only when `|occupancy_pct − _last_emitted_pct[car_id]| > pct_threshold`. Strict greater (`> threshold`); delta exactly at threshold does not emit (pinned by `test_delta_exactly_at_threshold_no_emit`). Baseline advances only on emit.
+- **AC2** — `/context` handler calls `ctx.observe_station_approach_edge()`; on `True`, dispatches `comfort.on_station_approach_edge()` and emits each returned payload through the standard `gate → emit_envelope` pipeline.
+- **AC3** — `CoachComfortIndexPayload` is the shipped shape (D1). `comfort_score = max(0.0, min(1.0, 1.0 − occupancy_pct))`; `temperature_c=None`, `noise_db=None` (D2/D3).
+- **AC4** — First OCCUPANCY for a coach seeds `_last_emitted_pct` and `_observed_coaches`, returns `None`. Pinned by `test_first_occupancy_seeds_baseline_no_emit`.
+- **AC5** — Under suppression, the handler skips the call to `comfort.on_occupancy_update` entirely, so `_last_emitted_pct` is not advanced. Side-effect: a coach first observed during a suppression window won't appear in `_observed_coaches` until the gate re-opens — explicit comment in `health.py`. This is the conservative interpretation: no telemetry escapes, and `_observed_coaches` matches the set of coaches the system has actually published comfort signals for.
+- **AC6** — Handled by `Enrichment._build_envelope` returning `None` when `ctx.journey_id is None` (existing behaviour); no change needed in this story.
+- **AC11** — `pytest --cov=src/fusion --cov-fail-under=90` → 139 passed (121 baseline + 18 new), **94.03%** cov. `mypy --strict src/` clean. `ruff check src/ tests/` clean.
+
 ### File List
+
+**Added:**
+- `fusion/src/fusion/comfort_index.py`
+- `fusion/tests/unit/test_comfort_index.py`
+
+**Modified:**
+- `fusion/src/fusion/config.py` — added `comfort_index_pct_threshold` (ge=0.0, le=1.0)
+- `fusion/src/fusion/context_state.py` — added `_prev_station_approach` field + `observe_station_approach_edge()` method
+- `fusion/src/fusion/health.py` — added `comfort` param to `build_app`; extended `/candidates/occupancy_update` with comfort emit; extended `/context` with station-approach-edge dispatch
+- `fusion/src/fusion/main.py` — construct + pass `ComfortIndexState` in lifespan
+- `fusion/tests/unit/test_health.py` — `_make_client` passes comfort; 5 new tests (delta emit, suppression, 202-on-failure, station-edge multi-coach, station-edge steady-state)
+- `fusion/tests/unit/test_security.py` — `comfort_index.py` added to MODULES scan
+- `fusion/tests/unit/test_context.py` — added `test_observe_station_approach_edge_trigger`
+- `fusion/tests/contract/test_candidate_payload_contract.py` — fixture passes comfort
+- `fusion/tests/integration/test_fusion_pipeline.py` — fixture passes comfort
+
+### Change Log
+
+- 2026-05-21 — Implemented Coach Comfort Index per Story 4-10 D1–D5. Added `ComfortIndexState` with delta-driven emit (AC1) and station-approach-edge multi-coach emit (AC2). Reused 4-9's `/candidates/occupancy_update` ingest path. Shipped `CoachComfortIndexPayload` shape (D1) with `temperature_c`/`noise_db=None` (D2). Suppression skips both emit and baseline advance (AC5 invariant). 139 fusion tests, fusion cov 94.03%, mypy/ruff clean. Inference (149) + shared (130) unaffected.

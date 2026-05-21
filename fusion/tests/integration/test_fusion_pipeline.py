@@ -19,6 +19,7 @@ import respx
 from fastapi.testclient import TestClient
 from oebb_shared.events import EventEnvelope, EventType
 
+from fusion.comfort_index import ComfortIndexState
 from fusion.config import Settings
 from fusion.context_state import ContextState
 from fusion.enrichment import Enrichment
@@ -40,9 +41,10 @@ def client() -> Iterator[TestClient]:
     enricher = Enrichment(http_client, settings, ctx)
     gate = SuppressionGate(ctx, enricher)
     ledger = CoachLedger(settings)
+    comfort = ComfortIndexState(settings)
     app = build_app(
         settings=settings, ctx=ctx, gate=gate, enricher=enricher, client=http_client,
-        ledger=ledger,
+        ledger=ledger, comfort=comfort,
     )
     test_client = TestClient(app)
     try:

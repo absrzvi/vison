@@ -38,6 +38,7 @@ from oebb_shared.events.payloads import OccupancyUpdatePayload
 
 from fusion import accessibility as accessibility_mod
 from fusion import door_obstruction as door_obstruction_mod
+from fusion.comfort_index import ComfortIndexState
 from fusion.config import Settings
 from fusion.context_state import ContextState
 from fusion.enrichment import Enrichment
@@ -75,6 +76,7 @@ def build_app(
     enricher: Enrichment,
     client: httpx.AsyncClient,
     ledger: CoachLedger,
+    comfort: ComfortIndexState,
 ) -> FastAPI:
     app = FastAPI(title="fusion")
     readiness = _ReadinessCache()
@@ -130,6 +132,32 @@ def build_app(
                             station_id=station_id,
                             error=str(exc),
                         )
+
+        # E4-S10 AC2: station_approach false→true edge — emit one
+        # COACH_COMFORT_INDEX per observed coach. Suppression-gated;
+        # downstream errors logged but do not break the /context handler.
+        if ctx.observe_station_approach_edge():
+            if not gate.should_emit():
+                log.debug(
+                    "context.comfort_index_suppressed",
+                    reason="comfort_index_suppressed",
+                    trigger="station_approach_edge",
+                )
+            else:
+                for comfort_payload in comfort.on_station_approach_edge():
+                    try:
+                        await enricher.emit_envelope(
+                            event_type_name="COACH_COMFORT_INDEX",
+                            payload=comfort_payload.model_dump(),
+                            severity="info",
+                        )
+                    except httpx.HTTPError as exc:
+                        log.warning(
+                            "context.comfort_index_emit_failed",
+                            car_id=comfort_payload.car_id,
+                            error=str(exc),
+                        )
+
         return {"status": "accepted"}
 
     @app.post("/candidates/door_obstruction", status_code=202)
@@ -215,6 +243,7 @@ def build_app(
     async def candidate_occupancy_update(
         payload: OccupancyUpdatePayload,
     ) -> dict[str, bool]:
+        # Story 4-9 — Ledger drift check.
         try:
             observation = ledger.check_drift(
                 payload, station_approach=ctx.station_approach
@@ -225,32 +254,60 @@ def build_app(
                 car_id=payload.car_id,
                 error=str(exc),
             )
-            return {"received": True}
+            observation = None
 
-        if observation is None:
-            return {"received": True}
+        if observation is not None:
+            if not gate.should_emit():
+                log.debug(
+                    "ledger.drift_suppressed",
+                    car_id=payload.car_id,
+                    delta=observation.delta,
+                    reason="ledger_drift_suppressed",
+                )
+            else:
+                try:
+                    await enricher.emit_envelope(
+                        event_type_name="LEDGER_DRIFT_OBSERVATION",
+                        payload=observation.model_dump(),
+                        severity="info",
+                    )
+                except httpx.HTTPError as exc:
+                    log.warning(
+                        "candidate.occupancy_update.emit_failed",
+                        car_id=payload.car_id,
+                        error=str(exc),
+                    )
 
+        # Story 4-10 — Coach Comfort Index (AC1, AC4, AC5).
+        # AC5 invariant: under suppression we drop the emit AND avoid advancing
+        # `_last_emitted_pct`. We achieve that by skipping `on_occupancy_update`
+        # entirely while suppressed. Side-effect: a coach first observed during
+        # a suppression window won't appear in `_observed_coaches` until the
+        # gate re-opens — that matches AC5's intent (no telemetry escapes,
+        # state stays consistent with what we've actually published).
         if not gate.should_emit():
             log.debug(
-                "ledger.drift_suppressed",
+                "candidate.comfort_index_suppressed",
+                reason="comfort_index_suppressed",
                 car_id=payload.car_id,
-                delta=observation.delta,
-                reason="ledger_drift_suppressed",
+                occupancy_pct=payload.occupancy_pct,
             )
-            return {"received": True}
+        else:
+            comfort_payload = comfort.on_occupancy_update(payload)
+            if comfort_payload is not None:
+                try:
+                    await enricher.emit_envelope(
+                        event_type_name="COACH_COMFORT_INDEX",
+                        payload=comfort_payload.model_dump(),
+                        severity="info",
+                    )
+                except httpx.HTTPError as exc:
+                    log.warning(
+                        "candidate.comfort_index_emit_failed",
+                        car_id=payload.car_id,
+                        error=str(exc),
+                    )
 
-        try:
-            await enricher.emit_envelope(
-                event_type_name="LEDGER_DRIFT_OBSERVATION",
-                payload=observation.model_dump(),
-                severity="info",
-            )
-        except httpx.HTTPError as exc:
-            log.warning(
-                "candidate.occupancy_update.emit_failed",
-                car_id=payload.car_id,
-                error=str(exc),
-            )
         return {"received": True}
 
     return app

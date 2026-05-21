@@ -16,6 +16,7 @@ import structlog
 import uvicorn
 from fastapi import FastAPI
 
+from fusion.comfort_index import ComfortIndexState
 from fusion.config import Settings
 from fusion.context_state import ContextState
 from fusion.enrichment import Enrichment
@@ -36,6 +37,7 @@ def main() -> None:  # pragma: no cover — integration entry point
             enricher = Enrichment(client, settings, ctx)
             gate = SuppressionGate(ctx, enricher)
             ledger = CoachLedger(settings)
+            comfort = ComfortIndexState(settings)
             wired_app = build_app(
                 settings=settings,
                 ctx=ctx,
@@ -43,6 +45,7 @@ def main() -> None:  # pragma: no cover — integration entry point
                 enricher=enricher,
                 client=client,
                 ledger=ledger,
+                comfort=comfort,
             )
             for route in wired_app.routes:
                 app.router.routes.append(route)
@@ -51,6 +54,7 @@ def main() -> None:  # pragma: no cover — integration entry point
             app.state.gate = gate
             app.state.enricher = enricher
             app.state.ledger = ledger
+            app.state.comfort = comfort
             log.info("fusion.started", port=settings.port)
             try:
                 yield

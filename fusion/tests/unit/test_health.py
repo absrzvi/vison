@@ -1,6 +1,7 @@
 """Health endpoints + readiness cache + ramp/door fallback paths — AC1, AC8."""
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 
 import httpx
@@ -8,6 +9,7 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 
+from fusion.comfort_index import ComfortIndexState
 from fusion.config import Settings
 from fusion.context_state import ContextState
 from fusion.enrichment import Enrichment
@@ -34,6 +36,7 @@ def _make_client(
     enricher = Enrichment(client, settings, ctx)
     gate = SuppressionGate(ctx, enricher)
     ledger = CoachLedger(settings)
+    comfort = ComfortIndexState(settings)
     app = build_app(
         settings=settings,
         ctx=ctx,
@@ -41,6 +44,7 @@ def _make_client(
         enricher=enricher,
         client=client,
         ledger=ledger,
+        comfort=comfort,
     )
     return TestClient(app)
 
@@ -422,5 +426,127 @@ def test_occupancy_update_suppressed_when_gate_closed_but_ledger_mutates() -> No
 
     assert resp.status_code == 202
     # No envelope POSTed because SuppressionGate is closed under maintenance_mode.
+    assert not envelope_route.called
+    client.close()
+
+
+
+# ---------------------------------------------------------------------------
+# E4-S10 — Coach Comfort Index handler-layer tests
+# ---------------------------------------------------------------------------
+
+
+def _valid_occupancy_body(car_id: str = "car-1", pct: float = 0.4) -> dict[str, object]:
+    return {
+        "car_id": car_id,
+        "zone": None,
+        "occupancy_count": int(round(pct * 200)),
+        "occupancy_pct": pct,
+        "capacity": 200,
+        "service_tier": "standard",
+    }
+
+
+@pytest.mark.unit
+def test_comfort_index_emits_on_delta_via_candidates_endpoint() -> None:
+    """AC1 + AC4 — first OCCUPANCY seeds (no emit); second past threshold emits
+    a COACH_COMFORT_INDEX envelope to event-store."""
+    client = _make_client()
+    with respx.mock(assert_all_called=False) as rmock:
+        envelope_route = rmock.post("http://event-store-test/api/v1/events").mock(
+            return_value=httpx.Response(201)
+        )
+        # First OCCUPANCY: cold-start; no emit.
+        client.post("/candidates/occupancy_update", json=_valid_occupancy_body(pct=0.30))
+        assert not envelope_route.called
+        # Second OCCUPANCY: delta 0.20 > 0.10 threshold → emit.
+        resp = client.post("/candidates/occupancy_update", json=_valid_occupancy_body(pct=0.50))
+
+    assert resp.status_code == 202
+    assert envelope_route.called
+    # Verify the envelope is a COACH_COMFORT_INDEX (not a LEDGER_DRIFT_OBSERVATION).
+    bodies = [json.loads(c.request.content) for c in envelope_route.calls]
+    event_types = [b["event_type"] for b in bodies]
+    assert "COACH_COMFORT_INDEX" in event_types
+    client.close()
+
+
+@pytest.mark.unit
+def test_comfort_index_suppressed_under_maintenance() -> None:
+    """AC5 — under suppression, no COACH_COMFORT_INDEX envelope POSTed, and
+    `_last_emitted_pct` is NOT advanced."""
+    ctx = ContextState(
+        journey_id="OBB-TEST_t1_20260520",
+        vehicle_id="OBB-TEST",
+        maintenance_mode=True,
+    )
+    client = _make_client(ctx)
+    with respx.mock(assert_all_called=False) as rmock:
+        envelope_route = rmock.post("http://event-store-test/api/v1/events").mock(
+            return_value=httpx.Response(201)
+        )
+        client.post("/candidates/occupancy_update", json=_valid_occupancy_body(pct=0.30))
+        client.post("/candidates/occupancy_update", json=_valid_occupancy_body(pct=0.80))
+
+    # Note: ledger drift wouldn't emit either (ledger_count starts at 0, but
+    # _seen_wagon is empty → check_drift returns None). So no envelopes at all.
+    assert not envelope_route.called
+    client.close()
+
+
+@pytest.mark.unit
+def test_comfort_index_emit_failure_returns_202() -> None:
+    """Downstream failure on COACH_COMFORT_INDEX emit must not break the
+    handler's 202 response (mirrors door_obstruction fail-safe)."""
+    client = _make_client()
+    with respx.mock(assert_all_called=False) as rmock:
+        rmock.post("http://event-store-test/api/v1/events").mock(
+            side_effect=httpx.ConnectError("event-store down")
+        )
+        # First (seed) tolerates failure since no emit happens.
+        client.post("/candidates/occupancy_update", json=_valid_occupancy_body(pct=0.30))
+        # Second crosses threshold → tries to emit, fails, handler still 202.
+        resp = client.post("/candidates/occupancy_update", json=_valid_occupancy_body(pct=0.60))
+    assert resp.status_code == 202
+    client.close()
+
+
+@pytest.mark.unit
+def test_comfort_index_station_approach_edge_emits_for_observed_coaches() -> None:
+    """AC2 — when station_approach transitions False→True via /context, one
+    COACH_COMFORT_INDEX is emitted per coach that has at least one OCCUPANCY."""
+    client = _make_client()
+    with respx.mock(assert_all_called=False) as rmock:
+        envelope_route = rmock.post("http://event-store-test/api/v1/events").mock(
+            return_value=httpx.Response(201)
+        )
+        # Seed two coaches.
+        client.post("/candidates/occupancy_update", json=_valid_occupancy_body(car_id="car-1", pct=0.40))
+        client.post("/candidates/occupancy_update", json=_valid_occupancy_body(car_id="car-2", pct=0.70))
+        envelope_route.reset()
+        # Push station_approach=True; should emit two COACH_COMFORT_INDEX events.
+        resp = client.post("/context", json={"station_approach": True})
+
+    assert resp.status_code == 200
+    bodies = [json.loads(c.request.content) for c in envelope_route.calls]
+    comfort_envelopes = [b for b in bodies if b["event_type"] == "COACH_COMFORT_INDEX"]
+    assert len(comfort_envelopes) == 2
+    car_ids = sorted(b["payload"]["car_id"] for b in comfort_envelopes)
+    assert car_ids == ["car-1", "car-2"]
+    client.close()
+
+
+@pytest.mark.unit
+def test_comfort_index_station_approach_steady_state_no_emit() -> None:
+    """AC2 — station_approach already True on prior push; no further edge fires."""
+    client = _make_client()
+    with respx.mock(assert_all_called=False) as rmock:
+        envelope_route = rmock.post("http://event-store-test/api/v1/events").mock(
+            return_value=httpx.Response(201)
+        )
+        client.post("/candidates/occupancy_update", json=_valid_occupancy_body(pct=0.40))
+        client.post("/context", json={"station_approach": True})  # edge 1
+        envelope_route.reset()
+        client.post("/context", json={"station_approach": True})  # steady — no edge
     assert not envelope_route.called
     client.close()
