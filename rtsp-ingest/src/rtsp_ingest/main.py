@@ -72,5 +72,5 @@ app.router.lifespan_context = _lifespan
 
 if __name__ == "__main__":
     uvicorn.run(
-        "rtsp_ingest.main:app", host="127.0.0.1", port=settings.context_push_port, reload=False
+        "rtsp_ingest.main:app", host="0.0.0.0", port=settings.context_push_port, reload=False
     )

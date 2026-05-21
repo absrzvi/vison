@@ -386,6 +386,16 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 -  masks permission failures on writable-parent-of-unwritable directories. Tie to docker-compose volume mount for . [fusion/src/fusion/ledger.py:121-124]
 
 
+## Deferred from: code review of 1-5-1-inference-dockerfile (2026-05-21)
+
+- **P2** — No `inference` service in `docker-compose.yml` — scope is story 1-5-3 (docker-compose.onboard.yml); inference service wiring deferred to that story. [docker-compose.yml]
+- **P6** — Mutable base image tag `hailo-software-suite:4.23` — cannot verify/pin digest without Hailo Developer Zone registry access; pin to sha256 digest when hardware access is available. [inference/Dockerfile:16]
+- **P8** — No `HEALTHCHECK` in Dockerfile — pre-existing pattern; event-store/cloud-backend also lack Dockerfile-level HEALTHCHECK; wire in compose healthcheck in story 1-5-3. [inference/Dockerfile]
+- **P9** — `degraded` readiness returns HTTP 200 — pre-existing in health.py; Kubernetes readiness probes treat 200 as pass; consider 503 for degraded in a future hardening story. [inference/src/inference/health.py]
+- **P10** — Editable install in production image — matches existing event-store/cloud-backend pattern; switch to non-editable `pip install .` across all containers in a hardening story. [inference/Dockerfile:30]
+- **P13** — `EXPOSE 8081` fragile if `INFERENCE_CONTEXT_PUSH_PORT` is overridden via env — low risk; document in CLAUDE.md that EXPOSE must match the env var if overridden. [inference/Dockerfile:44]
+- **P14/P15** — Daemon-thread shutdown race with in-flight async POSTs; no `STOPSIGNAL` — pre-existing design in main.py; add graceful drain + `STOPSIGNAL SIGTERM` handling in an inference hardening story. [inference/src/inference/main.py]
+
 ## Deferred from: code review of 4-10-coach-comfort-index (2026-05-21)
 
 - `gate.should_emit()` called twice per `/candidates/occupancy_update` handler (ledger + comfort blocks) — double call if gate becomes stateful. [fusion/src/fusion/health.py]
@@ -400,3 +410,13 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - Process-lifetime hidden state (`_last_drift_bucket`, `_seen_wagon`, `_seen_occupancy`) does not reset on journey change. Implement journey-lifecycle hook in fusion. [fusion/src/fusion/ledger.py:295-298]
 - Drift bucket transition consumed during suppression — observation entirely within a suppression window is never reported. Revisit when D5 OBSERVATION is promoted to ALERT and operator playbook exists. [fusion/src/fusion/health.py:218-247]
 - `mkdir parents=True, exist_ok=True` masks permission failures on writable-parent-of-unwritable directories. Tie to docker-compose volume mount for `/var/lib/fusion/coach_ledger.db`. [fusion/src/fusion/ledger.py:121-124]
+
+## Deferred from: code review of 1-5-2-rtsp-ingest-dockerfile (2026-05-21)
+
+- P5 — `pip install -e .` in production image; pre-existing pattern across all containers; revisit when switching to multi-stage builds.
+- P6 — No `HEALTHCHECK` directive in Dockerfile; pre-existing across all containers; add when docker-compose.onboard.yml is wired (story 1-5-3).
+- P7 — Mutable base image tag `hailo-software-suite:4.23` without digest pin; cannot verify digest without Hailo Developer Zone registry access; pin on first hardware bring-up.
+- P8 — `POST /context` reachable across docker bridge (not just VLAN-isolated pollers); PoC design decision; VLAN isolation is stated auth boundary; add X-API-Key at fleet rollout.
+- P9 — COPY paths require monorepo-root build context; established pattern documented in CLAUDE.md; enforce via docker-compose `context: .` in story 1-5-3.
+
+

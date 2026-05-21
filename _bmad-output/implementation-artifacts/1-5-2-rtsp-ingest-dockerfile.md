@@ -1,6 +1,6 @@
 # Story 1.5-2: `rtsp-ingest` Dockerfile
 
-Status: review
+Status: done
 
 ## Story
 
@@ -152,3 +152,18 @@ No `env_prefix` defined — env var names map directly from field names.
 - `VOLUME ["/config"]` declared; no `/models` needed (no .hef in rtsp-ingest)
 - `docker build --check` confirmed syntax valid; only failure is expected Hailo registry pull
 - CLAUDE.md covers all 8 src files, priority scheduling pattern, P3 gate, door-release override, credential hygiene, coverage exclusion
+
+### Review Findings (code-review 2026-05-21, Opus 4.7)
+
+**Patches (4)**
+- [x] [Review][Patch] P1 — env var prefix mismatch: added `env_prefix="RTSP_INGEST_"` to `SettingsConfigDict` [rtsp-ingest/src/rtsp_ingest/config.py:7]
+- [x] [Review][Patch] P2 — `main.py` `__main__` block binds `127.0.0.1` → fixed to `0.0.0.0` [rtsp-ingest/src/rtsp_ingest/main.py:75]
+- [x] [Review][Patch] P3 — Dockerfile comment duplicate phrase — dismissed (false positive; comment was already correct)
+- [x] [Review][Patch] P4 — CLAUDE.md runtime config table expanded to all 12 `RTSP_INGEST_*` env vars [rtsp-ingest/CLAUDE.md]
+
+**Deferred (5)**
+- [x] [Review][Defer] P5 — `pip install -e .` in production image — deferred, pre-existing pattern across all containers (event-store, cloud-backend, inference)
+- [x] [Review][Defer] P6 — no `HEALTHCHECK` directive — deferred, pre-existing across all containers (same as inference P8)
+- [x] [Review][Defer] P7 — mutable base image tag `hailo-software-suite:4.23` without digest pin — deferred, cannot verify digest without Hailo registry (same as inference P6)
+- [x] [Review][Defer] P8 — `POST /context` reachable across docker bridge — deferred, PoC design decision; VLAN isolation is stated auth boundary; documented in security notes (same as inference D2)
+- [x] [Review][Defer] P9 — COPY paths require monorepo-root build context — deferred, established pattern; documented in CLAUDE.md

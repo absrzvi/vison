@@ -96,11 +96,22 @@ Door-release override (`event: "door_release"`): calls `scheduler.override_to_p1
 
 These must be supplied at container startup (not in the Dockerfile):
 
-| Env var | Required | Default | Notes |
-|---|---|---|---|
-| `RTSP_INGEST_CAMERAS_JSON_PATH` | required | `cameras.json` | Set to `/config/cameras.json` in Dockerfile; bind-mount actual file |
-| `RTSP_INGEST_VEHICLE_ID` | required | `OBB-TEST` | Override for real train ID |
-| `RTSP_INGEST_EVENT_STORE_URL` | required | `http://event-store:8000` | Correct for onboard compose stack |
+All env vars use the `RTSP_INGEST_` prefix (from `env_prefix` in `Settings`).
+
+| Env var | Default | Notes |
+|---|---|---|
+| `RTSP_INGEST_CAMERAS_JSON_PATH` | `cameras.json` | Set to `/config/cameras.json` in Dockerfile; bind-mount actual file |
+| `RTSP_INGEST_VEHICLE_ID` | `OBB-TEST` | Override for real train ID |
+| `RTSP_INGEST_EVENT_STORE_URL` | `http://event-store:8000` | Correct for onboard compose stack |
+| `RTSP_INGEST_CONTEXT_PUSH_PORT` | `8080` | Port uvicorn binds; matches `EXPOSE 8080` |
+| `RTSP_INGEST_TOPS_BUDGET_PCT_THRESHOLD` | `0.90` | Fraction of TOPS at which P2 throttle kicks in |
+| `RTSP_INGEST_TOPS_TOTAL` | `26.0` | Total Hailo-8 TOPS budget |
+| `RTSP_INGEST_P1_FPS` | `10.0` | P1 (door/vestibule) frame rate |
+| `RTSP_INGEST_P2_FPS` | `5.0` | P2 (interior) frame rate at normal load |
+| `RTSP_INGEST_P2_THROTTLED_FPS` | `2.0` | P2 frame rate under TOPS pressure |
+| `RTSP_INGEST_P3_FPS` | `8.0` | P3 (exterior) frame rate during station window |
+| `RTSP_INGEST_STATION_SPEED_THRESHOLD_KMH` | `20.0` | Speed below which P3 station gate activates |
+| `RTSP_INGEST_DOOR_RELEASE_OVERRIDE_S` | `120.0` | Seconds a door-release P1 override lasts |
 
 ## Security Boundary
 

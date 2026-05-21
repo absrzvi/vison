@@ -43,7 +43,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-21  # dev-story 2026-05-21: 1-5-2-rtsp-ingest-dockerfile → review (Dockerfile + CLAUDE.md; docker build --check clean)
+last_updated: 2026-05-21  # code-review 2026-05-21 (opus-4.7): 1-5-2-rtsp-ingest-dockerfile → done; 4 patches applied (P1 env_prefix, P2 uvicorn host, P4 CLAUDE.md table); P3 dismissed; 5 deferred; 43 unit tests pass
 # code-review 2026-05-21 (opus-4.7): 1-5-1-inference-dockerfile → done; 5 patches applied, 2 decisions resolved, 7 deferred; 149 unit tests pass
 # dev-story 2026-05-21: 1-5-1-inference-dockerfile → review (Dockerfile + CLAUDE.md; docker build --check clean)
 # create-story 2026-05-21: 1-5-1-inference-dockerfile → ready-for-dev (Hailo base image, CLAUDE.md, env-var config, CMD python -m inference.main)
@@ -137,7 +137,7 @@ development_status:
   # ── Epic 1.5: Onboard Containerised Infrastructure (Phase 1.5 bridge) ──
   epic-1-5: in-progress
   1-5-1-inference-dockerfile: done          # containerise inference service; 5 patches applied (P1 uvicorn host, P3 API key docs, P4 device docs, P5 VOLUME, P7 py assertion); D1/D2 decisions documented
-  1-5-2-rtsp-ingest-dockerfile: review      # containerise rtsp-ingest service; Dockerfile + CLAUDE.md; docker build --check clean
+  1-5-2-rtsp-ingest-dockerfile: done        # containerise rtsp-ingest service; 4 patches applied (P1 env_prefix, P2 uvicorn host, P4 CLAUDE.md); 5 deferred; 43 unit tests pass
   1-5-3-onboard-docker-compose: backlog     # docker-compose.onboard.yml — standalone onboard stack
   1-5-4-onboard-smoke-test: backlog         # verify full onboard stack comes up healthy end-to-end
   epic-1-5-retrospective: optional
