@@ -1,0 +1,117 @@
+# docker-compose.onboard.yml — Standalone onboard stack for R5001C SYS2 (Debian 12 + Docker)
+#
+# Covers the three containerised onboard services: event-store, rtsp-ingest, inference.
+# vlan-pollers and fusion are not yet containerised (story 1-5-4 scope).
+#
+# Bring up the full onboard stack:
+#   docker compose -f docker-compose.onboard.yml up --build
+#
+# On a dev machine without the Hailo registry, substitute a stub base image:
+#   HAILO_BASE=my-local-stub:latest docker compose -f docker-compose.onboard.yml build rtsp-ingest inference
+#
+# Required overrides before production deployment (see comments below):
+#   EVENT_STORE_API_KEY, RTSP_INGEST_VEHICLE_ID, INFERENCE_VEHICLE_ID
+
+services:
+
+  # ── event-store ──────────────────────────────────────────────────────────────
+  # Edge SQLite event ingest + sync cursor. Dependency root for all pipeline services.
+  event-store:
+    build:
+      context: .
+      dockerfile: event-store/Dockerfile
+    environment:
+      DB_PATH: /data/events.db
+      CURSOR_PAGE_SIZE: "100"
+      # PRODUCTION OVERRIDE REQUIRED: set to a strong secret before fleet deployment.
+      EVENT_STORE_API_KEY: onboard-dev-key
+    ports:
+      - "8001:8001"
+    volumes:
+      - onboard_event_store_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health/ready')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── rtsp-ingest ──────────────────────────────────────────────────────────────
+  # RTSP camera ingestion + priority scheduling (P1/P2/P3 frame rates, P3 station gate).
+  # Uses Hailo Software Suite base image for GStreamer RTSP pipeline.
+  rtsp-ingest:
+    build:
+      context: .
+      dockerfile: rtsp-ingest/Dockerfile
+      args:
+        # Override on dev machines without Hailo registry access:
+        #   docker compose build --build-arg HAILO_BASE=my-local-stub:latest rtsp-ingest
+        HAILO_BASE: hailo-software-suite:4.23
+    environment:
+      RTSP_INGEST_CAMERAS_JSON_PATH: /config/cameras.json
+      RTSP_INGEST_EVENT_STORE_URL: http://event-store:8001
+      # PRODUCTION OVERRIDE REQUIRED: must match EVENT_STORE_API_KEY above.
+      RTSP_INGEST_EVENT_STORE_API_KEY: onboard-dev-key
+      # PRODUCTION OVERRIDE REQUIRED: set to real train ID, e.g. OBB-4711.
+      RTSP_INGEST_VEHICLE_ID: OBB-TEST
+    ports:
+      - "8080:8080"
+    volumes:
+      # cameras.json is bind-mounted; never baked into the image.
+      - ./cameras.json:/config/cameras.json:ro
+    depends_on:
+      event-store:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health/ready')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── inference ─────────────────────────────────────────────────────────────────
+  # Hailo-8 YOLOv8m detection + tracking. Requires /dev/hailo0 device passthrough.
+  # Uses Hailo Software Suite base image for HailoRT + TAPPAS GStreamer plugins.
+  inference:
+    build:
+      context: .
+      dockerfile: inference/Dockerfile
+      args:
+        # Override on dev machines without Hailo registry access:
+        #   docker compose build --build-arg HAILO_BASE=my-local-stub:latest inference
+        HAILO_BASE: hailo-software-suite:4.23
+    environment:
+      INFERENCE_CAMERAS_JSON_PATH: /config/cameras.json
+      INFERENCE_MODEL_HEF_PATH: /models/yolov8m.hef
+      INFERENCE_EVENT_STORE_URL: http://event-store:8001
+      # PRODUCTION OVERRIDE REQUIRED: must match EVENT_STORE_API_KEY above.
+      INFERENCE_EVENT_STORE_API_KEY: onboard-dev-key
+      # PRODUCTION OVERRIDE REQUIRED: set to real train ID, e.g. OBB-4711.
+      INFERENCE_VEHICLE_ID: OBB-TEST
+      # journey_id is updated at runtime by vlan-pollers via POST /context.
+      INFERENCE_JOURNEY_ID: OBB-TEST_unknown_19700101
+      INFERENCE_FUSION_URL: http://fusion:8090
+    ports:
+      - "8081:8081"
+    volumes:
+      # cameras.json and .hef model are bind-mounted; never baked into the image.
+      - ./cameras.json:/config/cameras.json:ro
+      # PRODUCTION: replace with the actual path to the yolov8m.hef on SYS2.
+      - /opt/hailo/models/yolov8m.hef:/models/yolov8m.hef:ro
+    devices:
+      # Hailo-8 M.2 PCIe device. Without this, hailonet element init fails and
+      # ReadinessHolder stays false — inference returns 503 indefinitely.
+      - /dev/hailo0:/dev/hailo0
+    group_add:
+      - video
+    depends_on:
+      event-store:
+        condition: service_healthy
+      rtsp-ingest:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081/health/ready')\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  onboard_event_store_data:
