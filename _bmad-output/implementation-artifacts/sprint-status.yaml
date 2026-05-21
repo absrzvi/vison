@@ -1,4 +1,5 @@
 # generated: 2026-05-17
+# last_updated: 2026-05-21  # dev-story 2026-05-21: 1-5-4-onboard-smoke-test → review (smoke-test-onboard.sh exits 0; event-store POST+GET verified)
 # last_updated: 2026-05-21  # dev-story 2026-05-21 (opus-4.7): 4-10-coach-comfort-index → review (139 fusion tests, cov 94.03%, mypy/ruff clean)
 # last_updated: 2026-05-21  # dev-story 2026-05-21: 4-10-coach-comfort-index → in-progress
 # last_updated: 2026-05-21  # code-review 2026-05-21 (opus-4.7): 4-9 → done; 17 patches applied + 5 decisions resolved; 121 fusion tests cov 94.15%
@@ -140,5 +141,5 @@ development_status:
   1-5-1-inference-dockerfile: done          # containerise inference service; 5 patches applied (P1 uvicorn host, P3 API key docs, P4 device docs, P5 VOLUME, P7 py assertion); D1/D2 decisions documented
   1-5-2-rtsp-ingest-dockerfile: done        # containerise rtsp-ingest service; 4 patches applied (P1 env_prefix, P2 uvicorn host, P4 CLAUDE.md); 5 deferred; 43 unit tests pass
   1-5-3-onboard-docker-compose: done        # docker-compose.onboard.yml — 7 patches applied; 149 inference + 43 rtsp-ingest tests pass; compose config valid
-  1-5-4-onboard-smoke-test: backlog         # verify full onboard stack comes up healthy end-to-end
+  1-5-4-onboard-smoke-test: review          # smoke-test-onboard.sh exits 0; event-store POST+GET verified; dev 2026-05-21
   epic-1-5-retrospective: optional
