@@ -1,8 +1,8 @@
 ---
-stepsCompleted: [1, 2, 3]
+stepsCompleted: [1, 2, 3, 4]
 adrUpdates: [ADR-15, ADR-16, ADR-17, ADR-18]
-storiesAdded: [E4-S8, E4-S9, E4-S10]
-lastUpdated: 2026-05-17
+storiesAdded: [E4-S8, E4-S9, E4-S10, E6-S1, E6-S2, E6-S3, E7-S1, E7-S2, E8-S1, E8-S2, E9-S1, E9-S2, E9-S3]
+lastUpdated: 2026-05-21
 inputDocuments:
   - _bmad-output/planning-artifacts/2026-05-13-oebb-user-stories.md
   - _bmad-output/planning-artifacts/architecture.md
@@ -137,15 +137,16 @@ UX-DR15: Prototype to production delta (9 items from DD-001): replace MockWebSoc
 
 | # | Epic | Priority | PoC scope |
 |---|---|---|---|
-| 1 | Foundation & Shared Infrastructure | P0 | ✅ In scope |
-| 2 | Control Centre Dashboard | P0 | ✅ In scope — first interface |
-| 3 | Onboard Edge Pipeline | P0 | ✅ In scope |
-| 4 | Conductor App (PWA) | P1 | ✅ In scope |
-| 5 | Passenger Portal | P1 | ✅ In scope (demo surface) |
-| 6 | PIS Exterior + Interior Screens | P1 | ✅ In scope |
-| 7 | Driver Display | P2 | ✅ In scope (read-only) |
-| 8 | Maintenance Dashboard | P2 | ❌ Descoped from PoC |
-| 9 | Bistro App | P2 | ❌ Descoped from PoC |
+| 1 | Foundation & Shared Infrastructure | P0 | ✅ Done |
+| 2 | Control Centre Dashboard — Live Operations | P0 | ✅ Done |
+| 3 | Control Centre Dashboard — Analytics & System Health | P0 | ✅ Done |
+| 4 | Onboard Edge Pipeline | P0 | ✅ Done |
+| 5 | Luggage Monitoring — Live Data | P0 | ✅ Done |
+| 1.5 | Onboard Containerised Infrastructure (bridge) | P0 | ✅ Done |
+| 6 | Fusion Hardening — Journey Lifecycle & Handler Robustness | P1 | ✅ In scope — hardening sprint 1 |
+| 7 | Retry & Idempotency Hardening | P1 | ✅ In scope — hardening sprint 1 |
+| 8 | Analytics UI Hardening | P2 | ✅ In scope — hardening sprint 1 |
+| 9 | Container & Infrastructure Hardening | P2 | ✅ In scope — hardening sprint 1 |
 
 ---
 
@@ -1562,3 +1563,346 @@ The system detects occupancy, congestion, luggage, door obstructions, accessibil
 
 **Dependencies:** E4-S6 (fusion container, ContextState), E4-S2 (reservation data in ContextState), E4-S4 (OCCUPANCY_UPDATE source), E1-S2 (EventType enum — `COACH_COMFORT_INDEX` present), E1-S4 (event-store POST endpoint)  
 **Deliverables:** `fusion/src/fusion/comfort_index.py`; updates to `fusion/src/fusion/main.py` (trigger wiring); `tests/unit/test_comfort_index.py`
+
+---
+
+## Hardening Epics — Post-PoC Sprint 1
+
+> These epics address correctness and reliability gaps identified in code reviews across Epics 1–5. They carry no new functional requirements. Priority order: E6 (highest risk — correctness) → E7 (cross-container correctness) → E8 (UI reliability) → E9 (ops/infra).
+
+---
+
+### Epic 6: Fusion Hardening — Journey Lifecycle & Handler Robustness
+
+Fusion containers reset all per-journey state correctly on journey change and all async handlers are resilient to timeout and validation errors, so long-running PoC sessions do not accumulate incorrect state or drop events silently.
+
+**Source:** Deferred items from E4-S9, E4-S10, E4-S6 code reviews  
+**Containers:** `fusion/`  
+**FRs covered:** NFR1 (uptime), NFR3 (false-positive rate)
+
+---
+
+#### Story E6-S1 — Fusion Journey-Lifecycle Reset Hook
+
+**As a** system operator,
+**I want** all fusion per-journey state reset cleanly when a new journey begins,
+**so that** drift counts, ledger entries, suppression flags, and coach indexes from a previous journey do not bleed into the next journey's computations.
+
+**Acceptance criteria:**
+
+**Given** `fusion` is running and `ContextState.journey_id` transitions from `journey_A` to `journey_B`  
+**When** the transition is detected  
+**Then** the following state is reset to its initialised default within one event-loop tick: `CoachLedger.unreconciled_exits` (→ 0), `CoachLedger._last_drift_bucket` (→ None), `CoachLedger._seen_wagon` (→ empty set), `CoachLedger._seen_occupancy` (→ empty dict), `ComfortIndex._observed_coaches` (→ empty dict), `ComfortIndex._last_emitted_pct` (→ empty dict), `SuppressionGate._depot_journey_ended_emitted_for` (→ empty set)
+
+**Given** the journey-lifecycle reset fires  
+**When** a `LEDGER_DRIFT_OBSERVATION` event was in-flight at the moment of reset  
+**Then** the in-flight event is completed with the pre-reset journey_id; no event is emitted with a mismatched journey_id
+
+**Given** the reset hook runs  
+**When** `ContextState.reservations` is absent for the new journey  
+**Then** `ComfortIndex` defers emission as per E4-S10 behaviour — the reset does not cause a spurious emission
+
+**Given** a test that simulates two consecutive journeys with differing occupancy patterns  
+**When** the second journey begins  
+**Then** `unreconciled_exits` starts at 0 (not carrying over from journey 1); `_last_drift_bucket` is None; ledger count starts at 0; a `LEDGER_DRIFT_OBSERVATION` from journey 1 does not appear in journey 2's event stream
+
+**And** `tests/unit/test_journey_lifecycle.py` covers all four state fields above with a two-journey transition scenario  
+**And** `mypy --strict fusion/src/` passes with zero errors after the change
+
+**Dependencies:** E4-S9 (CoachLedger), E4-S10 (ComfortIndex), E4-S6 (SuppressionGate)  
+**Deliverables:** `fusion/src/fusion/journey_lifecycle.py` (reset hook); wiring in `fusion/src/fusion/main.py`; `tests/unit/test_journey_lifecycle.py`
+
+---
+
+#### Story E6-S2 — Fusion Handler Async Exception Hardening
+
+**As a** system operator,
+**I want** all fusion `/candidates/*` route handlers to catch `asyncio.TimeoutError` and `pydantic.ValidationError` without returning HTTP 500,
+**so that** a single malformed or timed-out upstream event does not crash the handler and interrupt the pipeline.
+
+**Acceptance criteria:**
+
+**Given** a `/candidates/occupancy_update` POST where the downstream `event-store` call times out (simulated via `httpx.TimeoutException`)  
+**When** the handler processes the request  
+**Then** HTTP 200 is returned to the caller (fusion is best-effort); a structured JSON log is emitted at WARNING with `reason: "emit_timeout"`, `event_type`, `car_id`, `elapsed_ms`; no HTTP 500 is returned
+
+**Given** a `/candidates/occupancy_update` POST where the request body fails Pydantic validation  
+**When** the handler processes the request  
+**Then** HTTP 422 is returned with the standard ADR-10 error envelope `{"error": "VALIDATION_ERROR", "detail": "<pydantic message>", "recoverable": true}`; no unhandled exception propagates to the ASGI layer
+
+**Given** `gate.should_emit()` is called for the ledger check and again for the comfort index check within the same handler invocation  
+**When** the gate is stateless (current behaviour)  
+**Then** both calls return independently — no double-advance of any internal counter; a TODO comment is added: `# TODO: refactor to single gate.should_emit() call when gate becomes stateful`
+
+**Given** the same exception handling pattern is applied to all `/candidates/*` handlers (`door_obstruction`, `accessibility_detected`, `wagon_crossing`, `occupancy_update`)  
+**When** `grep -r "asyncio.TimeoutError\|ValidationError" fusion/src/fusion/` is run  
+**Then** every handler file contains at least one catch block for each exception type
+
+**And** `tests/unit/test_handler_exceptions.py` covers: timeout → 200 + warning log, ValidationError → 422 + error envelope, for at least two handler routes  
+**And** `mypy --strict fusion/src/` passes with zero errors
+
+**Dependencies:** E4-S6 (handler skeleton), E6-S1 (journey lifecycle — must land first to avoid test interference)  
+**Deliverables:** Updates to `fusion/src/fusion/health.py` and all `/candidates/*` handler modules; `tests/unit/test_handler_exceptions.py`
+
+---
+
+#### Story E6-S3 — Inference Test Hygiene (AsyncMock Warnings)
+
+**As a** developer,
+**I want** the 5 `RuntimeWarning: coroutine never awaited` warnings eliminated from the inference test suite,
+**so that** the test output is clean and warning-free, making genuine future warnings visible.
+
+**Acceptance criteria:**
+
+**Given** `pytest tests/unit/test_door_obstruction.py tests/unit/test_vestibule_congestion.py -W error::RuntimeWarning` is run  
+**When** all tests execute  
+**Then** the command exits 0 with no `RuntimeWarning` raised — all previously-warned coroutines are now properly awaited or bound as `MagicMock`
+
+**Given** the fix replaces `AsyncMock` bindings on `resp.raise_for_status` with `MagicMock`  
+**When** the production call path executes `resp.raise_for_status()` synchronously  
+**Then** the mock reflects the actual call signature — no `await` is present in production code at that callsite
+
+**And** total inference test count does not decrease (no tests removed to fix the warning)  
+**And** `pytest inference/tests/ --tb=short` exits 0 with all tests passing
+
+**Dependencies:** E4-S5 (inference safety tests exist)  
+**Deliverables:** Updates to `inference/tests/unit/test_door_obstruction.py`, `inference/tests/unit/test_vestibule_congestion.py`
+
+---
+
+### Epic 7: Retry & Idempotency Hardening
+
+The shared HTTP retry policy correctly classifies 4xx responses as non-retriable, and the gangway tripwire uses emit-then-commit ordering to prevent silent event loss on retry failure, so the pipeline does not burn retry budgets on permanent errors or produce inconsistent crossing state.
+
+**Source:** Deferred items from E4-S8 (W1, W3), E4-S6, E4-CS1 code reviews  
+**Containers:** `shared/`, `inference/` (tripwire), `cloud-sync/`  
+**FRs covered:** NFR1 (uptime), NFR8 (connectivity resilience)
+
+---
+
+#### Story E7-S1 — Shared Retry Policy: Exclude 4xx
+
+**As a** developer,
+**I want** `shared/http/retry.py`'s `DEFAULT_RETRY` decorator to not retry on 4xx responses,
+**so that** a 422 Unprocessable Entity (e.g. malformed event payload) does not burn 50 seconds of retry budget before surfacing the error.
+
+**Acceptance criteria:**
+
+**Given** an outbound `httpx` call returns HTTP 422  
+**When** `DEFAULT_RETRY` is applied  
+**Then** no retry is attempted; the 422 response is raised immediately as `httpx.HTTPStatusError`; a structured log is emitted at ERROR with `status_code: 422`, `url`, `reason: "non_retriable_4xx"`
+
+**Given** an outbound `httpx` call returns HTTP 503  
+**When** `DEFAULT_RETRY` is applied  
+**Then** exponential backoff with jitter is applied for up to 3 retries (existing behaviour preserved)
+
+**Given** an outbound `httpx` call returns HTTP 429 (rate limited)  
+**When** `DEFAULT_RETRY` is applied  
+**Then** it is treated as retriable (same as 5xx) — rate-limit back-off is the correct response
+
+**Given** an outbound `httpx` call returns HTTP 400  
+**When** `DEFAULT_RETRY` is applied  
+**Then** no retry is attempted — 400 is a permanent client error
+
+**And** a contract test `tests/unit/test_retry_policy.py` covers: 422 → no retry, 503 → 3 retries, 429 → retry, 400 → no retry  
+**And** `mypy --strict shared/` passes with zero errors  
+**And** the change is verified to not break any existing integration test that relies on retry behaviour (run full test suite)
+
+**Dependencies:** E1-S7 (shared retry module exists)  
+**Deliverables:** `shared/src/oebb_shared/http/retry.py` (policy update); `tests/unit/test_retry_policy.py`
+
+---
+
+#### Story E7-S2 — Gangway Tripwire: Emit-Then-Commit Ordering
+
+**As a** system operator,
+**I want** the gangway tripwire to record `_last_side` only after a successful HTTP emit,
+**so that** a crossing is not silently lost when the emit fails after retries — the side state stays consistent with what was actually published.
+
+**Acceptance criteria:**
+
+**Given** `_emit_wagon_exit` is called and the HTTP POST to `event-store` succeeds  
+**When** the emit returns  
+**Then** `_last_side` is updated to reflect the new side immediately after the successful response — not before the call
+
+**Given** `_emit_wagon_exit` is called and the HTTP POST fails after all retries  
+**When** all retries are exhausted  
+**Then** `_last_side` retains its pre-emit value; the next crossing detection for the same person will re-trigger the emit; a structured WARNING log is emitted with `reason: "emit_failed_side_not_committed"`, `track_id`, `car_id`
+
+**Given** `_build_envelope` captures `journey_id` at emit time  
+**When** a journey rollover occurs between the crossing detection and the emit call  
+**Then** the envelope uses the journey_id that was current when `_build_envelope` was called — not a stale closure value; add a `# NOTE: journey_id snapshotted at detection time` comment to document intent
+
+**And** `tests/unit/test_tripwire_ordering.py` covers: successful emit → side committed, failed emit → side not committed, journey rollover → correct journey_id in envelope  
+**And** `mypy --strict inference/src/` passes with zero errors
+
+**Dependencies:** E4-S8 (tripwire implementation), E7-S1 (retry policy must be correct before testing failure paths)  
+**Deliverables:** `inference/src/inference/tripwire.py` (ordering fix); `tests/unit/test_tripwire_ordering.py`
+
+---
+
+### Epic 8: Analytics UI Hardening
+
+All four analytics tabs and the system health view handle rapid date-range changes without stale fetches, retry controls are debounced, and the `FleetContext` provider does not cause unnecessary re-renders on every WebSocket tick.
+
+**Source:** Deferred items from E3-S3, E3-S4, E3-S5, E3-S7, E2-S2, E5-S1 code reviews  
+**Component files:** `src/components/analytics/`, `src/context/FleetContext.jsx`  
+**FRs covered:** UX-DR8–UX-DR12 (analytics interactions), NFR1 (uptime)
+
+---
+
+#### Story E8-S1 — AbortController Pass — Analytics Fetch Cancellation
+
+**As a** Control Centre operator,
+**I want** analytics data fetches to be cancelled when I change the date range before a previous request completes,
+**so that** stale responses from a previous range never overwrite the current view.
+
+**Acceptance criteria:**
+
+**Given** the operator changes the date range while a fetch is in flight (e.g. changes from 7d to 14d before the 7d response arrives)  
+**When** the new range triggers a new fetch  
+**Then** the previous `fetch` call is aborted via `AbortController.abort()`; the stale response is discarded; only the 14d response populates the component
+
+**Given** the component unmounts while a fetch is in flight  
+**When** React tears down the effect  
+**Then** the in-flight fetch is aborted; no `setState` is called after unmount; no `Warning: Can't perform a React state update on an unmounted component` appears in console
+
+**Given** the pattern is applied consistently  
+**When** `grep -n "AbortController" src/api/analytics.js` is run  
+**Then** every exported fetch function in `analytics.js` accepts an optional `signal` parameter and passes it to `fetch()`; callers (`ExceptionWorkflow`, `OccupancyHeatmap`, `DwellTime`, `AIDetection`) each create an `AbortController` in their `useEffect` and pass `controller.signal` to the fetch
+
+**Given** the retry button is clicked rapidly multiple times  
+**When** clicks fire within 300ms of each other  
+**Then** only one fetch is initiated (debounced via a 300ms leading-edge debounce or in-flight guard); no duplicate requests appear in the network tab
+
+**And** `analytics.test.js` is updated to cover: abort on range change, abort on unmount, no state update after abort  
+**And** no existing analytics acceptance criteria are broken
+
+**Dependencies:** E3-S1–S5 (analytics components exist)  
+**Files changed:** `src/api/analytics.js`; `src/components/analytics/ExceptionWorkflow.jsx`, `OccupancyHeatmap.jsx`, `DwellTime.jsx`, `AIDetection.jsx`
+
+---
+
+#### Story E8-S2 — FleetContext Provider Memoisation
+
+**As a** Control Centre operator,
+**I want** the `FleetContext` provider value to be memoised so it does not change reference on every WebSocket tick,
+**so that** components that consume only static parts of context (e.g. `setDateRange`) are not re-rendered on every incoming event.
+
+**Acceptance criteria:**
+
+**Given** the `FleetContext.Provider` renders with a `value` object  
+**When** a WebSocket `TRAIN_UPDATE` event is received that does not change any value consumed by `SystemHealth`  
+**Then** `SystemHealth` does not re-render (verified via `React.memo` + render count spy in test)
+
+**Given** the `value` object passed to `FleetContext.Provider`  
+**When** it is constructed  
+**Then** it is wrapped in `useMemo` with a dependency array containing every state variable and callback included in the value; the dependency array is exhaustive (no missing deps per `eslint-plugin-react-hooks`)
+
+**Given** the memoisation is in place  
+**When** `fleet` state updates due to a WS event  
+**Then** components that consume only `setDateRange` or `alertThreshold` from context do not re-render — only components consuming `fleet` re-render
+
+**And** no existing behaviour is changed — all consumers receive the same value shape  
+**And** `eslint --rule react-hooks/exhaustive-deps` passes on `FleetContext.jsx` with zero warnings
+
+**Dependencies:** E2-S1 (FleetContext real WS client)  
+**Files changed:** `src/context/FleetContext.jsx`
+
+---
+
+### Epic 9: Container & Infrastructure Hardening
+
+All production container images use non-editable installs, include `HEALTHCHECK` directives, carry a documented Hailo base image digest placeholder, and the cloud-backend database schema has indexes to support analytics query performance.
+
+**Source:** Deferred items from E1-S1, E1-S3, E1-S4, E4-CS1, E1-5-1, E1-5-2, E1-5-3 code reviews  
+**Containers:** all Dockerfiles, `cloud-backend/` migrations  
+**FRs covered:** NFR1 (uptime), NFR13 (CI/CD)
+
+---
+
+#### Story E9-S1 — PostgreSQL Analytics Indexes
+
+**As a** developer,
+**I want** composite indexes on the `events` table covering `(timestamp, event_type)` and `(vehicle_id, timestamp)`, and an index on `journeys.vehicle_id`,
+**so that** analytics range queries and fleet-level lookups do not full-scan the events table as data grows.
+
+**Acceptance criteria:**
+
+**Given** the Alembic migration `0002_add_analytics_indexes.py` is run against a PostgreSQL 15 database with the existing `events` and `journeys` tables  
+**When** `alembic upgrade head` is executed  
+**Then** it exits 0; a `btree` index named `ix_events_timestamp_event_type` exists on `(timestamp, event_type)`; a `btree` index named `ix_events_vehicle_timestamp` exists on `(vehicle_id, timestamp)`; a `btree` index named `ix_journeys_vehicle_id` exists on `journeys.vehicle_id`
+
+**Given** the migration is run a second time (idempotency check)  
+**When** `alembic upgrade head` is executed  
+**Then** it exits 0 with no changes (indexes already exist — `CREATE INDEX IF NOT EXISTS` semantics)
+
+**Given** a test that seeds 10,000 events across 5 vehicle IDs and queries `GET /api/v1/analytics/occupancy-heatmap?range=30d`  
+**When** `EXPLAIN ANALYZE` is run on the underlying query  
+**Then** the query plan shows `Index Scan` on `ix_events_timestamp_event_type` — not `Seq Scan`
+
+**And** `tests/integration/test_analytics_indexes.py` uses `testcontainers-python` and verifies the index exists via `pg_indexes` system table  
+**And** `alembic downgrade -1` reverts the indexes cleanly
+
+**Dependencies:** E1-S3 (initial migration), E3-S1 (analytics endpoints that benefit from indexes)  
+**Deliverables:** `cloud_backend/migrations/versions/0002_add_analytics_indexes.py`; `tests/integration/test_analytics_indexes.py`
+
+---
+
+#### Story E9-S2 — Dockerfile Hardening Pass (All Containers)
+
+**As a** DevOps engineer,
+**I want** all production Dockerfiles to use non-editable pip installs, declare `HEALTHCHECK` directives, and document the Hailo base image digest pin location,
+**so that** production images are reproducible, container orchestrators can probe readiness, and hardware bring-up does not require Dockerfile edits.
+
+**Acceptance criteria:**
+
+**Given** `cloud_backend/Dockerfile`, `event_store/Dockerfile`, `cloud_sync/Dockerfile`, `inference/Dockerfile`, `rtsp_ingest/Dockerfile`  
+**When** each is inspected  
+**Then** every `RUN pip install` line uses `pip install .` (non-editable) — no `-e` flag in any production Dockerfile; the change is verified by `grep -r "pip install -e" */Dockerfile` returning no matches
+
+**Given** each Dockerfile  
+**When** it is built and the resulting image is inspected  
+**Then** a `HEALTHCHECK` instruction is present; for Python/FastAPI containers the check is: `HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD curl -f http://localhost:${PORT}/api/v1/health || exit 1`; `PORT` defaults match each container's existing `EXPOSE` value
+
+**Given** `inference/Dockerfile` and `rtsp_ingest/Dockerfile` which use `hailo-software-suite:4.23`  
+**When** the Dockerfile is read  
+**Then** a comment block reads: `# Hailo base image — pin to sha256 digest on first SYS2 hardware bring-up.` followed by `# See: https://hailo.ai/developer-zone/ for digest lookup.`; the tag `4.23` is retained as-is (digest cannot be pinned without registry access)
+
+**Given** `@app.on_event("startup")` in `cloud_backend/main.py`  
+**When** the file is inspected  
+**Then** it has been migrated to a `@asynccontextmanager lifespan` function (FastAPI ≥0.93 pattern); `@app.on_event("startup")` does not appear anywhere in `cloud_backend/`
+
+**And** `docker build --check` passes for all five Dockerfiles (dry-run build validation)  
+**And** existing CI test suite passes without changes to any test file
+
+**Dependencies:** E1-S1 (Dockerfiles exist), E1-5-1/E1-5-2 (inference + rtsp-ingest Dockerfiles exist)  
+**Deliverables:** Updates to `cloud_backend/Dockerfile`, `event_store/Dockerfile`, `cloud_sync/Dockerfile`, `inference/Dockerfile`, `rtsp_ingest/Dockerfile`, `cloud_backend/main.py`
+
+---
+
+#### Story E9-S3 — Cloud-Sync Performance: Batch Commits & Background Truncation
+
+**As a** system operator,
+**I want** `cloud-sync` to batch SQLite commits across multiple events and run `truncate_old_journeys` in a background task rather than blocking the route handler,
+**so that** sustained event throughput does not cause excessive fsync load on SYS2 and the uvicorn worker is not blocked on multi-thousand-row deletes.
+
+**Acceptance criteria:**
+
+**Given** `cloud-sync` receives 100 events within a 200ms window  
+**When** `mark_published` is called for each  
+**Then** commits are batched: a single `COMMIT` is issued at most once per 50ms (configurable via `CLOUD_SYNC_COMMIT_INTERVAL_MS` env var, default 50); individual row writes are still immediate (WAL append); only the fsync is deferred
+
+**Given** a `POST /api/v1/events` request triggers the truncation check  
+**When** truncation is needed (journey count > 3)  
+**Then** `truncate_old_journeys` is dispatched via `asyncio.create_task` (background); the HTTP response is returned before truncation completes; a structured log is emitted at DEBUG when truncation starts and completes
+
+**Given** `CLOUD_SYNC_COMMIT_INTERVAL_MS=0` is set (disable batching)  
+**When** `mark_published` is called  
+**Then** each call commits immediately — existing behaviour preserved; this is the test-safe mode
+
+**And** `tests/integration/test_cloud_sync_perf.py` verifies: 100 rapid `mark_published` calls produce ≤10 commits (with default 50ms batch interval); truncation completes without blocking the HTTP response  
+**And** `mypy --strict cloud_sync/src/` passes with zero errors
+
+**Dependencies:** E4-CS1 (cloud-sync container), E1-S4 (SQLite patterns)  
+**Deliverables:** Updates to `cloud_sync/src/cloud_sync/db.py`; `tests/integration/test_cloud_sync_perf.py`
