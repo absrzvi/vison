@@ -1,9 +1,10 @@
 ---
 stepsCompleted: [1, 2, 3, 4]
 adrUpdates: [ADR-15, ADR-16, ADR-17, ADR-18]
-storiesAdded: [E4-S8, E4-S9, E4-S10, E6-S1, E6-S2, E6-S3, E7-S1, E7-S2, E8-S1, E8-S2, E9-S1, E9-S2, E9-S3, E5-S1, E5-S2, E5-S3, E5-S4, E1.5-1, E1.5-2, E1.5-3, E1.5-4, E3-S8]
+storiesAdded: [E4-S8, E4-S9, E4-S10, E6-S1, E6-S2, E6-S3, E7-S1, E7-S2, E8-S1, E8-S2, E9-S1, E9-S2, E9-S3, E5-S1, E5-S2, E5-S3, E5-S4, E1.5-1, E1.5-2, E1.5-3, E1.5-4, E3-S8, E1-S6']
 lastUpdated: 2026-05-30
 changelog:
+  - "2026-05-30 (later): ADR-20 ratified — SSE replaces WebSocket for landside push. Re-scoped E1-S6 (now onboard-only), added new E1-S6' (cloud-backend SSE fan-out), updated E2-S1 (Real SSE Client), E5-S1 (Luggage Live Feed via SSE). Removed FR25 from Epic 2 FRs covered."
   - "2026-05-30: Backfilled Epic 5 (Luggage) + Epic 1.5 (Onboard Infra) bodies from implementation-artifacts. Moved E2-S9 → E3-S8 (System Health). Updated FR Coverage Map for FR23/25/32/34/35 Phase-2 descope. Deduped Epic 3/4 headers."
   - "2026-05-21: Added Epic 6/7/8/9 hardening stories + ADR-15..18."
 inputDocuments:
@@ -381,6 +382,8 @@ Developers can deploy a working system skeleton — event envelope, shared types
 
 #### Story E1-S6 — WebSocket Subscription Spec & Filter Logic
 
+> **⚠ Scope refined 2026-05-30 by ADR-20.** This story stays as the **onboard event-store** WS contract (intra-CCU consumers: Conductor App + Driver Display in Phase 2). The **landside** cloud-backend → Control Centre push is now SSE — see new story **E1-S6'** below for the SSE fan-out and integration tests. ACs in this story are unchanged for the onboard event-store; do not implement them on the cloud-backend.
+
 **As a** developer,
 **I want** the WebSocket endpoint to accept a `SubscriptionRequest` on connect and filter delivered events server-side by event type, severity, and coach ID — with reconnect replay of the last N matching events,
 **so that** the Control Centre Dashboard only receives the events it needs and silently missed events (during disconnection) are replayed on reconnect.
@@ -416,6 +419,49 @@ Developers can deploy a working system skeleton — event envelope, shared types
 
 **Dependencies:** E1-S1 (WebSocket stub), E1-S2 (EventType, severity), E1-S4 (event store for replay)  
 **Deliverables:** `shared/ws/subscription.py` (`SubscriptionRequest` dataclass), `event_store/ws/handler.py` (full implementation replacing stub), `tests/unit/test_ws_subscription_filter.py`
+
+---
+
+#### Story E1-S6' — Cloud-Backend SSE Alert Fan-Out
+
+> _New story added 2026-05-30 per ADR-20 to formalise the landside push transport that was implemented ad-hoc in `cloud-backend/routes/alerts_sse.py`. Replaces the landside half of the original E1-S6 scope._
+
+**As a** developer,
+**I want** the cloud-backend to expose a Server-Sent Events stream on `GET /api/v1/alerts/stream` that pushes a fixed allow-list of alert event types to authenticated subscribers,
+**so that** the Control Centre Dashboard receives real-time alerts over a simple HTTP-friendly transport without needing a bidirectional WebSocket channel landside.
+
+**Acceptance criteria:**
+
+**Given** a client connects to `GET /api/v1/alerts/stream` with a valid `X-API-Key` header  
+**When** the connection is established  
+**Then** an `EventSource`-compatible stream is returned with `Content-Type: text/event-stream`; each delivered event has fields `event: <event_type>`, `id: <event_id>`, `data: <json-payload>`; the connection stays open until the client closes it
+
+**Given** `ingest.publish_alert(event)` is called on the cloud-backend  
+**When** the event type is in `ALERT_EVENT_TYPES = {ALARM_ACTIVE, ALERT_RAISED, ALERT_RESOLVED, LUGGAGE_RACK_SATURATION, UNATTENDED_BAG}`  
+**Then** the event is fanned out to all connected subscribers within 500ms of `publish_alert` returning
+
+**Given** a published event whose type is NOT in `ALERT_EVENT_TYPES` (e.g. `OCCUPANCY_UPDATE`)  
+**When** `publish_alert` is called  
+**Then** the event is persisted to PostgreSQL (existing ingest path) but is NOT pushed over the SSE stream
+
+**Given** an unauthenticated GET to `/api/v1/alerts/stream`  
+**When** the request is processed  
+**Then** HTTP 401 is returned with the ADR-10 error envelope `{"error": "UNAUTHORIZED", "detail": "API key required", "recoverable": false}`; no stream is opened
+
+**Given** multiple concurrent subscribers (≥3)  
+**When** a single `publish_alert` fires  
+**Then** all subscribers receive the event; per-subscriber queues are isolated (one slow consumer must not block the others)
+
+**Given** a uvicorn worker is restarted while a client is connected  
+**When** the connection drops  
+**Then** the client (via `EventSource` auto-reconnect) reconnects with its `Last-Event-ID`; any events the client missed during the gap are reconciled by the client calling REST endpoints (`GET /api/v1/trains/{id}/alerts?status=active`, `GET /api/v1/analytics/system-health`) — there is no server-side wire replay (ADR-20)
+
+**And** `tests/integration/test_alerts_sse.py` covers: valid subscription delivers event within 500ms; unauthenticated request returns 401; non-allow-listed event type is not pushed; 3 concurrent subscribers all receive a single publish; reconnect after worker restart does not produce a duplicate (the same `id` is only seen once if `Last-Event-ID` is honoured by the client)  
+**And** `mypy --strict cloud_backend/routes/alerts_sse.py` passes  
+**And** no `X-API-Key` value appears in any test fixture file or log line
+
+**Dependencies:** E1-S3 (PostgreSQL events table), E1-S7 (API auth + error envelope), existing `cloud-backend/routes/ingest.py` (already calls `publish_alert`)  
+**Deliverables:** `cloud-backend/src/cloud_backend/routes/alerts_sse.py` (ratify current implementation against ACs above + extend `ALERT_EVENT_TYPES` to include luggage types per ADR-20 §Migration impact #3), `tests/integration/test_alerts_sse.py`
 
 ---
 
@@ -459,46 +505,48 @@ Developers can deploy a working system skeleton — event envelope, shared types
 ### Epic 2: Control Centre Dashboard — Live Operations
 Control Centre operators (Claudia) can monitor the full fleet in real time — live train cards with occupancy and severity, unified escalation feed, acknowledge/resolve actions, and escalation detail panel.
 
-**FRs covered:** FR20, FR21, FR24, FR25, FR26, FR27
+**FRs covered:** FR20, FR21, FR24, FR26, FR27 (FR25 descoped 2026-05-30 per PRD v1.1)
 **UX-DRs covered:** UX-DR1–UX-DR6, UX-DR13–UX-DR15
 **Prototype reference:** `control-centre/` — DD-001 accepted 2026-05-16
-**Component files:** `src/components/shell/`, `src/components/live/`, `src/components/train-detail/`, `src/context/FleetContext.jsx`, `src/hooks/useFleetData.js`, `src/mock/MockWebSocketClient.js`
+**Component files:** `src/components/shell/`, `src/components/live/`, `src/components/train-detail/`, `src/context/FleetContext.jsx`, `src/hooks/useFleetData.js`, `src/sse/RealSseClient.js` (replaces `src/mock/MockWebSocketClient.js` reference per ADR-20)
 
 ---
 
-#### Story E2-S1 — Real WebSocket Client
+#### Story E2-S1 — Real Push Client (SSE)
+
+> **⚠ Scope refined 2026-05-30 by ADR-20.** Title and AC content updated: landside transport is **SSE**, not WebSocket. The client now uses `EventSource` against `/api/v1/alerts/stream` (no `SubscriptionRequest` round-trip; server filters at `ALERT_EVENT_TYPES`). `MockWebSocketClient` retained as dev fallback under the same name to minimise churn; document the misnomer in code comments. State reconciliation on reconnect uses REST, not wire replay.
 
 **As a** Control Centre operator,
-**I want** the dashboard to connect to the live cloud backend WebSocket instead of the mock client,
+**I want** the dashboard to connect to the live cloud-backend SSE stream (`/api/v1/alerts/stream`) instead of the mock client,
 **so that** fleet state, escalations, and train health data reflect real-time events from onboard trains rather than simulated data.
 
 **Acceptance criteria:**
 
 **Given** the dashboard loads in a browser  
 **When** `FleetContext` initialises  
-**Then** it connects to the cloud backend WebSocket at `WS_URL` (read from `VITE_WS_URL` env var) using a `SubscriptionRequest` matching ADR-9: `event_types` covering all live-monitoring event types, `min_severity: "info"`, `coach_ids: null`, `reconnect_replay_depth: 50`
+**Then** it opens an `EventSource` against `VITE_SSE_URL` (default: `/api/v1/alerts/stream`) — the `X-API-Key` is delivered via the SSE `withCredentials` pattern (CORS-allowed header on the same origin, or via a short-lived signed URL parameter when cross-origin); no subscription handshake message is sent (server-side allow-list per ADR-20)
 
-**Given** the WebSocket connection is established  
-**When** a train event arrives in the canonical envelope format (ADR-1)  
-**Then** `FleetContext` maps it to the frontend train shape documented in DD-001 §4 and all consumers (FleetList, UnifiedFeed, TrainDetail, SystemHealth) update without a page reload
+**Given** the SSE stream is open  
+**When** a server event arrives with `event: <event_type>` and `data: <ADR-1 envelope JSON>`  
+**Then** `FleetContext` maps it to the frontend train shape documented in DD-001 §4; all consumers (FleetList, UnifiedFeed, TrainDetail, SystemHealth) update without a page reload
 
-**Given** the WebSocket connection drops  
-**When** the client detects disconnection  
-**Then** it reconnects with exponential backoff (base 1s, max 30s, jitter); a "Reconnecting…" amber banner is shown in the top nav; existing fleet state is preserved (not wiped) during reconnection
+**Given** the SSE connection drops  
+**When** the browser's built-in `EventSource` reconnect fires  
+**Then** the reconnect attempt uses the last-seen `Last-Event-ID` header; a "Reconnecting…" amber banner is shown in the top nav; existing fleet state is preserved (not wiped) during reconnection
 
-**Given** the WebSocket reconnects after a drop  
-**When** the subscription handshake completes  
-**Then** the server replays the last 50 matching events (per ADR-9 `reconnect_replay_depth`); the "Reconnecting…" banner clears; no duplicate events appear in the unified feed
+**Given** the SSE stream reconnects after a drop  
+**When** the stream resumes  
+**Then** the client calls `GET /api/v1/trains/{id}/alerts?status=active` for any train it had active in state, plus `GET /api/v1/analytics/system-health`, to reconcile any events missed during the gap; the "Reconnecting…" banner clears; deduplication on `event_id` prevents duplicates in the unified feed
 
-**Given** `VITE_WS_URL` is not set  
+**Given** `VITE_SSE_URL` is not set  
 **When** the app starts  
-**Then** the browser console logs a single `[FleetContext] VITE_WS_URL not set — falling back to MockWebSocketClient` warning and the mock client is used; no uncaught exception
+**Then** the browser console logs a single `[FleetContext] VITE_SSE_URL not set — falling back to MockWebSocketClient` warning and the mock client is used; no uncaught exception (legacy class name retained; misnomer documented in source comment)
 
-**And** `MockWebSocketClient` is preserved and remains the default when `VITE_WS_URL` is absent — the real client is an additive replacement, not a deletion  
+**And** `MockWebSocketClient` is preserved and remains the default when `VITE_SSE_URL` is absent — the real client is an additive replacement, not a deletion (class is renamed to `RealSseClient.js`; the old `RealWebSocketClient.js` is deleted with a stub re-export that logs a one-time deprecation warning)  
 **And** no API keys or secrets appear in frontend source code or built assets
 
-**Dependencies:** E1-S1 (WebSocket endpoint), E1-S6 (SubscriptionRequest + filter logic)  
-**Files changed:** `src/context/FleetContext.jsx`, `src/hooks/useFleetData.js`, new `src/ws/RealWebSocketClient.js`
+**Dependencies:** E1-S6' (cloud-backend SSE fan-out), E1-S7 (API auth)  
+**Files changed:** `src/context/FleetContext.jsx`, `src/hooks/useFleetData.js`, new `src/sse/RealSseClient.js`, remove `src/ws/RealWebSocketClient.js`
 
 ---
 
@@ -1617,23 +1665,26 @@ Control Centre operators can monitor unattended bag and luggage-rack-saturation 
 
 ---
 
-#### Story E5-S1 — Luggage Monitoring Live WebSocket Feed
+#### Story E5-S1 — Luggage Monitoring Live Feed
+
+> **⚠ Transport updated 2026-05-30 by ADR-20.** Title was "Luggage Monitoring Live WebSocket Feed". Luggage events now flow over the SSE stream from E1-S6'. ACs below are unchanged in intent — they refer to the SSE client and `ALERT_EVENT_TYPES` allow-list instead of WebSocket + `SubscriptionRequest`.
 
 **As a** Control Centre operator,
-**I want** the Luggage Monitoring tab and the Luggage Alerts KPI tile to reflect live luggage events arriving over the WebSocket rather than the 7 hardcoded mock events,
+**I want** the Luggage Monitoring tab and the Luggage Alerts KPI tile to reflect live luggage events arriving over the SSE stream rather than the 7 hardcoded mock events,
 **so that** I can see real-time unattended bag alerts and rack saturation events as they are detected onboard, and respond before the situation escalates.
 
-**Canonical spec:** `_bmad-output/implementation-artifacts/5-1-luggage-ws-live-feed.md` (7 ACs)
+**Canonical spec:** `_bmad-output/implementation-artifacts/5-1-luggage-ws-live-feed.md` (7 ACs — filename retained for git history; intent updated to SSE)
 
-**Key acceptance criteria (summary):**
-- `LUGGAGE_RACK_SATURATION` and `UNATTENDED_BAG` envelopes are added to `SUBSCRIPTION_REQUEST.event_types` and routed via `RealWebSocketClient` into a `LUGGAGE_EVENT` frontend message
+**Key acceptance criteria (summary, ADR-20-aligned):**
+- `LUGGAGE_RACK_SATURATION` and `UNATTENDED_BAG` are added to the cloud-backend `ALERT_EVENT_TYPES` allow-list in `alerts_sse.py` so they are pushed over the SSE stream (no client-side `SUBSCRIPTION_REQUEST` needed)
+- `RealSseClient` routes both event types into a `LUGGAGE_EVENT` frontend message with the documented shape `{ id, trainId, coachId, state, title, detail, confidence, timestamp, stillFrame }`
 - `FleetContext` replaces the static `LUGGAGE_EVENTS`/`LUGGAGE_ESCALATIONS` constants with a live `luggageEvents` state; updates are merged into `escalations` via `luggageEventsToEscalations()`
-- `MockWebSocketClient` emits at least 2 `LUGGAGE_EVENT` messages (one `unattended`, one `overcrowded`) so the tab remains testable offline
-- Duplicate event_ids on reconnect replay are silently dropped via `_trackSeenId`
+- `MockWebSocketClient` (kept under legacy name as dev fallback) emits at least 2 `LUGGAGE_EVENT` messages (one `unattended`, one `overcrowded`) so the tab remains testable offline
+- Duplicate `event_id`s on SSE reconnect (via `Last-Event-ID`) are silently dropped via `_trackSeenId`
 - Empty state ("No luggage events received yet.") is preserved when `luggageEvents` is empty — no crash, no mock fallback
 
-**Dependencies:** E2-S1 (RealWebSocketClient), E1-S6 (SubscriptionRequest)
-**Files changed:** `src/ws/RealWebSocketClient.js`, `src/mock/websocket.js`, `src/context/FleetContext.jsx`, `src/components/live/LuggageMonitoring.jsx`
+**Dependencies:** E2-S1 (RealSseClient), E1-S6' (cloud-backend SSE fan-out + `ALERT_EVENT_TYPES` extended to luggage types)
+**Files changed:** `src/sse/RealSseClient.js`, `src/mock/websocket.js`, `src/context/FleetContext.jsx`, `src/components/live/LuggageMonitoring.jsx`, `cloud-backend/src/cloud_backend/routes/alerts_sse.py` (extend allow-list)
 
 ---
 

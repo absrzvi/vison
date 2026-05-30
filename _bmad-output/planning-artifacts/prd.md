@@ -1,8 +1,9 @@
 ---
 status: APPROVED
 date: '2026-05-30'
-version: '1.1'
+version: '1.2'
 changelog:
+  - '1.2 (2026-05-30): Ratify SSE as landside push transport per ADR-20 (supersedes ADR-9 for landside). Onboard event-store WS retained for intra-CCU fan-out. §9 split into Landside push and Onboard fan-out rows. OQ-13 added (multi-worker SSE fan-out at fleet scale).'
   - '1.1 (2026-05-30): Descope FR23, FR25, FR32, FR34, FR35 to Phase 2 per readiness review 2026-05-30. NFR2 reworded to reflect ADR-15 (APC is post-hoc calibration, not real-time blending).'
   - '1.0 (2026-05-16): Initial approval.'
 inputDocuments:
@@ -24,7 +25,7 @@ inputDocuments:
 | **Vendor** | Nomad Digital |
 | **Delivery model** | AI Insights-as-a-Service (managed SaaS, per-train subscription) |
 | **Pilot scope** | Single vehicle (R5001C CCU), 3-month PoC |
-| **PRD version** | 1.1 |
+| **PRD version** | 1.2 |
 | **Date** | 2026-05-30 |
 | **Status** | Approved |
 
@@ -229,7 +230,8 @@ These requirements are derived from the locked prototype (DD-001) and `01-contro
 | Event envelope | All events: `{uuid, journey_id, vehicle_id, timestamp, event_type, severity, source, payload}` |
 | journey_id scheme | `{vehicle_id}_{trip_number}_{YYYYMMDD}` — stable across midnight crossings |
 | Auth | VLAN isolation onboard (PoC); API key cloud (PoC); OAuth2/OIDC upgrade path at fleet rollout |
-| WebSocket | Client-driven subscriptions with `event_type` filter, `min_severity`, `coach_id`, `reconnect_replay_depth=50` |
+| Landside push transport | **Server-Sent Events (SSE)** on `GET /api/v1/alerts/stream` (cloud-backend → Control Centre). Server-side filter limited to `{ALARM_ACTIVE, ALERT_RAISED, ALERT_RESOLVED}`; client filters severity/coach in `FleetContext`. No reconnect replay on the wire — reconcile via REST. See ADR-20. |
+| Onboard fan-out transport | WebSocket with ADR-9 `SubscriptionRequest` (+ `reconnect_replay_depth=50`) — used by the **onboard `event-store`** for intra-CCU consumers (Conductor App, Driver Display in Phase 2). **Not** used landside. See ADR-9. |
 
 ---
 
@@ -284,6 +286,7 @@ Per architecture document, the confirmed build order is:
 | 10 | Should dismissed exceptions stay visible (greyed) or be fully hidden? | Analytics exception list UX | ÖBB / Claudia |
 | 11 | Confirmed data retention period for historical occupancy data? (90 days assumed) | Analytics date picker range | Nomad Digital data governance |
 | 12 | Per-operator configurable alert threshold — stored in operator config or environment variable? | Alert threshold implementation | ÖBB operations |
+| 13 | SSE multi-worker fan-out — in-process `_subscribers` set OK for PoC (single worker); fleet rollout needs Redis pub/sub or PG `LISTEN/NOTIFY`. Which? | SSE fan-out at fleet scale | Nomad Digital backend (non-blocking for PoC) |
 
 ---
 

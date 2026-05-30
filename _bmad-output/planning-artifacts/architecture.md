@@ -547,11 +547,13 @@ When VLAN 7 GPS + HAFAS timetable data indicates the train is within 2 minutes o
 
 **Rationale:** Costs nothing to add; avoids a breaking migration when the first v2 endpoint is needed. No unversioned routes permitted.
 
-#### ADR-9: WebSocket Subscription Model
+#### ADR-9: WebSocket Subscription Model — **SUPERSEDED 2026-05-30 by ADR-20** (kept for history)
 
-**Decision:** Client-driven subscription model. Clients declare interest at connection time; server filters delivery server-side.
+> **⚠ This ADR is no longer the active landside-push contract.** The PoC ships SSE (`cloud-backend/routes/alerts_sse.py`); see ADR-20 below. WebSocket remains the **onboard** event-store fan-out contract per Epic 4-S7 (intra-CCU only).
 
-**Subscription message spec:**
+**Original decision:** Client-driven subscription model. Clients declare interest at connection time; server filters delivery server-side.
+
+**Subscription message spec (retained for onboard event-store WS fan-out):**
 ```python
 # ws/subscription.py
 from dataclasses import dataclass
@@ -564,18 +566,80 @@ class SubscriptionRequest:
     reconnect_replay_depth: int = 50  # events to replay on reconnect
 ```
 
-**Reconnect replay:** On WebSocket reconnection, server replays last `reconnect_replay_depth` events matching the subscription filter. Prevents silent gaps for safety-relevant events. Default 50 events; configurable per client.
+**Original rationale:** Eliminates silent data gaps on CCU restart or tunnel reconnection. Safety-relevant alerts (ALERT_RAISED, DOOR_OBSTRUCTION, UNATTENDED_BAG) must not be silently missed.
 
-**Rationale:** Eliminates silent data gaps on CCU restart or tunnel reconnection. Safety-relevant alerts (ALERT_RAISED, DOOR_OBSTRUCTION, UNATTENDED_BAG) must not be silently missed.
+**Where this still applies (onboard only):**
+- `event-store` ↔ onboard consumers (E4-S7 fan-out, future Conductor App)
+- `SubscriptionRequest` dataclass remains in `shared/ws/subscription.py` for onboard use
+
+**Where it does NOT apply:**
+- Cloud-backend ↔ Control Centre Dashboard (now SSE — see ADR-20)
+
+---
+
+#### ADR-20: Landside Push Transport — Server-Sent Events (2026-05-30)
+
+**Status:** Accepted (ratifying shipped code)
+
+**Decision:** The cloud-backend pushes real-time events to the Control Centre Dashboard over **HTTP Server-Sent Events (SSE)** on `GET /api/v1/alerts/stream` using FastAPI `StreamingResponse` with `text/event-stream`. Each connected client gets a private `asyncio.Queue`; the ingest route calls `publish_alert(event)` to fan out to all subscribers. There is **no WebSocket route on the cloud-backend** — `alerts_sse.py` is the only push surface.
+
+**Filtering model:**
+- **Server-side type filter** — only `{ALARM_ACTIVE, ALERT_RAISED, ALERT_RESOLVED}` flow through `publish_alert()`. All other event types are persisted to PostgreSQL but not pushed live.
+- **Client-side severity/coach filter** — the CC client receives all alert events and filters in `FleetContext` for view-level concerns (severity bands, coach filters, KPI tile counts). Server has no per-client subscription state.
+- **No reconnect replay on the wire.** The CC client uses the existing REST endpoints (`GET /api/v1/analytics/system-health`, `GET /api/v1/trains/{id}/alerts?status=active`, `GET /api/v1/analytics/exceptions`) to reconcile state on reconnect. Reconnect replay was an ADR-9 onboard concern; it does not transfer to landside because PostgreSQL is the authoritative store and REST queries are cheap.
+
+**Rationale for SSE over WebSocket (PoC landside):**
+
+| Concern | SSE | WebSocket |
+|---|---|---|
+| Direction needed | Server→client only | Bidirectional (not needed for CC push) |
+| Behind HTTP/2 proxies, corporate firewalls, ÖBB perimeter | ✅ Plain HTTP request | ⚠ Some networks block Upgrade |
+| Browser API | Built-in `EventSource` — auto-reconnect with `Last-Event-ID` | Manual reconnect + heartbeat |
+| FastAPI ergonomics | `StreamingResponse` — already used | Needs separate `WebSocketRoute` machinery |
+| Backpressure / multi-worker | Each worker has its own `_subscribers` set (acceptable: small PoC) | Same per-worker isolation, more complex teardown |
+| Auth | `X-API-Key` header on the GET — fits ADR-7 verbatim | API key over query string or first WS frame — awkward |
+| Onboard event-store fan-out | N/A | Already specified in ADR-9 — retained for onboard |
+
+**Code state (as of 2026-05-30):**
+- ✅ `cloud-backend/src/cloud_backend/routes/alerts_sse.py` exists and is wired into `main.py`
+- ✅ `cloud-backend/src/cloud_backend/routes/ingest.py` calls `publish_alert()` after persistence
+- ❌ `control-centre/src/ws/RealWebSocketClient.js` still uses `new WebSocket(wsUrl)` — **must be replaced with an `EventSource`-based client.** Story E2-S1 acceptance criteria are written for WebSocket and need updating.
+- ❌ Epic 1 Story E1-S6 (`WebSocket Subscription Spec & Filter Logic`) and Story E2-S1 (`Real WebSocket Client`) carry WS-specific ACs that no longer match the landside contract. They must be split into (a) onboard event-store WS handler (E1-S6 retained scope) and (b) cloud-backend SSE fan-out (new replacement scope).
+- ❌ PRD §9 still names "WebSocket: Client-driven subscriptions…" — must be reworded to reference SSE for landside push.
 
 **Test required:**
 ```
-tests/unit/test_ws_subscription_filter.py
-- Assert events below min_severity are not delivered to subscriber
-- Assert events not in event_types list are not delivered
-- Assert reconnect replay delivers exactly last N matching events
-- Assert no duplicate delivery if client was not disconnected
+cloud-backend/tests/integration/test_alerts_sse.py
+- Assert: a client connecting to /api/v1/alerts/stream with valid X-API-Key receives an event within 500ms of publish_alert(...)
+- Assert: 4xx-class auth failures return ADR-10 error envelope
+- Assert: SSE stream recovers without duplicate delivery after a worker restart (NFR1, per CLAUDE.md story standards)
+- Assert: events that are not in ALERT_EVENT_TYPES are never pushed (e.g. OCCUPANCY_UPDATE)
+- Assert: multiple concurrent subscribers all receive the same event
 ```
+
+**Onboard vs landside transports — definitive map:**
+
+| Edge | Transport | Where defined |
+|---|---|---|
+| onboard producers → onboard `event-store` | HTTP POST `/api/v1/events` | ADR-1, ADR-3, E1-S4, E4-S7 |
+| onboard producers → onboard `fusion` | HTTP POST `/candidates/<event>` (double-POST) | ADR-19 |
+| onboard `event-store` → onboard consumers (Conductor App, Driver Display — Phase 2) | WebSocket with ADR-9 `SubscriptionRequest` + replay | ADR-9, E4-S7 |
+| onboard `cloud-sync` → landside Mosquitto broker | MQTT (topic `oebb/events/{vehicle_id}/{event_type}`) | E1-L1, E4-CS1 |
+| landside `mqtt-ingestor` → PostgreSQL | DB write | E1-L1 |
+| landside cloud-backend → Control Centre Dashboard | **SSE on `/api/v1/alerts/stream`** | **ADR-20 (this ADR)** |
+| Control Centre Dashboard → cloud-backend | HTTP REST `/api/v1/*` | ADR-8 |
+
+**Migration impact:**
+
+1. **Epic 1 — Story E1-S6** must be re-scoped to "Onboard event-store WebSocket Subscription Spec & Filter Logic". The cloud-backend SSE work is a separate new story (call it **E1-S6'**) covering the test surface above.
+2. **Epic 2 — Story E2-S1** "Real WebSocket Client" must be re-scoped to "Real SSE Client" — replace `new WebSocket(wsUrl)` with `new EventSource(sseUrl)`, use `Last-Event-ID` for resume, keep `MockWebSocketClient` as the dev fallback but rename to `MockPushClient` (or keep name and document the misnomer). Drop the `SubscriptionRequest` round-trip from the client side; server filters at `ALERT_EVENT_TYPES`.
+3. **Epic 5 — Story E5-S1** ("Luggage Live WebSocket Feed") — `LUGGAGE_RACK_SATURATION` and `UNATTENDED_BAG` are currently routed via `RealWebSocketClient`. **Decision:** add these two event types to `ALERT_EVENT_TYPES` on the cloud-backend (so they push over SSE) and update the client to consume them from the SSE stream. Title remains for backwards-compat but Dev Notes flag the transport change.
+4. **PRD §9** ("WebSocket: Client-driven subscriptions with…") — replaces with SSE landside, retains WebSocket as the onboard intra-CCU contract.
+5. **CLAUDE.md** container map — already correct ("REST+SSE for Control Centre"). No change needed.
+
+**Open follow-up:** Multi-worker fan-out on the cloud-backend currently uses an in-process `_subscribers` set per worker. At PoC scale (single-vehicle, single-worker) this is fine. Before fleet rollout, evaluate Redis pub/sub or PostgreSQL `LISTEN/NOTIFY` so a publish from any worker reaches all subscribers. Track as **OQ-13** (new open question; non-blocking for PoC).
+
+**Supersedes (for landside scope only):** ADR-9 WebSocket Subscription Model. ADR-9 remains the **onboard** event-store fan-out contract (intra-CCU, retained as-is).
 
 #### ADR-10: API Error Envelope
 
