@@ -1,4 +1,5 @@
 # generated: 2026-05-17
+# last_updated: 2026-05-30  # sprint-planning re-run: Hardening epics 6/7/8/9 added (all stories backlog, ACs in epics.md); E1-S6' added (cloud-backend SSE fan-out per ADR-20). Existing statuses preserved. Epic 1 retro-reopened from done → in-progress because E1-S6' is a new in-flight story under it.
 # last_updated: 2026-05-30  # E10-S1 scoped via grill-me + party-mode: renamed to 10-1-alert-confidence-and-ai-pipeline-health (code-only); playbook content moved to E10-S3; new E10-S5 (alert quality measurement) + Epic 11 (CC Admin & Identity) added; full ACs at _bmad-output/implementation-artifacts/10-1-alert-confidence-and-ai-pipeline-health.md
 # last_updated: 2026-05-30  # epic-10 added (Operator Adoption & Trust): 4 stories backlog (S1 confidence+exec playbook, S2 behavioural telemetry, S3 SOP+drill cadence, S4 dwell-time KPI) — source: owning-the-gap-ai-pm-analysis.md
 # last_updated: 2026-05-21  # code-review 2026-05-21 (opus-4.7): 1-5-4-onboard-smoke-test → done; 7 patches applied (curl body, GET filter, cameras.json stub, CWD guard, compose v2, API_KEY env, exec bit); smoke test exits 0
@@ -80,17 +81,18 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # ── Epic 1: Foundation & Shared Infrastructure ──
-  epic-1: done
+  epic-1: in-progress  # reopened 2026-05-30: E1-S6' added (cloud-backend SSE fan-out); was done
   1-1-e2e-skeleton-mvp: done
   1-2-event-envelope-pydantic-models: done
   1-3-postgresql-schema-alembic: done
   1-4-sqlite-event-store: done
   1-5-apc-adapter: done
-  1-6-ws-subscription-spec: backlog  # E1-S6 absorbed into E4-S7 (event-store onboard WS); no standalone story file
+  1-6-ws-subscription-spec: backlog  # ADR-20 (2026-05-30): re-scoped to onboard-only event-store WS; still absorbed by E4-S7; landside push moved to new 1-6-prime story below
+  1-6-prime-cloud-backend-sse-fanout: backlog  # NEW 2026-05-30 per ADR-20: cloud-backend SSE fan-out; ratify alerts_sse.py against 7 BDD ACs; extend ALERT_EVENT_TYPES with luggage types; integration tests
   1-7-rest-api-sse-fleet: done
   1-8-shared-contract-enforcement: done
   1-l1-landside-mqtt-ingestion: backlog  # MQTT ingestor deferred; 4-cs1 covers cloud-sync transport; full broker story pending
-  epic-1-retrospective: done
+  epic-1-retrospective: done  # retro stays done; will redo at end of E1-S6' if substantial findings emerge
 
   # ── Epic 2: Control Centre Dashboard — Live Operations ──
   epic-2: done
@@ -171,3 +173,41 @@ development_status:
   11-4-admin-ui-alert-class-killswitch: backlog                 # replaces curl operation of E10-S1 endpoints; same backend, auth middleware swapped
   11-5-configuration-surface: backlog                           # mutable confidence thresholds + per-operator alert thresholds
   epic-11-retrospective: optional
+
+  # ── Epic 6: Fusion Hardening — Journey Lifecycle & Handler Robustness ──
+  # Source: deferred items from E4-S9, E4-S10, E4-S6 code reviews
+  # Containers: fusion/
+  # FRs covered: NFR1 (uptime), NFR3 (false-positive rate)
+  epic-6: backlog
+  6-1-fusion-journey-lifecycle-reset-hook: backlog              # reset CoachLedger / ComfortIndex / SuppressionGate per-journey state; tests/unit/test_journey_lifecycle.py
+  6-2-fusion-handler-async-exception-hardening: backlog         # /candidates/* handlers catch asyncio.TimeoutError + ValidationError → 200/422 not 500
+  6-3-inference-test-hygiene-asyncmock-warnings: backlog        # eliminate 5 "coroutine never awaited" warnings in inference unit tests
+  epic-6-retrospective: optional
+
+  # ── Epic 7: Retry & Idempotency Hardening ──
+  # Source: deferred items from E4-S8 (W1, W3), E4-S6, E4-CS1 code reviews
+  # Containers: shared/, inference/, cloud-sync/
+  # FRs covered: NFR1 (uptime), NFR8 (connectivity resilience)
+  epic-7: backlog
+  7-1-shared-retry-policy-exclude-4xx: backlog                  # DEFAULT_RETRY: no retry on 4xx (except 429); contract test
+  7-2-gangway-tripwire-emit-then-commit: backlog                # tripwire records _last_side only after successful emit; journey_id snapshot at detection time
+  epic-7-retrospective: optional
+
+  # ── Epic 8: Analytics UI Hardening ──
+  # Source: deferred items from E3-S3..S7, E2-S2, E5-S1 code reviews
+  # Component files: src/components/analytics/, src/context/FleetContext.jsx
+  # FRs covered: UX-DR8–UX-DR12, NFR1
+  epic-8: backlog
+  8-1-abortcontroller-analytics-fetch-cancellation: backlog     # cancel stale fetches on range change + unmount; 300ms debounce on retry
+  8-2-fleetcontext-provider-memoisation: backlog                # useMemo on context value; eslint exhaustive-deps clean
+  epic-8-retrospective: optional
+
+  # ── Epic 9: Container & Infrastructure Hardening ──
+  # Source: deferred items from E1-S1, E1-S3, E1-S4, E4-CS1, E1.5-1..3 code reviews
+  # Containers: all Dockerfiles, cloud-backend/ migrations
+  # FRs covered: NFR1 (uptime), NFR13 (CI/CD)
+  epic-9: backlog
+  9-1-postgresql-analytics-indexes: backlog                     # 0002_add_analytics_indexes.py — (timestamp,event_type), (vehicle_id,timestamp), journeys.vehicle_id
+  9-2-dockerfile-hardening-pass: backlog                        # non-editable pip installs, HEALTHCHECK directives, Hailo digest-pin comment, FastAPI lifespan migration
+  9-3-cloud-sync-batch-commits-bg-truncation: backlog           # 50ms batched commits; asyncio.create_task for truncate_old_journeys
+  epic-9-retrospective: optional
