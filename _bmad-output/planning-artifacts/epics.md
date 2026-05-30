@@ -147,6 +147,7 @@ UX-DR15: Prototype to production delta (9 items from DD-001): replace MockWebSoc
 | 7 | Retry & Idempotency Hardening | P1 | ✅ In scope — hardening sprint 1 |
 | 8 | Analytics UI Hardening | P2 | ✅ In scope — hardening sprint 1 |
 | 9 | Container & Infrastructure Hardening | P2 | ✅ In scope — hardening sprint 1 |
+| 10 | Operator Adoption & Trust (AI PM gap-closure) | P1 | 🆕 Proposed — pre-pilot |
 
 ---
 
@@ -1906,3 +1907,153 @@ All production container images use non-editable installs, include `HEALTHCHECK`
 
 **Dependencies:** E4-CS1 (cloud-sync container), E1-S4 (SQLite patterns)  
 **Deliverables:** Updates to `cloud_sync/src/cloud_sync/db.py`; `tests/integration/test_cloud_sync_perf.py`
+
+---
+
+### Epic 10: Operator Adoption & Trust (AI PM Gap-Closure)
+
+**Source:** [owning-the-gap-ai-pm-analysis.md](owning-the-gap-ai-pm-analysis.md) — closes the gap between "the system works" and "the operator changes how they run trains because of it." Required before any signed ÖBB pilot.
+
+**Why now:** Stories E10-S1 and E10-S2 must land before Control Centre PostgreSQL contracts harden further — retrofitting `confidence_score` into `AlertRaisedPayload` and behavioural telemetry into the `events` schema is far more expensive post-pilot than now.
+
+**Out of scope:** Model accuracy improvements (Epic 4 territory), Conductor App UI work (Phase 2).
+
+**Stories (priority order — implement in this sequence):**
+
+#### Story E10-S1 — Exec-Failure Playbook & Alert Confidence Metadata
+
+**As an** AI PM preparing for ÖBB pilot signoff,
+**I want** every `ALERT_RAISED` event to carry a per-alert `confidence_score` and `model_version`, a live AI-quality tile on System Health, a documented 24-hour exec response playbook, and a per-alert-class kill-switch with a named owner,
+**so that** when the system is publicly wrong in front of an executive we have evidence, a comms path, and a rollback — and procurement conversations have a credible answer to "what happens when it's wrong?"
+
+**Acceptance criteria:**
+
+**Given** an `ALERT_RAISED` event is emitted by `fusion/`  
+**When** the envelope is validated  
+**Then** the payload contains `confidence_score: float` (range 0.0–1.0) and `model_version: str` (semver, e.g. `"hailo-yolov8s-1.4.2"`); both fields are required, not optional
+
+**Given** the Claudia escalations inbox  
+**When** an escalation has `confidence_score < 0.65` (configurable via `LOW_CONFIDENCE_THRESHOLD` env var)  
+**Then** a `low-confidence` pill is rendered next to the alert title with a tooltip showing the score and model version
+
+**Given** the Control Centre System Health page  
+**When** it loads  
+**Then** a new "AI Quality" tile shows: rolling 1-hour false-positive rate (from `ALERT_RESOLVED` outcome tags), rolling 1-hour mean `confidence_score` by alert class, and a `model_version` drift indicator (changes in last 24h)
+
+**Given** the fusion config  
+**When** the operator sets `disabled_alert_classes: ["UNATTENDED_BAG", "DOOR_OBSTRUCTION"]`  
+**Then** those alert classes are not emitted to the event store; the suppression is logged as a structured event `ALERT_CLASS_DISABLED` with operator_id, reason, and timestamp
+
+**And** `_bmad-output/operational-procedures/exec-failure-playbook.md` is created covering: T+0–15min (acknowledge to ÖBB sponsor via phone using holding statement template), T+15min–4h (evidence bundle = event-store export + Hailo logs + fusion config snapshot), T+4–24h (root-cause writeup + per-alert-class disable decision), with named Nomad-side and ÖBB-side owners in a RACI table  
+**And** the playbook is reviewed and signed by Abbas (Nomad) and the named ÖBB sponsor before pilot kickoff  
+**And** `event-payload-schemas.md` is updated to reflect the new `AlertRaisedPayload` fields  
+**And** existing fusion tests for `ALERT_RAISED` are updated to assert `confidence_score` and `model_version` presence
+
+**Dependencies:** E4-S6 (fusion alert correlation), E2-S5 (escalation inbox), E2-S9 / E3-S6 (system health page)  
+**Deliverables:** `shared/events/payloads.py` (AlertRaisedPayload update), `fusion/` emit sites, `control-centre/src/components/escalations/LowConfidencePill.jsx`, `control-centre/src/components/health/AIQualityTile.jsx`, `cloud-backend/src/api/v1/ai_quality.py`, `_bmad-output/operational-procedures/exec-failure-playbook.md`, schema doc update
+
+**Permission tier:** Tier 2 (local file edits) + Tier 3 (schema migration on shared `events` table — default permission mode required)
+
+---
+
+#### Story E10-S2 — Operator Behavioural Telemetry
+
+**As an** AI PM measuring whether alerts change operator behaviour,
+**I want** every escalation lifecycle event (raised → acknowledged → resolved → silently-dismissed) logged with operator-attributable telemetry and queryable via a new audit endpoint,
+**so that** after 8 weeks of pilot operation I can identify which alert classes have the highest ack-to-action rate, which are being silently dismissed, and which thresholds need retuning.
+
+**Acceptance criteria:**
+
+**Given** an escalation transitions state (`raised`, `acknowledged`, `resolved`)  
+**When** the transition is persisted  
+**Then** a row is inserted into `escalation_audit` with columns: `escalation_id`, `operator_id`, `alert_class`, `t_fired`, `t_ack`, `t_resolve`, `outcome_tags[]`, `dwell_focus_ms`, `model_version`, `confidence_score`
+
+**Given** a Claudia user navigates away from an unacknowledged escalation detail panel (route change or tab close)  
+**When** the panel is closed without an Acknowledge action and the escalation is still in `raised` state  
+**Then** an `escalation_silently_dismissed` event is emitted with `escalation_id`, `operator_id`, `t_viewed`, `t_dismissed`, `dwell_focus_ms`; this surfaces in the System Health AI Quality tile as a "silent dismissal rate (1h)" indicator
+
+**Given** the new endpoint `GET /api/v1/escalations-audit`  
+**When** called with `?from=<iso>&to=<iso>&alert_class=<class>`  
+**Then** it returns per-alert-class funnels: `{alert_class, count_raised, count_acknowledged, count_resolved, count_silently_dismissed, median_t_ack_seconds, p95_t_ack_seconds, outcome_tag_distribution}`
+
+**Given** the weekly Alert Effectiveness Report job runs every Monday 06:00 UTC  
+**When** it executes  
+**Then** it generates `reports/alert-effectiveness-{YYYY-WW}.md` containing: top-5 high-volume / low-action alert classes (retune candidates), median ack latency by class, threshold-change events from the previous week and their impact on ack rate, silent-dismissal rate trend
+
+**And** an Alembic migration creates `escalation_audit` with appropriate indices (`alert_class`, `operator_id`, `t_fired`)  
+**And** the migration is safe under concurrent reads (NFR-compliant; matches Epic 1 migration pattern)  
+**And** `cloud-backend` unit tests cover the funnel-aggregation query at ≥80% coverage  
+**And** no PII beyond `operator_id` (already in scope per existing ack/resolve schema) is logged — GDPR-compliant per NFR6
+
+**Dependencies:** E10-S1 (confidence_score in AlertRaisedPayload), E2-S5 (acknowledge/resolve flow), E3-S1 (analytics REST patterns)  
+**Deliverables:** `cloud-backend/migrations/versions/00XX_escalation_audit.py`, `cloud-backend/src/api/v1/escalations_audit.py`, `cloud-backend/src/services/alert_effectiveness_report.py`, `control-centre/src/lib/telemetry/dismissal.js`, tests
+
+**Permission tier:** Tier 3 (Alembic migration on shared cloud-backend DB — default permission mode required)
+
+---
+
+#### Story E10-S3 — Conrad/Claudia Operational SOP & Drill Cadence
+
+**As an** AI PM preparing for ÖBB pilot kickoff,
+**I want** a documented two-actor SOP for critical alerts, a decision matrix binding (alert_code × confidence × speed × location) to routing, a signed ÖBB security handoff contract, and a drill cadence wired to the pilot kickoff checklist,
+**so that** when a critical alert fires there is a written and rehearsed sequence — not a UI screen and a hope.
+
+**Acceptance criteria:**
+
+**Given** a critical alert fires (fire, fall, door-at-speed, unattended item with `confidence_score >= 0.85`)  
+**When** the operational team responds  
+**Then** they follow the SOP in `_bmad-output/operational-procedures/critical-alert-sop.md` covering: happy path (Conrad assess + escalate → Claudia acknowledge → resolve), Conrad-unreachable branch (auto-route to Claudia after 10 min amber), Claudia-unreachable branch (secondary Control Centre operator paged), dead-zone branch (event queued onboard, escalation surfaces on reconnect)
+
+**Given** the critical-alert decision matrix in `_bmad-output/operational-procedures/alert-routing-matrix.md`  
+**When** an alert is emitted  
+**Then** the matrix defines, per `alert_code`, the routing decision as a function of `confidence_score` bucket, train speed bucket, and location (in-station vs in-transit); each row has a signoff date and ÖBB ops owner
+
+**Given** the ÖBB security handoff contract  
+**When** Claudia tags an escalation with the "ÖBB security notified" outcome tag  
+**Then** the contract defines who receives the notification (named role + channel), within what SLA (e.g. 5 min acknowledge), and the escalation path if SLA is breached; the contract is signed by ÖBB Sicherheit and Nomad before pilot kickoff
+
+**And** a drill cadence is added to the pilot kickoff checklist: monthly tabletop drills (Conrad + Claudia walk the SOP for a randomly selected critical alert class), quarterly live drills (a planted test event on a non-revenue service)  
+**And** all four documents are linked from `_bmad-output/planning-artifacts/owning-the-gap-ai-pm-analysis.md` Gap 1  
+**And** Open Question 1 from [scenario-02d](../design-artifacts/C-UX-Scenarios/02d-conrad-unattended-bag.md) is closed by the security handoff contract
+
+**Dependencies:** E10-S1 (confidence_score must exist to define the decision matrix)  
+**Deliverables:** `_bmad-output/operational-procedures/critical-alert-sop.md`, `_bmad-output/operational-procedures/alert-routing-matrix.md`, `_bmad-output/operational-procedures/oebb-security-handoff-contract.md`, `_bmad-output/operational-procedures/drill-cadence.md`, updates to pilot kickoff checklist
+
+**Permission tier:** Tier 2 (documentation only — but each artefact requires named ÖBB signoff before pilot, which is a Tier 3 process boundary)
+
+---
+
+#### Story E10-S4 — Dwell-Time-Aware Alert Framing & Delay-Minutes-Avoided KPI
+
+**As an** AI PM aligning the product to Conrad's on-time-departure KPI,
+**I want** every pre-departure alert to carry a `seconds_to_departure` field sourced from ZFR/PIS, a dwell-time suffix in alert copy, an on-time-saved totaliser in the Conrad app pre-departure summary, and a new fleet KPI tracking delay-minutes-avoided,
+**so that** the product speaks Conrad's language and the business case is measurable in the metric ÖBB actually rewards.
+
+**Acceptance criteria:**
+
+**Given** an alert is emitted while a train is in `DWELL` state at a station  
+**When** the envelope is built  
+**Then** the payload contains `seconds_to_departure: int | null` derived from the ZFR/PIS scheduled departure feed; null only if the feed is unavailable (logged as a `DWELL_FEED_DEGRADED` event)
+
+**Given** the Conductor App pre-departure alert banner  
+**When** an alert renders with `seconds_to_departure` populated  
+**Then** the title includes the suffix `· {N}s to departure` (e.g. `"Door obstruction · Coach 6 · 90s to departure"`); colour shifts from amber to red when `seconds_to_departure < 30`
+
+**Given** the Conductor App pre-departure summary screen  
+**When** the train completes a station dwell  
+**Then** a "minutes saved this shift" totaliser updates, computed as Σ over acknowledged-before-departure alerts of `seconds_to_departure × ack_action_factor` (factor derived from the outcome-tag → resolution-time mapping); the totaliser resets at journey start
+
+**Given** the Control Centre fleet KPI strip  
+**When** the daily KPI window updates  
+**Then** a new tile "Delay-minutes avoided (24h)" shows the fleet-wide sum, computed from `escalation_audit` rows where outcome_tag indicates an in-time resolution
+
+**And** the new KPI is added to the business goals doc [01-Business-Goals](../design-artifacts/B-Trigger-Map/01-Business-Goals.md) as a measurable success criterion  
+**And** unit tests cover the `seconds_to_departure` computation including the null-on-feed-loss path  
+**And** the Conductor App is explicitly out-of-scope for the PoC Control Centre (descoped to Phase 2) — this story ships only the event-payload field, the Control Centre KPI tile, and a Conductor App spec stub; the Conductor App UI work is gated on Conductor App epic activation
+
+**Dependencies:** E10-S2 (escalation_audit for KPI computation), E4-S2 (VLAN pollers — PIS feed), Conductor App epic (UI portions deferred)  
+**Deliverables:** `shared/events/payloads.py` (alert payload + DwellFeedDegradedPayload), `vlan-pollers/` PIS departure-time extraction, `cloud-backend/src/api/v1/kpi/delay_minutes_avoided.py`, `control-centre/src/components/kpi/DelayMinutesAvoidedTile.jsx`, Conductor App spec stub at `_bmad-output/design-artifacts/D-UX-Design/conductor-app-dwell-aware-alerts.md`
+
+**Permission tier:** Tier 2 (local edits) + Tier 3 (event schema field — default permission mode for the payload migration)
+
+---

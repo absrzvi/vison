@@ -1,4 +1,5 @@
 # generated: 2026-05-17
+# last_updated: 2026-05-30  # epic-10 added (Operator Adoption & Trust): 4 stories backlog (S1 confidence+exec playbook, S2 behavioural telemetry, S3 SOP+drill cadence, S4 dwell-time KPI) — source: owning-the-gap-ai-pm-analysis.md
 # last_updated: 2026-05-21  # code-review 2026-05-21 (opus-4.7): 1-5-4-onboard-smoke-test → done; 7 patches applied (curl body, GET filter, cameras.json stub, CWD guard, compose v2, API_KEY env, exec bit); smoke test exits 0
 # last_updated: 2026-05-21  # dev-story 2026-05-21: 1-5-4-onboard-smoke-test → review (smoke-test-onboard.sh exits 0; event-store POST+GET verified)
 # last_updated: 2026-05-21  # dev-story 2026-05-21 (opus-4.7): 4-10-coach-comfort-index → review (139 fusion tests, cov 94.03%, mypy/ruff clean)
@@ -144,3 +145,14 @@ development_status:
   1-5-3-onboard-docker-compose: done        # docker-compose.onboard.yml — 7 patches applied; 149 inference + 43 rtsp-ingest tests pass; compose config valid
   1-5-4-onboard-smoke-test: done            # code-review 2026-05-21 (opus-4.7): 7 patches applied; smoke test exits 0; cameras.json stub, CWD guard, curl body capture, journey_id filter, compose v2 check, API_KEY env, exec bit
   epic-1-5-retrospective: done              # epic-1-5-retro-2026-05-21.md; 5 action items; 23 patches total across 4 stories
+
+  # ── Epic 10: Operator Adoption & Trust (AI PM gap-closure) ──
+  # Source: _bmad-output/planning-artifacts/owning-the-gap-ai-pm-analysis.md (2026-05-30)
+  # Pre-pilot blocker. Stories ordered by priority — implement in sequence (S1 → S2 → S3 → S4).
+  # S1 + S2 must land before Control Centre PostgreSQL contracts harden further.
+  epic-10: backlog
+  10-1-exec-failure-playbook-and-confidence-metadata: backlog   # P0 — exec-comms playbook + confidence_score/model_version on AlertRaisedPayload + AI quality tile + per-class kill-switch
+  10-2-operator-behavioural-telemetry: backlog                  # P0 — escalation_audit table + /api/v1/escalations-audit + silent-dismissal tracking + weekly effectiveness report
+  10-3-conrad-claudia-sop-and-drill-cadence: backlog            # P1 — critical-alert SOP + routing decision matrix + ÖBB security handoff contract + drill cadence
+  10-4-dwell-time-aware-alert-framing-and-kpi: backlog          # P2 — seconds_to_departure on alerts + delay-minutes-avoided KPI; Conductor App UI deferred to Phase 2
+  epic-10-retrospective: optional
