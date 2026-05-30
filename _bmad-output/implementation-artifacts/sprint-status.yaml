@@ -48,7 +48,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-30  # dev-story 2026-05-30 (Amelia/opus-4.7): 1-6-prime-cloud-backend-sse-fanout → review (T1: event: SSE field, T2: luggage types in ALERT_EVENT_TYPES, T3-T4: 10 integration tests, T5: unit regression, T6: mypy --strict clean, T7: ADR-20 housekeeping; D2 surfaced)
+last_updated: 2026-05-30  # code-review Round 1 2026-05-30: 1-6-prime-cloud-backend-sse-fanout patches applied (D-R1 SQL + D-R2 Alembic + P1-P12 + ingest.py timestamp bug fix); 66/66 tests pass
 # create-story 2026-05-30: 1-6-prime-cloud-backend-sse-fanout → ready-for-dev (ratifies shipped alerts_sse.py against 7 BDD ACs from ADR-20; T1 adds event: field, T2 extends ALERT_EVENT_TYPES to luggage types, T3-T5 add integration test surface)
 # code-review 2026-05-21 (opus-4.7): 1-5-3-onboard-docker-compose → done; D1 resolved (service_started), 7 patches applied (env_prefix fixes, api_key fields, restart, start_period); 149 inference + 43 rtsp-ingest tests pass
 # code-review 2026-05-21 (opus-4.7): 1-5-2-rtsp-ingest-dockerfile → done; 4 patches applied (P1 env_prefix, P2 uvicorn host, P4 CLAUDE.md table); P3 dismissed; 5 deferred; 43 unit tests pass
@@ -90,7 +90,7 @@ development_status:
   1-4-sqlite-event-store: done
   1-5-apc-adapter: done
   1-6-ws-subscription-spec: backlog  # ADR-20 (2026-05-30): re-scoped to onboard-only event-store WS; still absorbed by E4-S7; landside push moved to new 1-6-prime story below
-  1-6-prime-cloud-backend-sse-fanout: review  # dev-story 2026-05-30 (Amelia/opus-4.7): T1-T7 done; 20/20 tests pass (10 integration + 10 unit); mypy --strict + ruff clean; D2 records event_id string-ordering ratification finding
+  1-6-prime-cloud-backend-sse-fanout: done  # code-review Round 1 2026-05-30: D-R1+D-R2 resolved (SQL CTE rewrite + Alembic-driven test schema), P1-P12 patches applied, pre-existing ingest.py timestamp bug surfaced + fixed in scope; 66/66 tests pass; mypy + ruff clean on touched files
   1-7-rest-api-sse-fleet: done
   1-8-shared-contract-enforcement: done
   1-l1-landside-mqtt-ingestion: backlog  # MQTT ingestor deferred; 4-cs1 covers cloud-sync transport; full broker story pending

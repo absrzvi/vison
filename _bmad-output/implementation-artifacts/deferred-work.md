@@ -1,5 +1,14 @@
 # Deferred Work
 
+## Deferred from: code review of 1-6-prime-cloud-backend-sse-fanout (2026-05-30)
+
+- **DF1 — SSE `data:` field newline splitting.** `cloud-backend/src/cloud_backend/routes/alerts_sse.py:87-88, 96-97`. Per SSE spec, `data:` lines with embedded `\n` must be split into multiple `data:` lines. Current alert payloads have no free-text fields, so latent. Epic 9 hardening candidate.
+- **DF2 — `event_type` SSE control-line injection (theoretical).** `cloud-backend/src/cloud_backend/routes/alerts_sse.py:85-95`. `event_type` is constrained by `EventType` enum via Pydantic at ingest; can't carry a newline in practice. Document trust assumption; defensive `if event_type not in ALERT_EVENT_TYPES: continue` could be added later.
+- **DF3 — `_replay_since` `ORDER BY source_timestamp ASC` no tiebreaker.** `cloud-backend/src/cloud_backend/routes/alerts_sse.py:56`. Tied to D-R1 in story 1-6-prime. May resolve in this story if D-R1 option A is chosen; otherwise defer.
+- **DF4 — `_replay_since LIMIT 200` silent drop on long disconnects.** `cloud-backend/src/cloud_backend/routes/alerts_sse.py:57`. ADR-20 explicitly routes reconnect reconciliation through REST; wire-replay is bounded by design. Document the boundary in Dev Notes; consider emitting an `event: replay_truncated` frame when hit.
+- **DF5 — No SSE `retry:` directive emitted.** `cloud-backend/src/cloud_backend/routes/alerts_sse.py:88, 97, 99`. Browser EventSource default is 3s; ADR-20 doesn't mandate a server-side override. Add `retry: 15000\n\n` on first frame if reconnect-storm becomes an operational concern.
+- **DF6 — Control Centre `EventSource` consumer not wired.** `control-centre/src/ws/`. E2-S1 (`Real SSE Client`) is the paired frontend story, explicitly blocked on E1-S6'. Not in scope for this story.
+
 ## Triage — 2026-05-21 (post-Epic-4 phase-2 retro)
 
 Items reviewed before next epic planning. Items from E4 stories only (E1–E3/E5 items remain as-is).

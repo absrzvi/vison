@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Security
@@ -45,6 +46,12 @@ async def ingest_events(
             )
             continue
 
+        # EventEnvelope.timestamp is a Z-suffixed ISO-8601 string (validated by
+        # the shared model). The Postgres journeys.start_time and events.timestamp
+        # columns are TIMESTAMP WITH TIME ZONE, so asyncpg needs a datetime.
+        # Parse once per event — Z → +00:00 for fromisoformat compatibility.
+        ts_dt = datetime.fromisoformat(ev.timestamp.replace("Z", "+00:00"))
+
         # Ensure journey row exists before inserting the event (FK constraint).
         # Uses ON CONFLICT DO NOTHING — journey metadata is upserted separately
         # by the vlan-pollers when a trip starts; this guard prevents FK violations
@@ -59,7 +66,7 @@ async def ingest_events(
                 "journey_id": ev.journey_id,
                 "vehicle_id": ev.vehicle_id,
                 "trip_number": ev.journey_id.split("_")[1] if "_" in ev.journey_id else ev.journey_id,
-                "start_time": ev.timestamp,
+                "start_time": ts_dt,
             },
         )
 
@@ -81,8 +88,8 @@ async def ingest_events(
                 "severity": ev.severity,
                 "source": ev.source,
                 "schema_version": ev.schema_version,
-                "timestamp": ev.timestamp,
-                "source_timestamp": ev.timestamp,
+                "timestamp": ts_dt,
+                "source_timestamp": ts_dt,
                 "payload": json.dumps(ev.payload),
             },
         )

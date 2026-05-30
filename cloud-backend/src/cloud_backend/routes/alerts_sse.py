@@ -31,36 +31,83 @@ _subscribers: set[asyncio.Queue[dict[str, object]]] = set()
 
 
 def publish_alert(event: dict[str, object]) -> None:
-    """Called by ingest route when an alert-class event is stored."""
-    for q in _subscribers:
+    """Called by ingest route when an alert-class event is stored.
+
+    Iterates a list-snapshot of `_subscribers` so that concurrent
+    subscriber registration / disconnection during fan-out cannot raise
+    `RuntimeError: Set changed size during iteration` (P8 defence).
+    """
+    for q in list(_subscribers):
         try:
             q.put_nowait(event)
         except asyncio.QueueFull:
             pass
 
 
+def _build_frame(event: dict[str, object]) -> str | None:
+    """Render an event dict to a single SSE frame, or None if malformed.
+
+    Per E1-S6' code-review P11: bare `event["event_type"]` access would
+    propagate a KeyError out of the generator and tear down the SSE
+    connection. Instead, skip malformed events with a structured log.
+    A missing `event_type` or `event_id` (or a NULL value) is treated as
+    a producer-side bug, not a client-facing crash.
+    """
+    event_type_raw = event.get("event_type")
+    event_id_raw = event.get("event_id")
+    if event_type_raw is None or event_id_raw is None:
+        log.warning(
+            "sse_frame_skipped_missing_field",
+            event_type=event_type_raw,
+            event_id=event_id_raw,
+        )
+        return None
+    event_type = str(event_type_raw)
+    event_id = str(event_id_raw)
+    data = json.dumps(event, default=str)
+    return f"event: {event_type}\nid: {event_id}\ndata: {data}\n\n"
+
+
 async def _replay_since(
     last_event_id: str | None,
     db: AsyncSession,
 ) -> list[dict[str, object]]:
-    """Return alert-class events stored after last_event_id (for SSE reconnect)."""
+    """Return alert-class events stored after the row with `last_event_id`.
+
+    Ordering and cursor semantics (per E1-S6' code-review D-R1):
+    - Filter on `source_timestamp > (cursor row's source_timestamp)`. Using
+      `event_id` as the cursor would fail on production because the column
+      is `UUID` (not text) and because UUIDv4 has no temporal ordering.
+    - Order deterministically by `(source_timestamp ASC, event_id ASC)` so
+      ties on `source_timestamp` resolve identically across calls.
+    - If `last_event_id` is missing or does not exist, returns an empty
+      list — fresh subscribers get no replay (consistent with current
+      behaviour and ADR-20: "reconnect reconciliation goes through REST").
+    - `LIMIT 200` caps the wire-replay payload; clients use the REST
+      endpoints to reconcile any older gap.
+    """
     if not last_event_id:
         return []
     rows = await db.execute(
         text("""
+            WITH cursor AS (
+                SELECT source_timestamp AS ts
+                FROM events
+                WHERE event_id = :after
+            )
             SELECT event_id, event_type, severity, journey_id, vehicle_id,
                    timestamp, payload
-            FROM events
+            FROM events, cursor
             WHERE event_type = ANY(:types)
-              AND event_id > :after
-            ORDER BY source_timestamp ASC
+              AND source_timestamp > cursor.ts
+            ORDER BY source_timestamp ASC, event_id ASC
             LIMIT 200
         """),
         {"types": list(ALERT_EVENT_TYPES), "after": last_event_id},
     )
     return [
         {
-            "event_id": r.event_id,
+            "event_id": str(r.event_id),
             "event_type": r.event_type,
             "severity": r.severity,
             "journey_id": r.journey_id,
@@ -82,19 +129,17 @@ async def _sse_generator(
     try:
         # Replay missed events on reconnect
         for event in await _replay_since(last_event_id, db):
-            event_type = str(event["event_type"])
-            event_id = str(event["event_id"])
-            data = json.dumps(event)
-            yield f"event: {event_type}\nid: {event_id}\ndata: {data}\n\n"
+            frame = _build_frame(event)
+            if frame is not None:
+                yield frame
 
         # Live stream
         while not await request.is_disconnected():
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=15.0)
-                event_type = str(event["event_type"])
-                event_id = str(event["event_id"])
-                data = json.dumps(event)
-                yield f"event: {event_type}\nid: {event_id}\ndata: {data}\n\n"
+                frame = _build_frame(event)
+                if frame is not None:
+                    yield frame
             except TimeoutError:
                 yield ": keep-alive\n\n"
     finally:
