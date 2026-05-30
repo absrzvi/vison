@@ -1,7 +1,10 @@
 ---
 status: APPROVED
-date: '2026-05-16'
-version: '1.0'
+date: '2026-05-30'
+version: '1.1'
+changelog:
+  - '1.1 (2026-05-30): Descope FR23, FR25, FR32, FR34, FR35 to Phase 2 per readiness review 2026-05-30. NFR2 reworded to reflect ADR-15 (APC is post-hoc calibration, not real-time blending).'
+  - '1.0 (2026-05-16): Initial approval.'
 inputDocuments:
   - _bmad-output/design-artifacts/A-Product-Brief/product-brief.md
   - _bmad-output/planning-artifacts/architecture.md
@@ -21,8 +24,8 @@ inputDocuments:
 | **Vendor** | Nomad Digital |
 | **Delivery model** | AI Insights-as-a-Service (managed SaaS, per-train subscription) |
 | **Pilot scope** | Single vehicle (R5001C CCU), 3-month PoC |
-| **PRD version** | 1.0 |
-| **Date** | 2026-05-16 |
+| **PRD version** | 1.1 |
+| **Date** | 2026-05-30 |
 | **Status** | Approved |
 
 ---
@@ -102,9 +105,7 @@ All inference runs onboard. Raw video never leaves the train. Only structured, a
 | FR20 | Control Centre dashboard — live fleet view with occupancy, active incidents, and fault alerts across all trains |
 | FR21 | Unified prioritised incident feed for control centre operator, sorted by severity |
 | FR22 | Real-time dwell time shown per stop to control centre operator and capacity planner |
-| FR23 | Predictive overcrowding warning — forecast capacity breach at an upcoming stop |
 | FR24 | Slip/fall detection alert to control centre operator |
-| FR25 | Prohibited zone detection alert to control centre operator |
 | FR26 | Degraded operation alert to control centre operator, technician, and maintenance manager |
 | FR27 | All incidents tagged with trip ID and route for post-incident review |
 
@@ -112,24 +113,26 @@ All inference runs onboard. Raw video never leaves the train. Only structured, a
 
 | ID | Requirement |
 |----|-------------|
-| FR32 | No-show seat detection data by route, day type, and class for capacity planner |
 | FR33 | Anonymised ridership analytics — monthly boardings, peak loads, coach class occupancy |
-| FR34 | Occupancy-normalised energy KPIs per journey for ESG reporting |
-| FR35 | Advertising audience metadata — aggregate audience profiles per route |
 
 ### 5.4 Deferred / Out of PoC Scope
 
-| ID | Requirement | Status |
-|----|-------------|--------|
-| FR13 | AI-generated fault pattern detection | Deferred Phase 2 |
-| FR14 | Predictive fault alerting | Deferred Phase 2 |
-| FR15 | Natural language diagnostics agent | Deferred Phase 2 |
-| FR16 | Automated cleaning work orders | Deferred Phase 2 |
-| FR17 | Energy anomaly flagging | Deferred Phase 2 |
-| FR18 | Bistro demand intelligence | Descoped PoC |
-| FR19 | Boarding volume prediction | Descoped PoC |
-| FR28–FR31 | Fleet maintenance manager features | Descoped PoC |
-| FR36–FR37 | Platform displays, PIS sync | Deferred Phase 2 |
+| ID | Requirement | Status | Rationale |
+|----|-------------|--------|-----------|
+| FR13 | AI-generated fault pattern detection | Deferred Phase 2 | Diagnostics AI scope |
+| FR14 | Predictive fault alerting | Deferred Phase 2 | Diagnostics AI scope |
+| FR15 | Natural language diagnostics agent | Deferred Phase 2 | Diagnostics AI scope |
+| FR16 | Automated cleaning work orders | Deferred Phase 2 | Maintenance integration outside PoC |
+| FR17 | Energy anomaly flagging | Deferred Phase 2 | Requires VLAN 12 energy poller (not in PoC) |
+| FR18 | Bistro demand intelligence | Descoped PoC | Bistro App is Phase 2 |
+| FR19 | Boarding volume prediction | Descoped PoC | Platform Staff interface is Phase 2 |
+| FR23 | Predictive overcrowding warning — forecast capacity breach at upcoming stop | Deferred Phase 2 (descoped 2026-05-30) | No forecasting story in PoC epics; depends on resolution of Open Question Q5 (trend query key). Historical capacity exceptions covered by E3-S2 satisfy operator needs for PoC |
+| FR25 | Prohibited zone detection alert | Deferred Phase 2 (descoped 2026-05-30) | Not implemented in E4-S4/E4-S5; zone-definition workflow (operator-drawn polygons) is itself a feature requiring UX work. Out of PoC safety-critical scope |
+| FR28–FR31 | Fleet maintenance manager features | Descoped PoC | Maintenance Dashboard is Phase 2 |
+| FR32 | No-show seat detection by route, day type, class | Deferred Phase 2 (descoped 2026-05-30) | Requires reservation-vs-occupancy reconciliation event type not in schema; capacity planner is a Phase 2 secondary user |
+| FR34 | Occupancy-normalised energy KPIs (ESG) | Deferred Phase 2 (descoped 2026-05-30) | Requires VLAN 12 energy poller (not in E4-S1/S2); ESG reporting is a Phase 2 commercial concern, not safety/ops |
+| FR35 | Advertising audience metadata | Deferred Phase 2 (descoped 2026-05-30) | Commercial monetisation; outside safety/operations PoC focus |
+| FR36–FR37 | Platform displays, PIS sync | Deferred Phase 2 | Platform Staff interface + PIS apps are Phase 2 |
 
 ---
 
@@ -138,7 +141,7 @@ All inference runs onboard. Raw video never leaves the train. Only structured, a
 | ID | Requirement | Target |
 |----|-------------|--------|
 | NFR1 | System uptime | ≥99.5% — Docker restart policies; graceful degradation on SYS1 loss |
-| NFR2 | Occupancy accuracy | ≥95% — APC fusion for ground-truth calibration |
+| NFR2 | Occupancy accuracy | ≥95% measured post-hoc against APC ground truth — camera count is the authoritative real-time figure (ADR-15); APC is the calibration/accuracy-reporting reference, not a real-time blending input |
 | NFR3 | False-positive alert rate | <5% — formal suppression state machine |
 | NFR4 | Alert latency | Within station dwell window (~30–90s) — local inference, no cloud round-trip for alerts |
 | NFR5 | Privacy — video | Raw video must never leave the train — edge-only inference; anonymised events to cloud only |

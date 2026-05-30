@@ -1,14 +1,18 @@
 ---
 stepsCompleted: [1, 2, 3, 4]
 adrUpdates: [ADR-15, ADR-16, ADR-17, ADR-18]
-storiesAdded: [E4-S8, E4-S9, E4-S10, E6-S1, E6-S2, E6-S3, E7-S1, E7-S2, E8-S1, E8-S2, E9-S1, E9-S2, E9-S3]
-lastUpdated: 2026-05-21
+storiesAdded: [E4-S8, E4-S9, E4-S10, E6-S1, E6-S2, E6-S3, E7-S1, E7-S2, E8-S1, E8-S2, E9-S1, E9-S2, E9-S3, E5-S1, E5-S2, E5-S3, E5-S4, E1.5-1, E1.5-2, E1.5-3, E1.5-4, E3-S8]
+lastUpdated: 2026-05-30
+changelog:
+  - "2026-05-30: Backfilled Epic 5 (Luggage) + Epic 1.5 (Onboard Infra) bodies from implementation-artifacts. Moved E2-S9 → E3-S8 (System Health). Updated FR Coverage Map for FR23/25/32/34/35 Phase-2 descope. Deduped Epic 3/4 headers."
+  - "2026-05-21: Added Epic 6/7/8/9 hardening stories + ADR-15..18."
 inputDocuments:
   - _bmad-output/planning-artifacts/2026-05-13-oebb-user-stories.md
   - _bmad-output/planning-artifacts/architecture.md
   - _bmad-output/design-artifacts/DD-001-cc-dashboard.md
   - _bmad-output/design-artifacts/D-UX-Design/2026-05-14-oebb-ux-design-v2.md
   - _bmad-output/planning-artifacts/event-payload-schemas.md
+  - _bmad-output/planning-artifacts/implementation-readiness-report-2026-05-30.md
   - project-context.md
 ---
 
@@ -118,20 +122,25 @@ UX-DR15: Prototype to production delta (9 items from DD-001): replace MockWebSoc
 
 ### FR Coverage Map
 
+> _Updated 2026-05-30: FR23, FR25, FR32, FR34, FR35 descoped to Phase 2 per readiness review. See PRD §5.4 v1.1 for rationale._
+
 | Requirement | Epic(s) |
 |---|---|
-| FR1–FR3 (occupancy, congestion) | Epic 2 (Onboard Pipeline), Epic 3 (Conductor App), Epic 6 (PIS) |
-| FR4–FR5 (unattended bag, door obstruction) | Epic 2, Epic 3 |
-| FR6–FR7 (TCMS alarms, correlated door) | Epic 2, Epic 3 |
-| FR8, FR11–FR12 (accessibility) | Epic 2, Epic 3, Epic 7 |
-| FR9–FR10 (speed-correlated, maintenance suppression) | Epic 2 |
-| FR13–FR15 (fault pattern, predictive, NL diagnostics) | Epic 2 (deferred) |
-| FR16–FR17 (cleaning, energy) | Epic 8 (Maintenance Dashboard — descoped PoC) |
-| FR18–FR19 (bistro demand, boarding prediction) | Epic 9 (Bistro App — descoped PoC) |
-| FR20–FR27 (Control Centre) | Epic 1 (CC Dashboard) |
-| FR28–FR31 (maintenance manager) | Epic 8 (deferred) |
-| FR32–FR35 (capacity planner analytics) | Epic 1 (analytics panel) |
-| FR36–FR37 (platform displays, PIS) | Epic 6 (PIS) |
+| FR1–FR3 (occupancy, congestion) | Epic 4 (Onboard Edge Pipeline), Epic 2 (CC Dashboard surfaces) |
+| FR4–FR5 (unattended bag, door obstruction) | Epic 4 (inference + fusion), Epic 2 (CC unified feed), Epic 5 (Luggage UI) |
+| FR6–FR7 (TCMS alarms, correlated door) | Epic 4 (vlan-pollers + fusion) |
+| FR8, FR11–FR12 (accessibility) | Epic 4 (inference + fusion + ramp signal) |
+| FR9–FR10 (speed-correlated, maintenance suppression) | Epic 4 (fusion suppression state machine) |
+| FR13–FR17 (diagnostics AI, cleaning, energy) | Deferred Phase 2 (Diagnostics AI scope) |
+| FR18–FR19 (bistro demand, boarding prediction) | Descoped PoC (Bistro / Platform Staff are Phase 2) |
+| FR20–FR21, FR26 (CC live ops) | Epic 2 (Live Operations) |
+| FR22 (real-time dwell), FR26 (degraded), FR27 (trip-tag), FR33 (ridership analytics) | Epic 3 (Analytics + System Health), Epic 1 (envelope/trip_id) |
+| FR23 (predictive overcrowding) | Deferred Phase 2 |
+| FR24 (slip/fall) | Epic 4 (inference safety) |
+| FR25 (prohibited zone) | Deferred Phase 2 |
+| FR28–FR31 (maintenance manager) | Deferred Phase 2 (Maintenance Dashboard is Phase 2) |
+| FR32 (no-show), FR34 (energy KPI), FR35 (advertising audience) | Deferred Phase 2 |
+| FR36–FR37 (platform displays, PIS) | Deferred Phase 2 (Platform Staff + PIS apps are Phase 2) |
 
 ## Epic List
 
@@ -786,57 +795,31 @@ PATCH /api/v1/operators/me/preferences
 
 ---
 
-#### Story E2-S9 — System Health Data Feed Integration
-
-**As a** Control Centre operator,
-**I want** the System Health view to show live CCTV, application, and connectivity status from the backend rather than mock data,
-**so that** I can detect real train health degradations and act on accurate container and device status.
-
-**Acceptance criteria:**
-
-**Given** the operator navigates to `/dashboard/health`  
-**When** `SystemHealth` mounts  
-**Then** `GET /api/v1/analytics/system-health` is called; a loading skeleton (3 skeleton rows matching the grid layout) is shown while the request is in flight; on success the fleet health grid renders with real data
-
-**Given** the API response contains a train with `appStatus: "red"` and `appDetail` array  
-**When** the operator clicks that train's row  
-**Then** the inline detail panel renders the per-container drill-down from the server's `appDetail`; no client-side generation of container names or statuses
-
-**Given** the API response contains `last_healthy` as an ISO-8601 UTC string  
-**When** the "Since" column renders  
-**Then** elapsed time is computed from `Date.now()` minus the parsed server timestamp — not from a hardcoded mock time; the value live-ticks every second via `setInterval`
-
-**Given** the WebSocket delivers a `CAMERA_DEGRADED` or `CAMERA_RECOVERED` event for a train while System Health is open  
-**When** `FleetContext` processes the event  
-**Then** the affected train's `cctvStatus` badge updates without a full page refresh or re-fetch of the REST endpoint
-
-**Given** the `GET /api/v1/analytics/system-health` call fails  
-**When** the error is returned  
-**Then** the grid shows "System health data unavailable" with a retry button; the summary strip shows "—" for all counts; no crash
-
-**And** `lastHealthy` timestamps in the prototype (hardcoded `'09:43'`, `'10:51'`) are removed; the component uses server-sourced ISO-8601 strings exclusively  
-**And** `Math.random()` ticket ref generation in `SystemHealth.jsx` remains unchanged — server-generated ticket IDs are a Phase 2 concern (flag `MAINTENANCE_APP_ENABLED = false` unchanged)  
-**And** staleness detection (amber "reconnecting…" banner) triggers when no WS message has been received for longer than the operator's `staleness_threshold_sec` preference (default 120s); the threshold is read from `FleetContext` which sources it from `operator_preferences` with `localStorage` cache
-
-**Dependencies:** E3-S1 (backend `/api/v1/analytics/system-health` endpoint), E2-S1 (FleetContext with CAMERA_DEGRADED/RECOVERED event handling), E2-S7 (shared skeleton animation class)  
-**Files changed:** `src/components/health/SystemHealth.jsx`  
-**Backend required:** `GET /api/v1/analytics/system-health` (covered by E3-S1)
+> _E2-S9 (System Health Data Feed Integration) was moved to Epic 3 as **E3-S8** on 2026-05-30 to remove a forward dependency on E3-S1._
 
 ---
 
 ### Epic 3: Control Centre Dashboard — Analytics & System Health
 
-### Epic 3: Control Centre Dashboard — Analytics & System Health
-Control Centre operators and capacity planners can analyse historical exceptions, occupancy heatmaps, dwell times, and AI detection quality; fleet maintenance managers can review system health.
+Control Centre operators and capacity planners can analyse historical exceptions, occupancy heatmaps, dwell times, and AI detection quality; fleet maintenance managers can review live system health.
 
-**FRs covered:** FR22, FR23, FR26, FR32–FR35
+**FRs covered:** FR22 (historical dwell), FR26 (degraded operation), FR33 (anonymised ridership analytics)
 **UX-DRs covered:** UX-DR7–UX-DR12
 **Component files:** `src/components/analytics/`, `src/components/health/SystemHealth.jsx`
-**New REST endpoints required:** `/api/v1/analytics/exceptions`, `/api/v1/analytics/occupancy-heatmap`, `/api/v1/analytics/dwell-time`, `/api/v1/analytics/detection-quality`, `/api/v1/analytics/system-health` — all date-range-aware
+**New REST endpoints required:** `/api/v1/analytics/exceptions`, `/api/v1/analytics/occupancy-heatmap`, `/api/v1/analytics/dwell-time`, `/api/v1/analytics/detection-quality`, `/api/v1/analytics/system-health` — all date-range-aware (system-health endpoint is current-state only)
 
 ---
 
 #### Story E3-S1 — Analytics REST Endpoints (Backend)
+
+> **⚠ Oversized — split before dev pickup (readiness review 2026-05-30).** This story defines 5 distinct endpoints with separate response shapes, error handling, and integration tests. Decompose at dev start into:
+> - **E3-S1a** — `GET /api/v1/analytics/exceptions` (capacity exceptions; consumed by E3-S2)
+> - **E3-S1b** — `GET /api/v1/analytics/occupancy-heatmap` (consumed by E3-S3)
+> - **E3-S1c** — `GET /api/v1/analytics/dwell-time` (consumed by E3-S4)
+> - **E3-S1d** — `GET /api/v1/analytics/detection-quality` (consumed by E3-S5)
+> - **E3-S1e** — `GET /api/v1/analytics/system-health` (consumed by E3-S8; current-state only, no `?range=` param)
+>
+> Rationale: a single failure or rollback on one endpoint must not block the other four. Each endpoint can ship and pass CI independently; the parent story stays as the umbrella spec until the last sub-story merges.
 
 **As a** developer,
 **I want** five date-range-aware analytics REST endpoints implemented in the cloud backend,
@@ -1126,12 +1109,51 @@ CREATE TABLE capacity_review_queue (
 
 ---
 
-### Epic 4: Onboard Edge Pipeline
+#### Story E3-S8 — System Health Data Feed Integration
+
+> _Moved from Epic 2 (was E2-S9) on 2026-05-30 to resolve a forward dependency on E3-S1._
+
+**As a** Control Centre operator,
+**I want** the System Health view to show live CCTV, application, and connectivity status from the backend rather than mock data,
+**so that** I can detect real train health degradations and act on accurate container and device status.
+
+**Acceptance criteria:**
+
+**Given** the operator navigates to `/dashboard/health`  
+**When** `SystemHealth` mounts  
+**Then** `GET /api/v1/analytics/system-health` is called; a loading skeleton (3 skeleton rows matching the grid layout) is shown while the request is in flight; on success the fleet health grid renders with real data
+
+**Given** the API response contains a train with `appStatus: "red"` and `appDetail` array  
+**When** the operator clicks that train's row  
+**Then** the inline detail panel renders the per-container drill-down from the server's `appDetail`; no client-side generation of container names or statuses
+
+**Given** the API response contains `last_healthy` as an ISO-8601 UTC string  
+**When** the "Since" column renders  
+**Then** elapsed time is computed from `Date.now()` minus the parsed server timestamp — not from a hardcoded mock time; the value live-ticks every second via `setInterval`
+
+**Given** the WebSocket delivers a `CAMERA_DEGRADED` or `CAMERA_RECOVERED` event for a train while System Health is open  
+**When** `FleetContext` processes the event  
+**Then** the affected train's `cctvStatus` badge updates without a full page refresh or re-fetch of the REST endpoint
+
+**Given** the `GET /api/v1/analytics/system-health` call fails  
+**When** the error is returned  
+**Then** the grid shows "System health data unavailable" with a retry button; the summary strip shows "—" for all counts; no crash
+
+**And** `lastHealthy` timestamps in the prototype (hardcoded `'09:43'`, `'10:51'`) are removed; the component uses server-sourced ISO-8601 strings exclusively  
+**And** `Math.random()` ticket ref generation in `SystemHealth.jsx` remains unchanged — server-generated ticket IDs are a Phase 2 concern (flag `MAINTENANCE_APP_ENABLED = false` unchanged)  
+**And** staleness detection (amber "reconnecting…" banner) triggers when no WS message has been received for longer than the operator's `staleness_threshold_sec` preference (default 120s); the threshold is read from `FleetContext` which sources it from `operator_preferences` with `localStorage` cache
+
+**Dependencies:** E3-S1 (backend `/api/v1/analytics/system-health` endpoint), E2-S1 (FleetContext with CAMERA_DEGRADED/RECOVERED event handling), E2-S7 (shared skeleton animation class)  
+**Files changed:** `src/components/health/SystemHealth.jsx`  
+**Backend required:** `GET /api/v1/analytics/system-health` (covered by E3-S1)
+
+---
 
 ### Epic 4: Onboard Edge Pipeline
+
 The system detects occupancy, congestion, luggage, door obstructions, accessibility events, and TCMS alarms onboard — producing structured events that are buffered locally and published to the landside MQTT broker.
 
-**FRs covered:** FR1–FR14, FR26, FR29–FR31
+**FRs covered:** FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR8, FR9, FR10, FR11, FR12, FR24, FR26, FR27
 **Containers:** `rtsp-ingest`, `vlan-pollers`, `inference`, `fusion`, `event-store`, `cloud-sync`
 **Hardware:** Hailo-8 M.2 (25–30 cameras/train confirmed); HailoRT + TAPPAS 5.1.0
 **Base images:** `rtsp-ingest` + `inference` use Hailo Software Suite Docker image (HailoRT 4.23); all others use `python:3.11-slim-bookworm`
@@ -1355,6 +1377,14 @@ The system detects occupancy, congestion, luggage, door obstructions, accessibil
 
 #### Story E4-S6 — `fusion` Alert Correlation & Suppression State Machine
 
+> **⚠ Oversized — split before dev pickup (readiness review 2026-05-30).** This story bundles 6 modules (suppression state machine, door obstruction correlation, occupancy fusion per ADR-15, speed escalation, depot lifecycle, enrichment). Decompose at dev start into:
+> - **E4-S6a** — Suppression state machine (`suppression.py`): NORMAL ↔ MAINTENANCE ↔ DEPOT transitions with multi-condition handling
+> - **E4-S6b** — Door obstruction correlation (`door_obstruction.py`): ZFR cross-reference + speed-correlated severity escalation (FR7, FR9)
+> - **E4-S6c** — Occupancy fusion (`occupancy.py`): authoritative camera count per ADR-15; `weight_apc` removal; APC reserved for post-hoc accuracy reporting (NFR2 v1.1)
+> - **E4-S6d** — Enrichment + depot lifecycle (`enrichment.py`, `JOURNEY_ENDED` on `im0vstShutdownAll`)
+>
+> Rationale: each module owns a distinct failure mode and test surface. Suppression bugs must not regress occupancy fusion correctness, and vice versa.
+
 **As a** system operator,
 **I want** the `fusion` container to correlate camera detections with TCMS/ZFR state, apply the suppression state machine, enrich events with journey metadata, and post finalised alerts to `event-store`,
 **so that** false-positive alert rate stays below 5% and alerts are suppressed correctly during maintenance mode, depot parking, and GPS-invalid conditions.
@@ -1396,6 +1426,13 @@ The system detects occupancy, congestion, luggage, door obstructions, accessibil
 ---
 
 #### Story E4-S7 — `event-store` Onboard REST API & WebSocket Fan-Out
+
+> **⚠ Oversized — split before dev pickup (readiness review 2026-05-30).** REST endpoints, WebSocket fan-out, and reconnect replay are three distinct concerns with separate concurrency models. Decompose at dev start into:
+> - **E4-S7a** — REST API surface: `POST /api/v1/events` (idempotent), `GET /api/v1/events` (cursor pagination + filters), `GET /api/v1/journeys/{id}`; concurrent write p99 latency test
+> - **E4-S7b** — WebSocket fan-out: subscriber filter matching at write-time, ≤100ms delivery SLO, no duplicate delivery to a connected client
+> - **E4-S7c** — Reconnect replay (`websocket/replay.py`): last-N matching events on reconnect, schema_version skew handling
+>
+> Rationale: REST and WS handlers can be developed and reviewed in parallel by different developers; replay is a higher-risk path that benefits from isolated review.
 
 **As a** developer,
 **I want** the `event-store` container to expose a complete REST API (POST events, GET events with cursor pagination, GET journeys) and fan out new events to all subscribed WebSocket clients in real time,
@@ -1565,6 +1602,196 @@ The system detects occupancy, congestion, luggage, door obstructions, accessibil
 
 **Dependencies:** E4-S6 (fusion container, ContextState), E4-S2 (reservation data in ContextState), E4-S4 (OCCUPANCY_UPDATE source), E1-S2 (EventType enum — `COACH_COMFORT_INDEX` present), E1-S4 (event-store POST endpoint)  
 **Deliverables:** `fusion/src/fusion/comfort_index.py`; updates to `fusion/src/fusion/main.py` (trigger wiring); `tests/unit/test_comfort_index.py`
+
+---
+
+### Epic 5: Luggage Monitoring — Live Data
+
+Control Centre operators can monitor unattended bag and luggage-rack-saturation events in real time through a dedicated Luggage Monitoring tab fed by live `UNATTENDED_BAG` and `LUGGAGE_RACK_SATURATION` events on the WebSocket, with a staleness banner, an age-gated KPI tile, and per-coach attribution in the train detail grid — replacing the prototype's 7 hardcoded mock events.
+
+**FRs covered:** FR2 (luggage count) + FR4 (unattended bag alert) at the Control Centre surface
+**UX-DRs covered:** UX-DR15 (Luggage Monitoring view)
+**Prototype reference:** `control-centre/src/components/live/LuggageMonitoring.jsx` (existing; mock data path being replaced)
+**Component files:** `src/components/live/LuggageMonitoring.jsx`, `src/components/live/UnifiedFeed.jsx`, `src/components/live/KpiStrip.jsx`, `src/context/FleetContext.jsx`, `src/ws/RealWebSocketClient.js`, `src/mock/luggage.js`, `src/mock/websocket.js`
+**Status:** ✅ Done — 4 stories shipped; canonical specs in `_bmad-output/implementation-artifacts/5-*.md`
+
+---
+
+#### Story E5-S1 — Luggage Monitoring Live WebSocket Feed
+
+**As a** Control Centre operator,
+**I want** the Luggage Monitoring tab and the Luggage Alerts KPI tile to reflect live luggage events arriving over the WebSocket rather than the 7 hardcoded mock events,
+**so that** I can see real-time unattended bag alerts and rack saturation events as they are detected onboard, and respond before the situation escalates.
+
+**Canonical spec:** `_bmad-output/implementation-artifacts/5-1-luggage-ws-live-feed.md` (7 ACs)
+
+**Key acceptance criteria (summary):**
+- `LUGGAGE_RACK_SATURATION` and `UNATTENDED_BAG` envelopes are added to `SUBSCRIPTION_REQUEST.event_types` and routed via `RealWebSocketClient` into a `LUGGAGE_EVENT` frontend message
+- `FleetContext` replaces the static `LUGGAGE_EVENTS`/`LUGGAGE_ESCALATIONS` constants with a live `luggageEvents` state; updates are merged into `escalations` via `luggageEventsToEscalations()`
+- `MockWebSocketClient` emits at least 2 `LUGGAGE_EVENT` messages (one `unattended`, one `overcrowded`) so the tab remains testable offline
+- Duplicate event_ids on reconnect replay are silently dropped via `_trackSeenId`
+- Empty state ("No luggage events received yet.") is preserved when `luggageEvents` is empty — no crash, no mock fallback
+
+**Dependencies:** E2-S1 (RealWebSocketClient), E1-S6 (SubscriptionRequest)
+**Files changed:** `src/ws/RealWebSocketClient.js`, `src/mock/websocket.js`, `src/context/FleetContext.jsx`, `src/components/live/LuggageMonitoring.jsx`
+
+---
+
+#### Story E5-S2 — Luggage Monitoring Live UI
+
+**As a** Control Centre operator,
+**I want** the Luggage Monitoring tab to display a loading state while waiting for the first WS events, show live event cards with correctly formatted timestamps and elapsed time, surface per-coach status in the train detail grid from live `coachId` values, and allow me to filter events by type without the filter resetting on new arrivals,
+**so that** I can monitor live luggage alerts without confusion from broken timestamps, incorrect coach attribution, or disorienting filter resets.
+
+**Canonical spec:** `_bmad-output/implementation-artifacts/5-2-luggage-monitoring-live-ui.md`
+
+**Key acceptance criteria (summary):**
+- Loading skeleton while `luggageEvents` is empty AND WS has not yet delivered its first message; replaced by content on first message (or by the empty state after a connected-no-events period)
+- `formatTimestamp` and `elapsedMin` accept the unified ISO-8601 input — no HH:MM legacy branch
+- Per-coach attribution in the train detail grid is derived from `event.coachId` from the live payload, not hardcoded mappings
+- Type filter (overcrowded / unattended) state persists across new event arrivals — filter does not reset
+- All existing event card visual treatment (severity ramp, confidence chips, pulsing border) preserved
+
+**Dependencies:** E5-S1 (live luggage events flowing into context)
+**Files changed:** `src/components/live/LuggageMonitoring.jsx`
+
+---
+
+#### Story E5-S3 — Luggage KPI Live Monitoring (Staleness + Age-Gated KPI)
+
+**As a** Control Centre operator,
+**I want** the Luggage Monitoring tab to warn me when luggage data is stale, the KPI strip to flag unattended bags only once they exceed a configurable age threshold, and a preference control to tune that threshold,
+**so that** I can trust the KPI numbers reflect real operational urgency and avoid alert fatigue from short-duration false alarms.
+
+**Canonical spec:** `_bmad-output/implementation-artifacts/5-3-luggage-kpi-live-monitoring.md`
+
+**Key acceptance criteria (summary):**
+- An amber "⚠ Luggage data may be stale — reconnecting…" banner appears when no `LUGGAGE_EVENT` has arrived for the operator's `staleness_threshold_sec` preference (default 120s); reuses the staleness mechanism from E3-S6
+- The "Unattended bags" KPI tile counts only events where `elapsedSec > age_gate_sec` (default 180s); below the gate they appear in the feed but are excluded from the KPI count
+- A new `luggage_age_gate_sec` field is added to `operator_preferences` (CHECK constraint: 60, 120, 180, 300); GET/PATCH on `/api/v1/operators/me/preferences` returns and accepts it
+- Preferences panel (`OperatorPreferences.jsx`) adds the age-gate control; keyboard accessible (arrow keys, Enter to confirm)
+- Existing per-operator `threshold_sec` and `staleness_threshold_sec` behaviour preserved
+
+**Status:** ready-for-dev
+**Dependencies:** E5-S1, E5-S2, E2-S8 (operator_preferences table + GET/PATCH endpoints), E3-S6 (staleness mechanism)
+**Files changed:** `src/components/live/LuggageMonitoring.jsx`, `src/components/live/KpiStrip.jsx`, `src/components/shell/OperatorPreferences.jsx`, `src/context/FleetContext.jsx`; cloud-backend `operator_preferences` Alembic migration + preferences endpoint update
+
+---
+
+#### Story E5-S4 — Luggage ISO Timestamp Migration
+
+**As a** developer maintaining the Control Centre luggage mock data,
+**I want** all static `LUGGAGE_EVENTS` timestamps migrated to ISO-8601 UTC strings and the legacy HH:MM code paths removed,
+**so that** `elapsedMin` and `formatTimestamp` have a single, testable code path that is consistent with live WebSocket events.
+
+**Canonical spec:** `_bmad-output/implementation-artifacts/5-4-luggage-iso-timestamps.md`
+
+**Key acceptance criteria (summary):**
+- All static mock timestamps in `src/mock/luggage.js` are ISO-8601 UTC strings with `Z` suffix — no `'HH:MM'` literals remain
+- `formatTimestamp(input)` accepts ISO-8601 only; the legacy HH:MM branch is deleted
+- `elapsedMin(start, end)` accepts ISO-8601 only; legacy branch deleted
+- Existing unit tests updated; new test covers ISO-8601 parse + elapsed computation against a fixed `Date.now()` mock
+- No visual regression — rendered timestamps remain in the same format as before
+
+**Dependencies:** None (refactor)
+**Files changed:** `src/mock/luggage.js`, `src/components/live/LuggageMonitoring.jsx` (formatter callsites), test files
+
+---
+
+### Epic 1.5: Onboard Containerised Infrastructure
+
+The complete onboard pipeline (event-store, rtsp-ingest, inference) builds and runs on the R5001C SYS2 edge device via a single `docker-compose.onboard.yml`, with Hailo Software Suite base image used where TAPPAS/HailoRT/GStreamer are required and a CI-safe smoke test verifying the containerisation layer without Hailo hardware.
+
+**Bridge purpose:** Epic 1 delivered landside infrastructure (FastAPI, PostgreSQL, MQTT). Epic 1.5 delivers the *onboard* containerisation that Epic 4 stories run inside. Without it, Epic 4 stories have no execution surface on SYS2.
+**FRs covered:** NFR1 (uptime — restart policies + healthchecks), NFR13 (CI gates)
+**Containers:** `event-store`, `rtsp-ingest`, `inference`
+**Base images:** `hailo-software-suite:4.23` for `rtsp-ingest` and `inference`; `python:3.11-slim-bookworm` for `event-store`
+**Status:** ✅ Done — 4 stories shipped; canonical specs in `_bmad-output/implementation-artifacts/1-5-*.md`
+
+---
+
+#### Story E1.5-1 — `inference` Dockerfile
+
+**As a** platform engineer,
+**I want** a `Dockerfile` for the `inference` service that builds correctly from the Hailo Software Suite base image,
+**so that** the inference container can be deployed as part of the onboard Docker Compose stack with all GStreamer/TAPPAS/HailoRT dependencies available at runtime.
+
+**Canonical spec:** `_bmad-output/implementation-artifacts/1-5-1-inference-dockerfile.md`
+
+**Key acceptance criteria (summary):**
+- `inference/Dockerfile` uses `FROM hailo-software-suite:4.23` (HailoRT + TAPPAS pre-installed; not pip-installable)
+- `oebb-shared` installed via the two-step staging pattern (copy `shared/src/oebb_shared` + `shared/pyproject.toml` → `pip install --no-cache-dir ./shared_src`)
+- Non-editable install of the inference package
+- `HEALTHCHECK` directive present (per Epic 9 hardening — added in retro)
+- Comment block documents `# Hailo base image — pin to sha256 digest on first SYS2 hardware bring-up.`
+- `docker build` succeeds in CI on a runner without the Hailo image present (uses `ARG HAILO_BASE` with a stub for dry-run validation)
+
+**Dependencies:** E1-S2 (oebb-shared package exists)
+**Deliverables:** `inference/Dockerfile`
+
+---
+
+#### Story E1.5-2 — `rtsp-ingest` Dockerfile
+
+**As a** platform engineer,
+**I want** a `Dockerfile` for the `rtsp-ingest` service that builds correctly from the Hailo Software Suite base image,
+**so that** the rtsp-ingest container can be deployed as part of the onboard Docker Compose stack with all GStreamer/TAPPAS dependencies available at runtime.
+
+**Canonical spec:** `_bmad-output/implementation-artifacts/1-5-2-rtsp-ingest-dockerfile.md`
+
+**Key acceptance criteria (summary):**
+- `rtsp-ingest/Dockerfile` uses `ARG HAILO_BASE=hailo-software-suite:4.23` + `FROM ${HAILO_BASE}`
+- `oebb-shared` installed via the two-step staging pattern matching all other containers
+- Non-editable install of the rtsp-ingest package
+- `HEALTHCHECK` directive present
+- Hailo digest-pin comment block matches the inference Dockerfile pattern
+- Builds cleanly in CI
+
+**Dependencies:** E1-S2
+**Deliverables:** `rtsp-ingest/Dockerfile`
+
+---
+
+#### Story E1.5-3 — Onboard Docker Compose
+
+**As a** platform engineer,
+**I want** a `docker-compose.onboard.yml` that brings up the complete standalone onboard stack (event-store, rtsp-ingest, inference),
+**so that** the full onboard pipeline can be started with a single command on the R5001C SYS2 edge device.
+
+**Canonical spec:** `_bmad-output/implementation-artifacts/1-5-3-onboard-docker-compose.md`
+
+**Key acceptance criteria (summary):**
+- `docker-compose.onboard.yml` at monorepo root defines exactly three services: `event-store`, `rtsp-ingest`, `inference`
+- `event-store` builds from `event-store/Dockerfile` (context `.`), mounts `/data` volume for SQLite WAL, takes `EVENT_STORE_API_KEY` via env, exposes port 8001, healthchecks via `/health/ready`
+- `rtsp-ingest` and `inference` build from their Hailo-based Dockerfiles; restart policy `unless-stopped`
+- Onboard-only — no landside services (no Mosquitto, no PostgreSQL, no cloud-backend) in this compose file (those are in `docker-compose.yml` at root)
+- `cloud-sync` (Story E4-CS1) is added later as the bridge; this compose file is the standalone onboard floor
+- Documented network model: SYS2-local bridge network; no external port mappings on rtsp-ingest/inference
+
+**Dependencies:** E1.5-1, E1.5-2
+**Deliverables:** `docker-compose.onboard.yml`
+
+---
+
+#### Story E1.5-4 — Onboard Smoke Test
+
+**As a** platform engineer,
+**I want** a CI-safe smoke test script that verifies the onboard `event-store` container builds and starts healthy with no external dependencies,
+**so that** every push can confirm the containerisation layer works without requiring Hailo hardware.
+
+**Canonical spec:** `_bmad-output/implementation-artifacts/1-5-4-onboard-smoke-test.md`
+
+**Key acceptance criteria (summary):**
+- `scripts/smoke-test-onboard.sh` exists at monorepo root, executable
+- Brings up only `event-store` via `docker compose -f docker-compose.onboard.yml up -d event-store` (rtsp-ingest and inference are skipped — they need Hailo hardware or real RTSP streams)
+- Polls `/health/ready` until HTTP 200 or 60s timeout
+- POSTs a synthetic `EventEnvelope` and asserts HTTP 201
+- Reads it back via `GET /api/v1/events?journey_id=...` and asserts presence
+- Tears down cleanly; exits 0 on success, non-zero on any failure
+- GitLab CI invokes this script on every push to `master`
+
+**Dependencies:** E1.5-3, E1-S4 (event-store API)
+**Deliverables:** `scripts/smoke-test-onboard.sh`, `.gitlab-ci.yml` update
 
 ---
 
@@ -1922,6 +2149,13 @@ All production container images use non-editable installs, include `HEALTHCHECK`
 **Stories (priority order — implement in this sequence):**
 
 #### Story E10-S1 — Alert Confidence Metadata, Kill-Switch & AI Pipeline Health
+
+> **⚠ Still oversized after the 2026-05-30 scope refinement — split before dev pickup (readiness review 2026-05-30).** Even with playbook content, FP rate definition, and admin UI removed, this story still bundles shared-schema changes, a new event type, a cloud-backend kill-switch table + endpoint, and three CC UI surfaces. Decompose at dev start into:
+> - **E10-S1a** — Shared schema + inference heartbeat: `AlertRaisedPayload` confidence fields, `model_versions` in detection payloads, `INFERENCE_HEARTBEAT` event type, `model_provenance.py` in inference, `train_inference_heartbeat` table + upsert on ingest
+> - **E10-S1b** — Cloud-backend kill-switch: `alert_class_state` table, `X-Admin-Key`-protected `POST /api/v1/admin/alert-classes/{alert_code}/{disable|enable}`, REST + SSE fan-out enforcement, hardcoded `confidence_thresholds.py` + read-only GET
+> - **E10-S1c** — Control Centre UI surfaces: per-alert confidence chip on alert rows, server-triggered degraded banner via `ai_quality_degraded` flag on `/health`, AI pipeline row on System Health (Green/Amber/Red from heartbeat liveness)
+>
+> Rationale: a/b are backend-only and can ship without touching the UI; c depends on a/b but is independently testable. Splitting also lets the shared schema migration land first so Epic 4 producers can adopt the new fields without waiting for the kill-switch backend.
 
 > **Scope refined 2026-05-30 via grill-me + party-mode.** Exec-failure playbook content moved to E10-S3. False-positive rate definition deferred to new E10-S5. Admin UI deferred to new Epic 11. Story is now **code-only** with three discrete UI surfaces (no standalone "AI Quality" tile).
 
