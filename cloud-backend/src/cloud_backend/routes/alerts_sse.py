@@ -17,8 +17,14 @@ log = structlog.get_logger()
 
 router = APIRouter(prefix="/api/v1/alerts", dependencies=[Security(require_api_key)])
 
-# Alert event types pushed over SSE
-ALERT_EVENT_TYPES = frozenset({"ALARM_ACTIVE", "ALERT_RAISED", "ALERT_RESOLVED"})
+# Alert event types pushed over SSE (ADR-20: landside push allow-list)
+ALERT_EVENT_TYPES = frozenset({
+    "ALARM_ACTIVE",
+    "ALERT_RAISED",
+    "ALERT_RESOLVED",
+    "LUGGAGE_RACK_SATURATION",
+    "UNATTENDED_BAG",
+})
 
 # In-process fan-out: set of queues, one per connected SSE client
 _subscribers: set[asyncio.Queue[dict[str, object]]] = set()
@@ -76,16 +82,20 @@ async def _sse_generator(
     try:
         # Replay missed events on reconnect
         for event in await _replay_since(last_event_id, db):
+            event_type = str(event["event_type"])
+            event_id = str(event["event_id"])
             data = json.dumps(event)
-            yield f"id: {event['event_id']}\ndata: {data}\n\n"
+            yield f"event: {event_type}\nid: {event_id}\ndata: {data}\n\n"
 
         # Live stream
         while not await request.is_disconnected():
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=15.0)
+                event_type = str(event["event_type"])
+                event_id = str(event["event_id"])
                 data = json.dumps(event)
-                yield f"id: {event['event_id']}\ndata: {data}\n\n"
-            except asyncio.TimeoutError:
+                yield f"event: {event_type}\nid: {event_id}\ndata: {data}\n\n"
+            except TimeoutError:
                 yield ": keep-alive\n\n"
     finally:
         _subscribers.discard(queue)

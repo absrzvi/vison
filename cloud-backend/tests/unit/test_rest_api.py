@@ -243,3 +243,21 @@ def test_publish_alert_full_queue_does_not_raise() -> None:
         publish_alert({"event_id": "y", "event_type": "ALARM_ACTIVE"})  # should not raise
     finally:
         _subscribers.discard(q)
+
+
+@pytest.mark.unit
+def test_alerts_sse_event_types_includes_luggage() -> None:
+    """E1-S6' AC2 regression: ADR-20 mandates LUGGAGE_RACK_SATURATION and
+    UNATTENDED_BAG flow over the landside SSE stream (Migration impact #3)."""
+    from cloud_backend.routes.alerts_sse import ALERT_EVENT_TYPES
+
+    assert "LUGGAGE_RACK_SATURATION" in ALERT_EVENT_TYPES
+    assert "UNATTENDED_BAG" in ALERT_EVENT_TYPES
+    # Lock the full allow-list shape so accidental edits to the frozenset trip the test.
+    assert ALERT_EVENT_TYPES == frozenset({
+        "ALARM_ACTIVE",
+        "ALERT_RAISED",
+        "ALERT_RESOLVED",
+        "LUGGAGE_RACK_SATURATION",
+        "UNATTENDED_BAG",
+    })

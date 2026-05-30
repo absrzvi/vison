@@ -607,6 +607,11 @@ class SubscriptionRequest:
 - ❌ Epic 1 Story E1-S6 (`WebSocket Subscription Spec & Filter Logic`) and Story E2-S1 (`Real WebSocket Client`) carry WS-specific ACs that no longer match the landside contract. They must be split into (a) onboard event-store WS handler (E1-S6 retained scope) and (b) cloud-backend SSE fan-out (new replacement scope).
 - ❌ PRD §9 still names "WebSocket: Client-driven subscriptions…" — must be reworded to reference SSE for landside push.
 
+**Code state (post-E1-S6', 2026-05-30):**
+- ✅ `event:` field added to SSE frames in `alerts_sse.py:_sse_generator` (AC1).
+- ✅ `ALERT_EVENT_TYPES` extended with `LUGGAGE_RACK_SATURATION` and `UNATTENDED_BAG` per Migration impact #3 (AC2).
+- ✅ `cloud-backend/tests/integration/test_alerts_sse.py` covers all 5 Test required bullets + the luggage-types extension.
+
 **Test required:**
 ```
 cloud-backend/tests/integration/test_alerts_sse.py
