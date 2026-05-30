@@ -1,4 +1,5 @@
 # generated: 2026-05-17
+# last_updated: 2026-05-30  # E10-S1 scoped via grill-me + party-mode: renamed to 10-1-alert-confidence-and-ai-pipeline-health (code-only); playbook content moved to E10-S3; new E10-S5 (alert quality measurement) + Epic 11 (CC Admin & Identity) added; full ACs at _bmad-output/implementation-artifacts/10-1-alert-confidence-and-ai-pipeline-health.md
 # last_updated: 2026-05-30  # epic-10 added (Operator Adoption & Trust): 4 stories backlog (S1 confidence+exec playbook, S2 behavioural telemetry, S3 SOP+drill cadence, S4 dwell-time KPI) — source: owning-the-gap-ai-pm-analysis.md
 # last_updated: 2026-05-21  # code-review 2026-05-21 (opus-4.7): 1-5-4-onboard-smoke-test → done; 7 patches applied (curl body, GET filter, cameras.json stub, CWD guard, compose v2, API_KEY env, exec bit); smoke test exits 0
 # last_updated: 2026-05-21  # dev-story 2026-05-21: 1-5-4-onboard-smoke-test → review (smoke-test-onboard.sh exits 0; event-store POST+GET verified)
@@ -148,11 +149,25 @@ development_status:
 
   # ── Epic 10: Operator Adoption & Trust (AI PM gap-closure) ──
   # Source: _bmad-output/planning-artifacts/owning-the-gap-ai-pm-analysis.md (2026-05-30)
-  # Pre-pilot blocker. Stories ordered by priority — implement in sequence (S1 → S2 → S3 → S4).
+  # Pre-pilot blocker. Stories ordered by priority — implement in sequence (S1 → S2 → S3 → S4 → S5).
+  # S1 scoped via grill-me + party-mode 2026-05-30: code-only, exec-failure playbook moved to S3, FP-rate measurement deferred to new S5.
   # S1 + S2 must land before Control Centre PostgreSQL contracts harden further.
   epic-10: backlog
-  10-1-exec-failure-playbook-and-confidence-metadata: backlog   # P0 — exec-comms playbook + confidence_score/model_version on AlertRaisedPayload + AI quality tile + per-class kill-switch
+  10-1-alert-confidence-and-ai-pipeline-health: ready-for-dev   # P0 — code-only: AlertRaisedPayload (confidence_score/basis/model_versions), INFERENCE_HEARTBEAT, fusion plumbing, cloud-backend kill-switch + endpoints (no UI), CC confidence chip + degraded banner + AI pipeline row. Full ACs in story file.
   10-2-operator-behavioural-telemetry: backlog                  # P0 — escalation_audit table + /api/v1/escalations-audit + silent-dismissal tracking + weekly effectiveness report
-  10-3-conrad-claudia-sop-and-drill-cadence: backlog            # P1 — critical-alert SOP + routing decision matrix + ÖBB security handoff contract + drill cadence
+  10-3-conrad-claudia-sop-and-drill-cadence: backlog            # P1 — critical-alert SOP + routing decision matrix + ÖBB security handoff contract + drill cadence + exec-failure playbook (moved from S1)
   10-4-dwell-time-aware-alert-framing-and-kpi: backlog          # P2 — seconds_to_departure on alerts + delay-minutes-avoided KPI; Conductor App UI deferred to Phase 2
+  10-5-alert-quality-measurement: backlog                       # P3 — false_positive outcome tag + three-rate resolution-quality tile + NFR3 redefinition (deferred from S1 design session)
   epic-10-retrospective: optional
+
+  # ── Epic 11: Control Centre Admin & Identity ──
+  # Source: surfaced 2026-05-30 during E10-S1 grill-me. Prerequisite for the UI half of E10-S1's kill-switch + threshold mutability.
+  # E10 work does NOT block on Epic 11 — E10-S1 uses an X-Admin-Key seam designed to be forward-compatible with JWT auth.
+  # Stories below are placeholders; full breakdown requires a separate planning conversation.
+  epic-11: backlog
+  11-1-auth-jwt-login-flow: backlog                             # JWT issuance, role claim (admin|operator), login screen
+  11-2-user-management: backlog                                 # CRUD users + role assignment, password reset
+  11-3-profile-management: backlog                              # extract OperatorPreferences to per-user persistence
+  11-4-admin-ui-alert-class-killswitch: backlog                 # replaces curl operation of E10-S1 endpoints; same backend, auth middleware swapped
+  11-5-configuration-surface: backlog                           # mutable confidence thresholds + per-operator alert thresholds
+  epic-11-retrospective: optional

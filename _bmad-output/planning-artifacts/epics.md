@@ -148,6 +148,7 @@ UX-DR15: Prototype to production delta (9 items from DD-001): replace MockWebSoc
 | 8 | Analytics UI Hardening | P2 | ✅ In scope — hardening sprint 1 |
 | 9 | Container & Infrastructure Hardening | P2 | ✅ In scope — hardening sprint 1 |
 | 10 | Operator Adoption & Trust (AI PM gap-closure) | P1 | 🆕 Proposed — pre-pilot |
+| 11 | Control Centre Admin & Identity | P1 | 🆕 Proposed — prerequisite for E10 admin surfaces |
 
 ---
 
@@ -1920,39 +1921,31 @@ All production container images use non-editable installs, include `HEALTHCHECK`
 
 **Stories (priority order — implement in this sequence):**
 
-#### Story E10-S1 — Exec-Failure Playbook & Alert Confidence Metadata
+#### Story E10-S1 — Alert Confidence Metadata, Kill-Switch & AI Pipeline Health
 
-**As an** AI PM preparing for ÖBB pilot signoff,
-**I want** every `ALERT_RAISED` event to carry a per-alert `confidence_score` and `model_version`, a live AI-quality tile on System Health, a documented 24-hour exec response playbook, and a per-alert-class kill-switch with a named owner,
-**so that** when the system is publicly wrong in front of an executive we have evidence, a comms path, and a rollback — and procurement conversations have a credible answer to "what happens when it's wrong?"
+> **Scope refined 2026-05-30 via grill-me + party-mode.** Exec-failure playbook content moved to E10-S3. False-positive rate definition deferred to new E10-S5. Admin UI deferred to new Epic 11. Story is now **code-only** with three discrete UI surfaces (no standalone "AI Quality" tile).
 
-**Acceptance criteria:**
+**As an** AI PM closing the gap between "the system works" and "the operator changes how they run trains because of it,"
+**I want** every `ALERT_RAISED` event to carry per-alert confidence and model-provenance metadata, every inference container to emit a 60-second heartbeat, three surfaces in Control Centre that consume them (per-alert confidence chip, fleet-degraded banner, AI pipeline row on System Health), and a cloud-backend kill-switch that suppresses new alerts of a disabled class at the API/SSE fan-out layer,
+**so that** procurement conversations have a credible answer to "what happens when the AI is wrong," operators have a per-alert trust signal, and Nomad on-call has an emergency rollback path during PoC.
 
-**Given** an `ALERT_RAISED` event is emitted by `fusion/`  
-**When** the envelope is validated  
-**Then** the payload contains `confidence_score: float` (range 0.0–1.0) and `model_version: str` (semver, e.g. `"hailo-yolov8s-1.4.2"`); both fields are required, not optional
+**See `_bmad-output/implementation-artifacts/10-1-alert-confidence-and-ai-pipeline-health.md` for the full 24-AC story file.** Summary of locked decisions from the design session:
 
-**Given** the Claudia escalations inbox  
-**When** an escalation has `confidence_score < 0.65` (configurable via `LOW_CONFIDENCE_THRESHOLD` env var)  
-**Then** a `low-confidence` pill is rendered next to the alert title with a tooltip showing the score and model version
+- **Schema (shared):** `AlertRaisedPayload` gains required `confidence_score: float | None`, `confidence_basis: Literal["model","sensor","fused"]`, `model_versions: dict[str, str]`. Validator enforces basis/score/models combinations. Detection payloads gain `model_versions`.
+- **Model provenance (inference):** New `model_provenance.py` produces 4-key dict using Hailo `HEF.get_network_group_names()` (lie-proof), HEF SHA256, git SHA (build arg), labels SHA. Stamped on every candidate payload.
+- **New event `INFERENCE_HEARTBEAT`:** Emitted by inference every 60s independent of detections. Cloud-backend upserts `train_inference_heartbeat` table on ingest. Distinguishes "healthy and quiet" from "Hailo crashed."
+- **Fusion plumbing:** `Enrichment.emit_alert` gains required keyword-only `confidence_basis`. Per-handler call-site updates pass upstream confidence + handler-side fused additions (e.g. `door_sensor_firmware`).
+- **Kill-switch (cloud-backend):** New `alert_class_state` table. `X-Admin-Key`-protected `POST /api/v1/admin/alert-classes/{alert_code}/{disable|enable}`. Fan-out enforcement filters new alerts of disabled classes from REST + SSE; in-flight escalations stay visible. No UI in E10-S1 — operated via curl per E10-S3 playbook. UI deferred to Epic 11.
+- **Confidence thresholds:** Per-class hardcoded `cloud-backend/src/cloud_backend/config/confidence_thresholds.py` with `# CALIBRATE` placeholder values. Read-only `GET /api/v1/config/confidence-thresholds`. Mutability deferred to Epic 11.
+- **Control Centre — three surfaces replace the original "AI Quality" tile:**
+  1. **Per-alert confidence chip** on alert rows. States: `High confidence` / `Medium confidence` / `Verify`. No numeric score on chip (drawer only). Chip absent when `basis !== "model"`.
+  2. **"Degraded" banner** at top of alerts list, server-triggered via `ai_quality_degraded` flag on `GET /api/v1/health` (rule: rolling 1h mean confidence < 0.60, 30s cache). Copy: "AI alert quality is degraded. Nomad has been notified. Continue to verify alerts against CCTV as normal."
+  3. **"AI pipeline" row on System Health** — three states (Green/Amber/Red) driven by heartbeat liveness. Cold state: "AI pipeline: starting. No inferences yet."
+- **Out of scope (explicit):** standalone AI Quality tile, new top-level nav item, rollup table, background aggregation job, FP rate metric (→ E10-S5), admin UI (→ Epic 11), real auth (→ Epic 11), playbook content (→ E10-S3), auto-expiry on disabled classes, critical-alert kill-switch bypass.
 
-**Given** the Control Centre System Health page  
-**When** it loads  
-**Then** a new "AI Quality" tile shows: rolling 1-hour false-positive rate (from `ALERT_RESOLVED` outcome tags), rolling 1-hour mean `confidence_score` by alert class, and a `model_version` drift indicator (changes in last 24h)
+**Dependencies:** E4-S5 (inference safety/accessibility), E4-S6 (fusion alert correlation), E2-S5 (escalation acknowledge/resolve), E2-S9 / E3-S6 (system health page), Hailo `pyhailort` package (already present per E1-5-1).
 
-**Given** the fusion config  
-**When** the operator sets `disabled_alert_classes: ["UNATTENDED_BAG", "DOOR_OBSTRUCTION"]`  
-**Then** those alert classes are not emitted to the event store; the suppression is logged as a structured event `ALERT_CLASS_DISABLED` with operator_id, reason, and timestamp
-
-**And** `_bmad-output/operational-procedures/exec-failure-playbook.md` is created covering: T+0–15min (acknowledge to ÖBB sponsor via phone using holding statement template), T+15min–4h (evidence bundle = event-store export + Hailo logs + fusion config snapshot), T+4–24h (root-cause writeup + per-alert-class disable decision), with named Nomad-side and ÖBB-side owners in a RACI table  
-**And** the playbook is reviewed and signed by Abbas (Nomad) and the named ÖBB sponsor before pilot kickoff  
-**And** `event-payload-schemas.md` is updated to reflect the new `AlertRaisedPayload` fields  
-**And** existing fusion tests for `ALERT_RAISED` are updated to assert `confidence_score` and `model_version` presence
-
-**Dependencies:** E4-S6 (fusion alert correlation), E2-S5 (escalation inbox), E2-S9 / E3-S6 (system health page)  
-**Deliverables:** `shared/events/payloads.py` (AlertRaisedPayload update), `fusion/` emit sites, `control-centre/src/components/escalations/LowConfidencePill.jsx`, `control-centre/src/components/health/AIQualityTile.jsx`, `cloud-backend/src/api/v1/ai_quality.py`, `_bmad-output/operational-procedures/exec-failure-playbook.md`, schema doc update
-
-**Permission tier:** Tier 2 (local file edits) + Tier 3 (schema migration on shared `events` table — default permission mode required)
+**Permission tier:** Tier 3 (shared event schema + two Alembic migrations + inference Dockerfile `GIT_SHA` arg) + Tier 2 (remainder).
 
 ---
 
@@ -2055,5 +2048,63 @@ All production container images use non-editable installs, include `HEALTHCHECK`
 **Deliverables:** `shared/events/payloads.py` (alert payload + DwellFeedDegradedPayload), `vlan-pollers/` PIS departure-time extraction, `cloud-backend/src/api/v1/kpi/delay_minutes_avoided.py`, `control-centre/src/components/kpi/DelayMinutesAvoidedTile.jsx`, Conductor App spec stub at `_bmad-output/design-artifacts/D-UX-Design/conductor-app-dwell-aware-alerts.md`
 
 **Permission tier:** Tier 2 (local edits) + Tier 3 (event schema field — default permission mode for the payload migration)
+
+---
+
+#### Story E10-S5 — Alert Quality Measurement (Resolution Quality Tile)
+
+> **Source:** Deferred from E10-S1 design session (2026-05-30). E10-S1's AI Quality drawer intentionally ships without a false-positive rate because the metric is unfalsifiable as currently defined. This story closes that gap by replacing the single "FP rate" claim with three observable rates, an explicit operator-tagged false-positive signal, and a redefinition of NFR3.
+
+**As an** AI PM measuring whether alerts are operationally useful,
+**I want** the Claudia resolve flow to capture an explicit `false_positive` outcome tag, the AI Quality drawer to show three orthogonal resolution-quality rates per alert class (no-action rate, auto-resolved-before-ack rate, explicit-false-positive rate), and NFR3 to be redefined against measurable quantities,
+**so that** procurement claims about model accuracy are grounded in operator-observable behaviour rather than vibes, and post-pilot retune candidates are identifiable from the data.
+
+**Acceptance criteria:**
+
+**Given** Story 2-5's resolve flow outcome-tag enum  
+**When** the enum is updated  
+**Then** a new tag `false_positive` is added; Claudia can select it when resolving any escalation; selecting it is mutually exclusive with action tags (i.e. an escalation can be `false_positive` OR have ≥1 action tag, never both)
+
+**Given** the AI Quality drawer in System Health (E10-S1 surface)  
+**When** the drawer is opened  
+**Then** it shows three rates per alert class (rolling 7-day, not 1-hour — calibration requires a longer window):
+- `no_action_rate` = `resolved_with_zero_action_tags / resolved_total`
+- `auto_resolved_before_ack_rate` = `auto_resolved_before_ack / raised_total`  
+- `explicit_fp_rate` = `resolved_with_tag("false_positive") / resolved_total`
+
+Each rate displayed with its count denominator (e.g. `4.2% (3 of 71)`) so small-sample noise is visible. No aggregated single "FP rate" number; all three shown side-by-side.
+
+**Given** the PRD's NFR3 (`<5% FP rate`)  
+**When** the PRD is updated  
+**Then** NFR3 is redefined as: `explicit_fp_rate < 5% per alert class over a rolling 7-day window`, with the other two rates demoted to targets (not gates)
+
+**And** the alert effectiveness report (E10-S2 weekly job) is updated to flag any alert class breaching the new NFR3 threshold  
+**And** the resolve UI gets a small explanation: "Mark `false_positive` if the model was wrong (no bag, no obstruction, no fall). Mark an action tag if the model was right and you took action." — Freya to spec exact placement  
+**And** training material is updated to cover the new tag (E10-S3 SOP appendix)
+
+**Dependencies:** E10-S1 (confidence metadata + AI Quality drawer must exist), E10-S2 (`escalation_audit` table provides the data), E2-S5 (resolve flow + outcome tags).
+
+**Deliverables:** `shared/src/oebb_shared/events/payloads.py` (outcome-tag enum update), `cloud-backend/src/cloud_backend/api/ai_quality_rates.py` (new endpoint), `control-centre/src/components/health/AIQualityRates.jsx` (new component in drawer), `cloud-backend/src/cloud_backend/services/alert_effectiveness_report.py` (update for NFR3 breach flag), `_bmad-output/planning-artifacts/prd.md` (NFR3 redefinition), training material updates in E10-S3 SOP.
+
+**Permission tier:** Tier 2 (local edits) + Tier 3 (event schema enum extension — default permission mode).
+
+---
+
+### Epic 11: Control Centre Admin & Identity
+
+> **Source:** Surfaced 2026-05-30 during E10-S1 grill-me. Prerequisite for any role-gated feature in Control Centre. E10-S1 ships kill-switch endpoints behind a shared `CC_ADMIN_KEY` — Epic 11 replaces that with real auth + an admin UI.
+
+**Goal:** Introduce authentication, user management, profile management, and a Control Centre admin/configuration surface. Unlocks the UI half of E10-S1's kill-switch and the mutability deferral on E10-S1's confidence thresholds.
+
+**Stories (placeholder — full breakdown in a separate planning conversation):**
+- E11-S1 — JWT-based auth: login flow, token issuance, role claim (`admin` | `operator`).
+- E11-S2 — User management: CRUD on users + role assignment; password reset.
+- E11-S3 — Profile management: extract from current `OperatorPreferences.jsx`; per-user persistence.
+- E11-S4 — Admin UI for E10-S1 kill-switch: replaces curl operation with a settings screen; same backend endpoint with auth middleware swapped from `X-Admin-Key` to JWT role check.
+- E11-S5 — Configuration surface: mutable confidence thresholds + per-operator alert thresholds (Story 2-8 already partially in place — Epic 11 makes them user-scoped).
+
+**Out of scope:** SSO integration with ÖBB's IDP (Phase 2 — likely a separate epic once the ÖBB tenant is identified).
+
+**Status:** `backlog` — planning required before any story moves to `ready-for-dev`. E10 work does NOT block on Epic 11; E10 uses the shared-key seam designed to be forward-compatible.
 
 ---
