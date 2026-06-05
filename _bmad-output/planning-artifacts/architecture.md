@@ -100,6 +100,17 @@ The Passenger Intelligence Service delivers six capabilities, all running on the
 
 ---
 
+### Onboard Network Topology (confirmed from Stadler IoB Konzept AL_4958944h + VLAN Konzept AL_5457087, 2026-06-05)
+
+Source docs filed at `reference/vendor-docs/` (IoB Konzept is **Freigegeben/released**, TLP:Amber).
+
+- **Segmented topology:** `IoB Netzwerk —[Firewall]— DMZ —[Firewall]— TCMS —[Firewall]— ETCS`. The **firewall is both the inter-VLAN router within the IoB network AND the TCMS↔IoB gateway.** Any inference path consuming TCMS-side signals (door-open from ZFR VLAN 2, Stadler diagnostics) crosses a firewall boundary — not a flat L2 reach.
+- **IP schema (Tabelle 13):** base `172.16.0.0/12`; address bits = static `172.` prefix | **VLAN-ID (5 bits, 1–31)** | **Vehicle-ID (8 bits, 1–255)** | **Device (7 bits, 1–127)**; subnet mask `255.255.128.0` (encodes vehicle but not VLAN, so intra-VLAN inter-vehicle traffic is not routed). Explains the `172.18.192.x` camera addressing.
+- **Landside egress path:** derived events leave the train via **ZFR → OBS** (On-Board System Server, VLAN 7). Per VLAN-routing Tabelle 23, "OBS ist das Gateway für den ZFR." **OBS = the sanctioned uplink for structured/anonymised events; raw video never egresses** (consistent with the Privacy NFR). 2 OBS units + Reserve OBS in Wagen F(500)/E(400). Implication: cloud-sync (SYS1) and `cloud-backend` ultimately receive from the OBS-mediated path, not direct from inference.
+- **Camera-stream routing:** VLAN 5 camera streams route to **TCMS-Netz for IDU display** (Tabelle 23) — a separate consumer from the Hailo inference tap.
+
+---
+
 ### Open Dependencies (tracked, not blocking architecture)
 
 | Dependency | Impact | Resolution path |
@@ -405,6 +416,8 @@ class EventType(StrEnum):
 #### ADR-15: Camera-Based Primary Passenger Counting (2026-05-17)
 
 **Decision:** Camera vision pipeline is the **primary and authoritative** source for passenger counting. APC (Automatic Passenger Counting) hardware data is a **calibration reference only** — it does not influence real-time occupancy counts.
+
+> **Terminology note (2026-06-05):** "APC" throughout this ADR refers to the onboard **AFZ** (Automatische Fahrgast Zählung) system on **VLAN 8** — **29 Zählsensoren** per the Stadler VLAN Konzept (AL_5457087, Tabelle 20). The `APCAdapter`/`MockAPCAdapter` code names are retained (shipped); AFZ is the vendor term for the same signal. Source docs: `reference/vendor-docs/`.
 
 **Mechanism:** Directional tripwire polygons are configured at each door threshold in `cameras.json`. The `inference` container uses the native `hailotracker` GStreamer plugin (Kalman+IoU, part of TAPPAS) to assign stable track IDs across frames. Track IDs flow through GStreamer buffer metadata into the Python callback layer. When a track ID crosses the entry or exit side of a door tripwire, the `local-fusion-engine` increments or decrements the coach passenger count atomically. The result is emitted as `OCCUPANCY_UPDATE`.
 
