@@ -71,3 +71,13 @@ models/
 .coverage
 *.egg-info/
 test-results/
+
+# ── Local tooling & generated artifacts (not source) ──────────────────────────
+/package.json
+/package-lock.json
+/node_modules/
+lint.json
+parse_lint.py
+openssh
+tappas_check/
+*.docx
