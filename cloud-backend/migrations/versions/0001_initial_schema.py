@@ -34,10 +34,7 @@ def upgrade() -> None:
         sa.Column("start_time", sa.TIMESTAMP(timezone=True), nullable=False),
         sa.Column("end_time", sa.TIMESTAMP(timezone=True), nullable=True),
     )
-    op.execute(
-        sa.text("COMMENT ON COLUMN journeys.journey_id IS :c"),
-        {"c": _JOURNEY_ID_COMMENT},
-    )
+    op.execute(sa.text(f"COMMENT ON COLUMN journeys.journey_id IS '{_JOURNEY_ID_COMMENT}'"))
 
     op.create_table(
         "events",
@@ -62,10 +59,7 @@ def upgrade() -> None:
         sa.Column("payload", JSONB, nullable=False),
         sa.Column("source_timestamp", sa.TIMESTAMP(timezone=True), nullable=False),
     )
-    op.execute(
-        sa.text("COMMENT ON COLUMN events.journey_id IS :c"),
-        {"c": _JOURNEY_ID_COMMENT},
-    )
+    op.execute(sa.text(f"COMMENT ON COLUMN events.journey_id IS '{_JOURNEY_ID_COMMENT}'"))
 
     # Idempotency constraint: same event from same source at same time = duplicate
     op.create_unique_constraint(
