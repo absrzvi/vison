@@ -124,7 +124,7 @@ UX-DR15: Prototype to production delta (9 items from DD-001): replace MockWebSoc
 
 ### FR Coverage Map
 
-> _Updated 2026-05-30: FR23, FR25, FR32, FR34, FR35 descoped to Phase 2 per readiness review. See PRD §5.4 v1.1 for rationale._
+> _Updated 2026-05-30: FR23, FR25, FR32, FR34, FR35 descoped to Phase 2 per readiness review. See PRD §5.5 (Deferred / Out of PoC Scope; was §5.4 before the 2026-06-05 Operator Adoption & Trust insertion) for rationale._
 
 | Requirement | Epic(s) |
 |---|---|
@@ -143,6 +143,7 @@ UX-DR15: Prototype to production delta (9 items from DD-001): replace MockWebSoc
 | FR28–FR31 (maintenance manager) | Deferred Phase 2 (Maintenance Dashboard is Phase 2) |
 | FR32 (no-show), FR34 (energy KPI), FR35 (advertising audience) | Deferred Phase 2 |
 | FR36–FR37 (platform displays, PIS) | Deferred Phase 2 (Platform Staff + PIS apps are Phase 2) |
+| FR38–FR42 (operator adoption & trust: confidence metadata, inference heartbeat, kill-switch, behavioural telemetry, alert-quality rates) | Epic 10 (E10-S1 confidence/heartbeat/kill-switch, E10-S2 telemetry, E10-S5 quality rates). Added to PRD §5.4 v1.3 (2026-06-05). |
 
 ## Epic List
 
@@ -1426,7 +1427,9 @@ The system detects occupancy, congestion, luggage, door obstructions, accessibil
 
 #### Story E4-S6 — `fusion` Alert Correlation & Suppression State Machine
 
-> **⚠ Oversized — split before dev pickup (readiness review 2026-05-30).** This story bundles 6 modules (suppression state machine, door obstruction correlation, occupancy fusion per ADR-15, speed escalation, depot lifecycle, enrichment). Decompose at dev start into:
+> **✅ RESOLVED 2026-06-05 — shipped as a single story (status: `done`).** The advisory split below was *not* taken; E4-S6 was implemented whole and its code-review follow-ups were folded into the hardening epics (6/7). Sub-story decomposition retained for historical reference only — do not action.
+>
+> _(Original 2026-05-30 readiness note:)_ **⚠ Oversized — split before dev pickup.** This story bundles 6 modules (suppression state machine, door obstruction correlation, occupancy fusion per ADR-15, speed escalation, depot lifecycle, enrichment). Decompose at dev start into:
 > - **E4-S6a** — Suppression state machine (`suppression.py`): NORMAL ↔ MAINTENANCE ↔ DEPOT transitions with multi-condition handling
 > - **E4-S6b** — Door obstruction correlation (`door_obstruction.py`): ZFR cross-reference + speed-correlated severity escalation (FR7, FR9)
 > - **E4-S6c** — Occupancy fusion (`occupancy.py`): authoritative camera count per ADR-15; `weight_apc` removal; APC reserved for post-hoc accuracy reporting (NFR2 v1.1)

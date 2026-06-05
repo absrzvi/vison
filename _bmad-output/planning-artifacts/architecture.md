@@ -1689,7 +1689,10 @@ All 6 Passenger AI capabilities architecturally supported. TCMS/PIS have known e
 
 ---
 
-### ADR-15: Control Centre Frontend Stack (confirmed)
+### ADR-CC-1: Control Centre Frontend Stack (confirmed)
+
+> _Renumbered 2026-06-05 from "ADR-15" — collided with the onboard ADR-15 (Camera-Based Primary Passenger Counting, §435). Frontend ADRs use the `ADR-CC-*` namespace; all `ADR-15`/`ADR-16` cross-references in this doc point to the onboard ADRs._
+
 
 **Decision:** React + Vite SPA (JavaScript, not TypeScript for PoC). JSX components, CSS Modules pattern via co-located `.css` files. No component library — custom CSS with design token system.
 
@@ -1708,7 +1711,10 @@ All 6 Passenger AI capabilities architecturally supported. TCMS/PIS have known e
 
 ---
 
-### ADR-16: Control Centre State Management
+### ADR-CC-2: Control Centre State Management
+
+> _Renumbered 2026-06-05 from "ADR-16" (collided with onboard ADR-16, Spatial Zone Masking, §463). **Note:** the `MockWebSocketClient` / WebSocket language below predates ADR-20 — landside transport is now SSE (`RealSseClient`); see PRD §9 and the transport table at §667. Body text not rewritten here to keep this a numbering-only change._
+
 
 **Decision:** Single `FleetContext` (React Context) wrapping one `MockWebSocketClient` instance. All views consume via `useFleetData()` hook. No Redux or Zustand for PoC.
 

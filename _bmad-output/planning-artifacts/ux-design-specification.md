@@ -16,6 +16,9 @@ activeScenario: "06 — Passenger with Pushchair Finds Accessible Space"
 # UX Design Specification — OEBB Smart Rail
 # Scenario 06 Conceptual Specifications
 
+> **⚠ This file is a single-scenario (Scenario 06) conceptual stub — NOT the authoritative UX spec.**
+> The Control Centre Dashboard UX contract lives in **PRD §7 (UX-DR1–UX-DR18)** and the full design set under **`_bmad-output/design-artifacts/D-UX-Design/`** (locked prototype: `DD-001-cc-dashboard.md`). Start there for any dashboard work. _(Pointer added 2026-06-05 per readiness drift check.)_
+
 **Author:** AbbasRizvi
 **Date:** 2026-05-14
 

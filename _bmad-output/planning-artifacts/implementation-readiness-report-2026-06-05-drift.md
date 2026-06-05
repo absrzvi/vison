@@ -169,3 +169,19 @@ This assessment identified **7 issues across 4 categories** (1 critical, 2 major
 ---
 
 _Drift readiness check — 2026-06-05 — assessor: Claude (PM/requirements-traceability). Method: bmad-check-implementation-readiness, drift-scoped._
+
+---
+
+## Remediation log (2026-06-05)
+
+All 7 findings actioned in-session:
+
+1. ✅ **Detector model drift (critical)** — architecture.md + epics.md §1352 corrected to `yolox_s_leaky.hef` (YOLOX, Apache-2.0). Committed `32b4a94`. *Inference code/config fix handed to a separate worktree session.*
+2. ✅ **Epic 10 PRD/FR anchor (major)** — added PRD §5.4 FR38–FR42; mirrored in epics.md FR Coverage Map.
+3. ✅ **NFR3 redefinition (major)** — PRD NFR3 flagged with pending-E10-S5 redefinition note + FR42 link.
+4. ✅ **Epic 10 UX-DR anchor (major)** — added PRD UX-DR16–18 for the E10-S1c surfaces (confidence chip, degraded banner, AI pipeline row + quality drawer).
+5. ✅ **Duplicate ADR numbering (minor)** — frontend ADRs renumbered ADR-CC-1 / ADR-CC-2; onboard ADR-15/16 untouched; cross-refs verified to point onboard.
+6. ✅ **E4-S6 status mismatch (minor)** — confirmed `done` (shipped whole, follow-ups → hardening epics); stale "split before dev" warning marked RESOLVED.
+7. ✅ **UX stub pointer (minor)** — redirect banner added to `ux-design-specification.md` → PRD §7 + D-UX-Design/.
+
+PRD bumped 1.2 → 1.3; epics.md `lastUpdated` → 2026-06-05; deferred-scope §5.4 → §5.5 (cross-ref in epics.md updated). **Drift fully cleared.** Critical path resumes at `bmad-dev-story` 10-1 (after inference worktree merge).
