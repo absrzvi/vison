@@ -135,6 +135,11 @@ export function SystemHealth() {
     return () => clearInterval(id);
   }, []);
 
+  const _setPending = useCallback((val) => {
+    ticketPendingRef.current = val;
+    setTicketPending(val);
+  }, []);
+
   // ESC — cancel pending ticket confirm first, then close panel
   useEffect(() => {
     const handler = (e) => {
@@ -164,11 +169,6 @@ export function SystemHealth() {
       return changed ? { ...prev, trains: patchedTrains } : prev;
     });
   }, [fleet]);
-
-  const _setPending = useCallback((val) => {
-    ticketPendingRef.current = val;
-    setTicketPending(val);
-  }, []);
 
   const confirmRaiseTicket = useCallback(async (trainId) => {
     if (ticketPendingRef.current !== null) return;
