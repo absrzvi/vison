@@ -464,11 +464,11 @@ tests/unit/test_occupancy_primary.py
 
 > **Amendment 2026-06-05 (detector license — Winston):** The counting/detection model is **`yolox_s_leaky.hef` (YOLOX, Apache-2.0)** from the Hailo Model Zoo — **NOT `yolov8m.hef`**. YOLOv8 weights are AGPL-3.0 (the licence attaches to the weights, not just the repo), incompatible with the commercial Insights-as-a-Service product without a paid Ultralytics enterprise licence. YOLOX is permissive, ships as a Hailo-8 HEF, and pairs with `hailotracker`/ByteTrack. **`yolov8m`/`yolov8m_pose` are retired; keep all AGPL weights off the device.** YOLOX is also the bench bring-up stand-in (there is no later "swap" — it is the production model). Pose is **deferred and out of bench/trip scope**; a permissive pose model will be selected if/when pose re-enters P1 planning. Read every `yolov8m`/`yolov8m_pose` reference below as `yolox_s_leaky` / "deferred permissive pose model" respectively.
 
-**Decision:** Per-coach seating occupancy distribution (seated vs standing) is calculated by intersecting `yolov8m.hef` bounding box coordinates with pre-configured static zone polygon masks — not by running pose estimation across all cameras.
+**Decision:** Per-coach seating occupancy distribution (seated vs standing) is calculated by intersecting `yolox_s_leaky.hef` (YOLOX, Apache-2.0) bounding box coordinates with pre-configured static zone polygon masks — not by running pose estimation across all cameras.
 
-**Rationale:** Deploying `yolov8m_pose.hef` across 25–30 streams would exhaust Hailo-8 TOPS budget and produce degraded accuracy due to high-back seat occlusion on ÖBB rolling stock. Static zone masks deliver equivalent seating vs aisle metrics at a fraction of compute cost.
+**Rationale:** Deploying a pose model across 25–30 streams would exhaust Hailo-8 TOPS budget and produce degraded accuracy due to high-back seat occlusion on ÖBB rolling stock. Static zone masks deliver equivalent seating vs aisle metrics at a fraction of compute cost.
 
-**Pose estimation scope (unchanged):** `yolov8m_pose.hef` is restricted to P1 cameras covering accessibility spaces and vestibule fall-detection zones only.
+**Pose estimation scope:** Pose is **deferred and out of bench/trip scope** (see §465 amendment). If pose re-enters P1 planning, a permissive-licensed pose model — restricted to P1 cameras covering accessibility spaces and vestibule fall-detection zones only — will be selected; AGPL `yolov8m_pose` is retired and must not run on the device.
 
 **Zone config:** Static polygon masks are defined per coach type in `config/zones/{coach_type}.json`. Masks define `seating`, `aisle`, `vestibule`, and `door_threshold` polygons. Zone configs are **not updated per-frame** — they are loaded at container startup.
 
@@ -1195,7 +1195,7 @@ Rather than building RTSP ingestion, object detection, and tracking from scratch
 | `inference` | `hailotracker` GStreamer plugin | Native Kalman+IoU tracker in TAPPAS; outputs track IDs as buffer metadata consumed by thin Python callback |
 | `inference` | `reid_multisource` pipeline | Cross-camera re-ID for multi-car person identity continuity (E4-S5+) |
 
-**Pose estimation removed from PoC scope.** Seated vs. standing classification uses static zone polygon masks (`seat_zones` in `cameras.json`) — not pose keypoints. This eliminates `yolov8m_pose.hef` and `pose.py` from the inference container. Re-evaluate for E4-S5 (accessibility detection).
+**Pose estimation removed from PoC scope.** Seated vs. standing classification uses static zone polygon masks (`seat_zones` in `cameras.json`) — not pose keypoints. This eliminates the pose model (`pose.py`) from the inference container; the detector is `yolox_s_leaky.hef` (YOLOX, Apache-2.0) — AGPL `yolov8m_pose` is retired (see ADR-16 §465 amendment). Re-evaluate for E4-S5 (accessibility detection).
 
 **Still custom-built (not in hailo-apps):**
 - Thin Python callbacks: zone mask application, per-coach 1 Hz occupancy count, OCCUPANCY_UPDATE / OCCUPANCY_THRESHOLD_CROSSED event emission
@@ -1293,7 +1293,7 @@ oebb-smart-rail/
 │   ├── pyproject.toml
 │   ├── .env.example
 │   ├── models/                       # pre-compiled .hef model files (gitignored, fetched at build)
-│   │   └── yolov8m.hef               # object detection (person, suitcase, bicycle)
+│   │   └── yolox_s_leaky.hef         # object detection (person, suitcase, bicycle) — YOLOX, Apache-2.0
 │   ├── src/
 │   │   └── inference/
 │   │       ├── __init__.py
@@ -1582,7 +1582,7 @@ rtsp-ingest (hailo-apps multisource — GStreamer HailoRoundRobin)
      │ GStreamer pipeline (frames flow internally via TAPPAS — no HTTP)
      ▼
 inference (hailo-apps detection + hailotracker — TAPPAS native)
-  Hailo-8 M.2 — yolov8m.hef (person/suitcase/bicycle)
+  Hailo-8 M.2 — yolox_s_leaky.hef (person/suitcase/bicycle) — YOLOX, Apache-2.0
   hailotracker GStreamer plugin → thin Python callback → zone_counter
      │ detections + tracking IDs (HTTP POST to fusion/event-store)
      │

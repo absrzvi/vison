@@ -2,8 +2,9 @@
 stepsCompleted: [1, 2, 3, 4]
 adrUpdates: [ADR-15, ADR-16, ADR-17, ADR-18]
 storiesAdded: [E4-S8, E4-S9, E4-S10, E6-S1, E6-S2, E6-S3, E7-S1, E7-S2, E8-S1, E8-S2, E9-S1, E9-S2, E9-S3, E5-S1, E5-S2, E5-S3, E5-S4, E1.5-1, E1.5-2, E1.5-3, E1.5-4, E3-S8, E1-S6']
-lastUpdated: 2026-05-30
+lastUpdated: 2026-06-05
 changelog:
+  - "2026-06-05: Detector model drift fix (readiness drift check) — E4-S6 §1352 AC now names `yolox_s_leaky.hef` (YOLOX, Apache-2.0) instead of retired AGPL `yolov8m.hef`. Aligns epics with architecture.md ADR-16 §465 amendment + Hailo capacity budget. No scope change."
   - "2026-05-30 (later): ADR-20 ratified — SSE replaces WebSocket for landside push. Re-scoped E1-S6 (now onboard-only), added new E1-S6' (cloud-backend SSE fan-out), updated E2-S1 (Real SSE Client), E5-S1 (Luggage Live Feed via SSE). Removed FR25 from Epic 2 FRs covered."
   - "2026-05-30: Backfilled Epic 5 (Luggage) + Epic 1.5 (Onboard Infra) bodies from implementation-artifacts. Moved E2-S9 → E3-S8 (System Health). Updated FR Coverage Map for FR23/25/32/34/35 Phase-2 descope. Deduped Epic 3/4 headers."
   - "2026-05-21: Added Epic 6/7/8/9 hardening stories + ADR-15..18."
@@ -1349,7 +1350,7 @@ The system detects occupancy, congestion, luggage, door obstructions, accessibil
 **Acceptance criteria:**
 
 **Given** `hailo_device.py` initialises  
-**When** the Hailo-8 device is present and `yolov8m.hef` is loaded  
+**When** the Hailo-8 device is present and `yolox_s_leaky.hef` (YOLOX, Apache-2.0) is loaded  
 **Then** `GET /health/ready` returns HTTP 200 with `{"status": "ready", "hailo_initialised": true}`; if the device is absent or the model fails to load it returns HTTP 503 with `recoverable: false`
 
 **Given** a frame from `rtsp-ingest` is received  
