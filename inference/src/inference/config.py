@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # E4-S5: expanded to include suitcase (door obstruction) and bicycle (accessibility).
     detection_classes: list[str] = ["person", "suitcase", "bicycle"]
-    model_hef_path: str = "/models/yolov8m.hef"
+    model_hef_path: str = "/models/yolox_s_leaky.hef"
 
     fusion_url: str = "http://fusion:8090"
     accessibility_confidence_threshold: float = 0.80

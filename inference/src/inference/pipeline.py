@@ -6,7 +6,7 @@ Do NOT import this module from unit-tested code.
 
 P-M16 topology: one GStreamer pipeline with N RTSP sources multiplexed via
 uridecodebin × N → videorate (per-camera fps) → hailoroundrobin → single hailonet
-(yolov8m.hef, batch_size=8) → hailotracker (stream-id aware, per-source state) →
+(yolox_s_leaky.hef, batch_size=8) → hailotracker (stream-id aware, per-source state) →
 per-stream Python callback keyed by stream-id. ONE VDevice context per process.
 
 HARDWARE-VERIFY: hailotracker stream-id semantics need verification on first
@@ -32,6 +32,9 @@ from inference.config import Settings
 from inference.models import DetectionClass
 
 # COCO class IDs for the classes our pipeline routes through the tracker.
+# yolox_s_leaky.hef (YOLOX-S, Hailo Model Zoo) emits the standard 80-class COCO
+# index space — identical to the retired yolov8m (person=0, bicycle=1, suitcase=28),
+# so this mapping is unchanged by the detector swap (ADR-16 §465).
 # Story 4-4 tracks person only; suitcase/bicycle/wheelchair move to E4-S5 with
 # their own per-class downstream modules (dwell timer, accessibility detector).
 _COCO_CLASS_ID = {
@@ -46,7 +49,7 @@ class InferencePipeline(GStreamerDetectionApp):  # type: ignore[misc]
 
     Pipeline string (N sources):
         [uridecodebin × N] → hailoroundrobin
-            → INFERENCE_PIPELINE (hailonet, yolov8m.hef)
+            → INFERENCE_PIPELINE (hailonet, yolox_s_leaky.hef)
             → TRACKER_PIPELINE (hailotracker, stream-id aware)
             → USER_CALLBACK_PIPELINE
             → DISPLAY_PIPELINE (fakesink)

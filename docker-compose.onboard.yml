@@ -74,7 +74,7 @@ services:
       start_period: 60s
 
   # ── inference ─────────────────────────────────────────────────────────────────
-  # Hailo-8 YOLOv8m detection + tracking. Requires /dev/hailo0 device passthrough.
+  # Hailo-8 YOLOX-S detection + tracking. Requires /dev/hailo0 device passthrough.
   # Uses Hailo Software Suite base image for HailoRT + TAPPAS GStreamer plugins.
   inference:
     build:
@@ -86,7 +86,7 @@ services:
         HAILO_BASE: hailo-software-suite:4.23
     environment:
       INFERENCE_CAMERAS_JSON_PATH: /config/cameras.json
-      INFERENCE_MODEL_HEF_PATH: /models/yolov8m.hef
+      INFERENCE_MODEL_HEF_PATH: /models/yolox_s_leaky.hef
       INFERENCE_EVENT_STORE_URL: http://event-store:8001
       # PRODUCTION OVERRIDE REQUIRED: must match EVENT_STORE_API_KEY above.
       INFERENCE_EVENT_STORE_API_KEY: onboard-dev-key
@@ -100,8 +100,8 @@ services:
     volumes:
       # cameras.json and .hef model are bind-mounted; never baked into the image.
       - ./cameras.json:/config/cameras.json:ro
-      # PRODUCTION: replace with the actual path to the yolov8m.hef on SYS2.
-      - /opt/hailo/models/yolov8m.hef:/models/yolov8m.hef:ro
+      # PRODUCTION: replace with the actual path to the yolox_s_leaky.hef on SYS2.
+      - /opt/hailo/models/yolox_s_leaky.hef:/models/yolox_s_leaky.hef:ro
     devices:
       # Hailo-8 M.2 PCIe device. Without this, hailonet element init fails and
       # ReadinessHolder stays false — inference returns 503 indefinitely.
