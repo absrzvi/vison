@@ -50,6 +50,8 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
   const navigate = useNavigate();
   const { escalationActionState } = useFleetData();
   const [frameExpanded, setFrameExpanded] = useState(false);
+  // E10-S1 AC20 — "Model details" disclosure (Freya micro-spec 2026-06-12).
+  const [modelDetailsOpen, setModelDetailsOpen] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [outcome, setOutcome] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
@@ -110,6 +112,7 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
     setOutcome('');
     setSelectedTags([]);
     setFrameExpanded(false);
+    setModelDetailsOpen(false);
     setSubmitAttempted(false);
   }
 
@@ -226,6 +229,42 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
               <p className="esc-still-frame__privacy">
                 Single frame from detection moment only. No live feed. Access logged.
               </p>
+            </div>
+          )}
+
+          {/* Model details — E10-S1 AC20, placement per Freya micro-spec:
+              below the evidence (still frame / description), above the action
+              surfaces. Rendered only for model/fused basis; collapsed by default. */}
+          {(escalation.confidence_basis === 'model' || escalation.confidence_basis === 'fused') &&
+            typeof escalation.confidence_score === 'number' && (
+            <div className="esc-model-details">
+              <div
+                className="esc-model-details__toggle"
+                role="button"
+                tabIndex={0}
+                aria-expanded={modelDetailsOpen}
+                onClick={() => setModelDetailsOpen(v => !v)}
+                onKeyDown={e => e.key === 'Enter' && setModelDetailsOpen(v => !v)}
+              >
+                {modelDetailsOpen ? '▾' : '▸'} Model details
+              </div>
+              {modelDetailsOpen && (
+                <div className="esc-model-details__body">
+                  <div className="esc-model-details__row">
+                    <span className="esc-model-details__label">Confidence</span>
+                    <span className="esc-model-details__score">
+                      {(escalation.confidence_score * 100).toFixed(1)}%
+                    </span>
+                    <span className="esc-model-details__basis">({escalation.confidence_basis})</span>
+                  </div>
+                  {Object.entries(escalation.model_versions ?? {}).map(([k, v]) => (
+                    <div key={k} className="esc-model-details__row">
+                      <span className="esc-model-details__label">{k}</span>
+                      <span className="esc-model-details__value">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

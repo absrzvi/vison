@@ -46,6 +46,10 @@ class ContextState:
     reservations: dict[str, int] = field(default_factory=dict)
     consist: dict[str, str] = field(default_factory=dict)
 
+    # E10-S1 AC9: door controller firmware version sourced from vlan-pollers SNMP;
+    # joins fused-basis model_versions on door_obstruction alerts.
+    door_firmware_version: str = "unknown"
+
     # R4: ramp edge-trigger tracking. We record the *previously observed* value
     # so the FastAPI layer can detect a false→true transition.
     ramp_deployed: bool = False
@@ -94,6 +98,8 @@ class ContextState:
             self.reservations = dict(model.reservations)
         if model.consist is not None:
             self.consist = dict(model.consist)
+        if model.door_firmware_version is not None:
+            self.door_firmware_version = model.door_firmware_version
         after = (
             self.maintenance_mode,
             self.depot_mode,

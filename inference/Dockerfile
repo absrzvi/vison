@@ -22,6 +22,13 @@
 ARG HAILO_BASE=hailo-software-suite:4.23
 FROM ${HAILO_BASE}
 
+# E10-S1 AC5: model provenance requires the building commit SHA. No default —
+# building without --build-arg GIT_SHA produces an empty env var and the app
+# raises RuntimeError("model provenance requires GIT_SHA build arg") at startup.
+# CI: docker build --build-arg GIT_SHA=$CI_COMMIT_SHA ...
+ARG GIT_SHA
+ENV INFERENCE_GIT_SHA=${GIT_SHA}
+
 WORKDIR /app
 
 # Assert Python 3.11 is the active interpreter. hailo-software-suite:4.23 bundles

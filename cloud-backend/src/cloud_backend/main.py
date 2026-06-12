@@ -5,9 +5,12 @@ from fastapi import FastAPI
 
 from .api.error_handlers import unhandled_exception_handler
 from .config import get_settings
+from .routes.admin_alert_classes import router as admin_alert_classes_router
+from .routes.ai_pipeline import router as ai_pipeline_router
 from .routes.alerts_sse import router as alerts_router
 from .routes.analytics import router as analytics_router
 from .routes.capacity_review import capacity_review_router
+from .routes.config import router as config_router
 from .routes.fleet import router as fleet_router
 from .routes.health import router as health_router
 from .routes.ingest import router as ingest_router
@@ -34,6 +37,9 @@ app.include_router(health_router)
 app.include_router(ingest_router)
 app.include_router(fleet_router)
 app.include_router(alerts_router)
+app.include_router(admin_alert_classes_router)
+app.include_router(config_router)
+app.include_router(ai_pipeline_router)
 app.include_router(maintenance_router)
 app.include_router(preferences_router)
 

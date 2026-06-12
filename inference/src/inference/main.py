@@ -23,6 +23,8 @@ from inference.budget import Budget
 from inference.callback import OccupancyCallback
 from inference.config import Settings
 from inference.health import build_app
+from inference.heartbeat import HeartbeatEmitter
+from inference.model_provenance import compute_model_versions
 from inference.models import JourneyHolder, LoopHolder, ReadinessHolder, ZoneMask
 from inference.safety import SafetyHandler
 from inference.tripwire import TripwireHandler
@@ -68,6 +70,8 @@ def wire(
     loop_holder: LoopHolder,
     journey_holder: JourneyHolder | None = None,
     cameras_json: dict[str, Any] | None = None,
+    model_versions: dict[str, str] | None = None,
+    heartbeat: HeartbeatEmitter | None = None,
 ) -> tuple[Budget, JourneyHolder, list[OccupancyCallback], FastAPI]:
     """Wire components together. One OccupancyCallback and one ReadinessHolder per camera.
 
@@ -85,6 +89,7 @@ def wire(
         settings=settings,
         event_store_client=event_client,
         journey_holder=journey_holder,
+        model_versions=model_versions,
     )
     safety_handler = SafetyHandler(
         settings=settings,
@@ -138,6 +143,8 @@ def wire(
                 event_store_client=event_client,
                 safety_handler=safety_handler,
                 tripwire_handler=tripwire_handler,
+                model_versions=model_versions,
+                heartbeat=heartbeat,
             )
         )
 
@@ -187,6 +194,13 @@ def _make_pipeline_thread(
 
 def main() -> None:  # pragma: no cover — integration entry point
     settings = Settings()
+    # E10-S1 AC5/AC6: provenance computed once at startup; failure is fatal.
+    model_versions = compute_model_versions(settings)
+    log.info(
+        "inference.model_provenance",
+        **model_versions,
+        hef_bottleneck_fps=settings.pipeline_fps,
+    )
     cameras, cameras_json = _load_cameras_data(settings.cameras_json_path)
     # F2 decision: one ReadinessHolder per camera; health.py aggregates.
     cam_readiness = [
@@ -200,10 +214,24 @@ def main() -> None:  # pragma: no cover — integration entry point
         async with httpx.AsyncClient(timeout=5.0) as client:
             # M1 fix: single wire() call here, where the running loop and real httpx
             # client both exist. Bootstrap below constructs only the app shell.
+            # E10-S1 AC7: heartbeat loop, independent of detections. The shared
+            # JourneyHolder is created here so heartbeat and wire() see the same one.
+            journey_holder = JourneyHolder(journey_id=settings.journey_id)
+            heartbeat = HeartbeatEmitter(
+                settings=settings,
+                client=client,
+                journey_holder=journey_holder,
+                model_versions=model_versions,
+                readiness=cam_readiness,
+            )
             budget, journey_holder, callbacks, wired_app = wire(
                 settings, cameras, client, cam_readiness, loop_holder,
+                journey_holder=journey_holder,
                 cameras_json=cameras_json,
+                model_versions=model_versions,
+                heartbeat=heartbeat,
             )
+            heartbeat_task = asyncio.create_task(heartbeat.run())
             # Patch E: append routes into the already-created app so uvicorn's reference
             # stays valid. include_router only works before app startup; route list append
             # is the safe runtime alternative.
@@ -223,6 +251,7 @@ def main() -> None:  # pragma: no cover — integration entry point
             try:
                 yield
             finally:
+                heartbeat_task.cancel()
                 for r in cam_readiness:
                     r.ready = False
                 loop_holder.loop = None

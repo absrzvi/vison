@@ -1,4 +1,4 @@
-"""Occupancy passthrough — AC10 (ADR-15)."""
+﻿"""Occupancy passthrough — AC10 (ADR-15)."""
 from __future__ import annotations
 
 import logging
@@ -32,6 +32,7 @@ def _payload(count: int) -> OccupancyUpdatePayload:
         capacity=200,
         confidence=None,
         service_tier="standard",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
 
 

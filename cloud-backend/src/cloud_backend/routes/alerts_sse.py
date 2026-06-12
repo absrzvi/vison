@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.auth import require_api_key
 from ..database import get_db
+from ..services.fanout_filter import alert_class_filter
 
 log = structlog.get_logger()
 
@@ -105,18 +106,27 @@ async def _replay_since(
         """),
         {"types": list(ALERT_EVENT_TYPES), "after": last_event_id},
     )
-    return [
-        {
-            "event_id": str(r.event_id),
-            "event_type": r.event_type,
-            "severity": r.severity,
-            "journey_id": r.journey_id,
-            "vehicle_id": r.vehicle_id,
-            "timestamp": str(r.timestamp),
-            "payload": r.payload,
-        }
-        for r in rows
-    ]
+    # E10-S1 AC13: kill-switch applies to the replay path too — disabled alert
+    # classes raised after disabled_at never reach a reconnecting client.
+    events: list[dict[str, object]] = []
+    for r in rows:
+        payload = r.payload if isinstance(r.payload, dict) else json.loads(r.payload)
+        if await alert_class_filter.is_filtered(
+            db, event_type=r.event_type, payload=payload, t_raised=r.timestamp
+        ):
+            continue
+        events.append(
+            {
+                "event_id": str(r.event_id),
+                "event_type": r.event_type,
+                "severity": r.severity,
+                "journey_id": r.journey_id,
+                "vehicle_id": r.vehicle_id,
+                "timestamp": str(r.timestamp),
+                "payload": payload,
+            }
+        )
+    return events
 
 
 async def _sse_generator(

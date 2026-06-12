@@ -1,4 +1,4 @@
-"""Health endpoints + readiness cache + ramp/door fallback paths — AC1, AC8."""
+﻿"""Health endpoints + readiness cache + ramp/door fallback paths — AC1, AC8."""
 from __future__ import annotations
 
 import json
@@ -254,6 +254,7 @@ def test_door_obstruction_emit_failure_returns_202() -> None:
                 "camera_id": "C1_DOOR_01",
                 "confidence": None,
                 "door_state": "unknown",
+                "model_versions": {"detector_arch": "yolox_s_leaky"},
             },
         )
     assert resp.status_code == 202
@@ -274,6 +275,7 @@ def test_accessibility_candidate_endpoint_updates_ctx_only() -> None:
             "camera_id": "C1_DOOR_01",
             "confidence": None,
             "near_door_id": "door-1A",
+            "model_versions": {"detector_arch": "yolox_s_leaky"},
         },
     )
     assert resp.status_code == 202
@@ -316,7 +318,7 @@ def _valid_occupancy_body(car_id: str = "car-1", count: int = 50) -> dict[str, o
         "occupancy_count": count,
         "occupancy_pct": count / 200.0,
         "capacity": 200,
-        "service_tier": "standard",
+        "service_tier": "standard", "model_versions": {"detector_arch": "yolox_s_leaky"},
     }
 
 
@@ -420,7 +422,7 @@ def test_occupancy_update_suppressed_when_gate_closed_but_ledger_mutates() -> No
                 "occupancy_count": 50,
                 "occupancy_pct": 0.25,
                 "capacity": 200,
-                "service_tier": "standard",
+                "service_tier": "standard", "model_versions": {"detector_arch": "yolox_s_leaky"},
             },
         )
 
@@ -443,7 +445,7 @@ def _valid_occupancy_body(car_id: str = "car-1", pct: float = 0.4) -> dict[str, 
         "occupancy_count": int(round(pct * 200)),
         "occupancy_pct": pct,
         "capacity": 200,
-        "service_tier": "standard",
+        "service_tier": "standard", "model_versions": {"detector_arch": "yolox_s_leaky"},
     }
 
 
@@ -585,4 +587,60 @@ def test_comfort_index_station_edge_preserved_under_suppression() -> None:
     bodies = [json.loads(c.request.content) for c in envelope_route.calls]
     comfort_envelopes = [b for b in bodies if b["event_type"] == "COACH_COMFORT_INDEX"]
     assert len(comfort_envelopes) >= 1
+    client.close()
+
+
+@pytest.mark.unit
+def test_slip_fall_candidate_carries_model_confidence() -> None:
+    """Story 10-1 AC9: slip-fall alert is model-basis with score + versions
+    from the inference candidate body."""
+    client = _make_client()
+    with respx.mock(assert_all_called=False) as rmock:
+        route = rmock.post("http://event-store-test/api/v1/events").mock(
+            return_value=httpx.Response(201)
+        )
+        resp = client.post(
+            "/candidates/alert_raised",
+            json={
+                "alert_type": "slip_fall",
+                "car_id": "car-1",
+                "track_id": 42,
+                "camera_id": "C1_INT_01",
+                "confidence": 0.66,
+                "model_versions": {"detector_arch": "yolox_s_leaky"},
+            },
+        )
+    assert resp.status_code == 202
+    assert route.called
+    body = json.loads(route.calls.last.request.content.decode())
+    assert body["payload"]["confidence_basis"] == "model"
+    assert body["payload"]["confidence_score"] == 0.66
+    assert body["payload"]["model_versions"] == {"detector_arch": "yolox_s_leaky"}
+    client.close()
+
+
+@pytest.mark.unit
+def test_slip_fall_candidate_missing_confidence_fails_safe_to_zero() -> None:
+    """Candidate without confidence (legacy producer) emits score 0.0 — the
+    lowest-trust rendering — rather than dropping the safety alert."""
+    client = _make_client()
+    with respx.mock(assert_all_called=False) as rmock:
+        route = rmock.post("http://event-store-test/api/v1/events").mock(
+            return_value=httpx.Response(201)
+        )
+        resp = client.post(
+            "/candidates/alert_raised",
+            json={
+                "alert_type": "slip_fall",
+                "car_id": "car-1",
+                "track_id": 7,
+                "camera_id": "C1_INT_01",
+            },
+        )
+    assert resp.status_code == 202
+    assert route.called
+    body = json.loads(route.calls.last.request.content.decode())
+    assert body["payload"]["confidence_score"] == 0.0
+    assert body["payload"]["confidence_basis"] == "model"
+    assert body["payload"]["model_versions"] == {"detector_arch": "unknown"}
     client.close()

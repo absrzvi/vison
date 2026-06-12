@@ -53,6 +53,7 @@ _MINIMAL_PAYLOADS: dict[str, dict] = {
         "occupancy_pct": 0.5,
         "capacity": 200,
         "service_tier": "standard",
+        "model_versions": {"detector_arch": "yolox_s_leaky"},  # E10-S1
     },
     "OCCUPANCY_THRESHOLD_CROSSED": {
         "car_id": "car-1",
@@ -70,6 +71,10 @@ _MINIMAL_PAYLOADS: dict[str, dict] = {
         "car_id": "car-2",
         "zone": None,
         "description": "Occupancy exceeded 90%.",
+        # E10-S1 required confidence metadata
+        "confidence_score": 0.91,
+        "confidence_basis": "model",
+        "model_versions": {"detector_arch": "yolox_s_leaky"},
     },
     "ALERT_RESOLVED": {
         "alert_id": "a3f1c2d4-89ab-4ef0-b123-000000000001",
@@ -91,6 +96,7 @@ _MINIMAL_PAYLOADS: dict[str, dict] = {
         "rack_id": "car-2-rack-upper-left",
         "fill_pct": 0.95,
         "item_count": 7,
+        "model_versions": {"detector_arch": "yolox_s_leaky"},  # E10-S1
     },
     "UNATTENDED_BAG": {
         "car_id": "car-3",
@@ -99,6 +105,7 @@ _MINIMAL_PAYLOADS: dict[str, dict] = {
         "dwell_s": 180.0,
         "bbox": {"x": 412, "y": 308, "w": 64, "h": 48},
         "camera_id": "cam-3-02",
+        "model_versions": {"detector_arch": "yolox_s_leaky"},  # E10-S1
     },
     "DOOR_OBSTRUCTION": {
         "car_id": "car-1",
@@ -107,6 +114,7 @@ _MINIMAL_PAYLOADS: dict[str, dict] = {
         "track_id": "person-0117",
         "camera_id": "cam-1-door-L2",
         "door_state": "closing",
+        "model_versions": {"detector_arch": "yolox_s_leaky"},  # E10-S1
     },
     "ACCESSIBILITY_DETECTED": {
         "car_id": "car-2",
@@ -115,6 +123,7 @@ _MINIMAL_PAYLOADS: dict[str, dict] = {
         "assistance_type": ["wheelchair"],  # min_length=1
         "camera_id": "cam-2-vest-b",
         "near_door_id": "car-2-door-R-1",
+        "model_versions": {"detector_arch": "yolox_s_leaky"},  # E10-S1
     },
     "RAMP_DEPLOYED": {
         "car_id": "car-2",
@@ -223,6 +232,24 @@ _MINIMAL_PAYLOADS: dict[str, dict] = {
         "duration_s": 120.0,
         "reason": "door_release",
     },
+    # E10-S1
+    "INFERENCE_HEARTBEAT": {
+        "train_id": "R5001C-031",
+        "model_versions": {"detector_arch": "yolox_s_leaky"},
+        "frames_processed_window": 1480,
+        "last_inference_at": "2026-06-12T14:32:00Z",
+        "hailo_device_ok": True,
+    },
+    "ALERT_CLASS_DISABLED": {
+        "alert_code": "UNATTENDED_BAG",
+        "actor_name": "nomad-oncall",
+        "source_ip": "10.0.0.7",
+    },
+    "ALERT_CLASS_REENABLED": {
+        "alert_code": "UNATTENDED_BAG",
+        "actor_name": "nomad-oncall",
+        "source_ip": "10.0.0.7",
+    },
 }
 
 # Fail fast with a clear message if a new EventType is added without a fixture entry.
@@ -328,6 +355,7 @@ def test_door_obstruction_door_state_literal_accepts_all_values(door_state: str)
         track_id="person-0117",
         camera_id="cam-1-door-L2",
         door_state=door_state,  # type: ignore[arg-type]
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     assert p.model_dump()["door_state"] == door_state
 
@@ -345,6 +373,7 @@ def test_door_obstruction_door_state_rejects_unknown_literal() -> None:
             track_id="person-0117",
             camera_id="cam-1-door-L2",
             door_state="ajar",  # type: ignore[arg-type]
+            model_versions={"detector_arch": "yolox_s_leaky"},
         )
 
 

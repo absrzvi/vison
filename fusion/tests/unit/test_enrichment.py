@@ -1,4 +1,4 @@
-"""Enrichment envelope construction + station_approach escalation — AC7, AC11."""
+﻿"""Enrichment envelope construction + station_approach escalation — AC7, AC11."""
 from __future__ import annotations
 
 import httpx
@@ -66,6 +66,7 @@ async def test_emit_alert_posts_envelope_with_source_fusion() -> None:
             alert_code="slip_fall",
             car_id="car-1",
             description="fall detected",
+            confidence_basis="sensor",
         )
     assert route.called
     body = route.calls.last.request.content.decode()
@@ -90,6 +91,7 @@ async def test_station_approach_escalates_priority() -> None:
             alert_code="slip_fall",
             car_id="car-1",
             description="fall detected",
+            confidence_basis="sensor",
         )
     body = route.calls.last.request.content.decode()
     env = EventEnvelope.model_validate_json(body)
@@ -110,6 +112,7 @@ async def test_no_station_approach_keeps_priority_normal() -> None:
             alert_code="slip_fall",
             car_id="car-1",
             description="fall detected",
+            confidence_basis="sensor",
         )
     # AlertRaisedPayload _drop_none keeps priority because it's set to 'normal',
     # not None. Envelope payload must reflect that.
@@ -158,5 +161,6 @@ async def test_emit_skipped_when_journey_id_is_none() -> None:
             alert_code="slip_fall",
             car_id="car-1",
             description="fall detected",
+            confidence_basis="sensor",
         )
     assert not route.called  # NO emit with empty journey_id

@@ -1,7 +1,9 @@
 from .envelope import Event, EventEnvelope, EventModel, SUPPORTED_SCHEMA_VERSIONS
 from .payloads import (
     PAYLOAD_MODELS,
+    AlertClassStatePayload,
     BoundingBox,
+    InferenceHeartbeatPayload,
     AccessibilityDetectedPayload,
     AlarmActivePayload,
     AlarmClearedPayload,
@@ -53,4 +55,6 @@ __all__ = [
     "WagonExitPayload",
     "WagonEntryPayload",
     "LedgerDriftObservationPayload",
+    "InferenceHeartbeatPayload",
+    "AlertClassStatePayload",
 ]

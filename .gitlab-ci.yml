@@ -71,6 +71,23 @@ security:detect-secrets:
     - detect-secrets scan --baseline .secrets.baseline
   allow_failure: false
 
+# E10-S1 AC24: the live CC_ADMIN_KEY value must never be hardcoded anywhere in
+# the repo. Allowed: .env.example placeholder and test fixture values. The CI
+# variable CC_ADMIN_KEY is set in GitLab project settings (masked).
+security:admin-key-grep:
+  stage: security
+  script:
+    - |
+      if [ -n "$CC_ADMIN_KEY" ]; then
+        if grep -rF --exclude-dir=.git --exclude-dir=node_modules --exclude=".env.example" --exclude-dir=tests "$CC_ADMIN_KEY" .; then
+          echo "FATAL: CC_ADMIN_KEY literal value found in repo"; exit 1
+        fi
+        echo "OK: CC_ADMIN_KEY not present in repo"
+      else
+        echo "CC_ADMIN_KEY not set in CI — skipping grep"
+      fi
+  allow_failure: false
+
 # ── Test ──────────────────────────────────────────────────────────────────────
 
 test:shared:

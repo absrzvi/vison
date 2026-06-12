@@ -34,6 +34,7 @@ from inference.models import LoopHolder, ReadinessHolder, ZoneMask
 from inference.zone_counter import ZoneCounter
 
 if TYPE_CHECKING:
+    from inference.heartbeat import HeartbeatEmitter
     from inference.safety import SafetyHandler
     from inference.tripwire import TripwireHandler
 
@@ -128,7 +129,13 @@ class OccupancyCallback:
         event_store_client: httpx.AsyncClient | None = None,
         safety_handler: SafetyHandler | None = None,
         tripwire_handler: TripwireHandler | None = None,
+        model_versions: dict[str, str] | None = None,
+        heartbeat: HeartbeatEmitter | None = None,
     ) -> None:
+        # E10-S1: provenance stamped onto detection payloads (AC6).
+        self._model_versions: dict[str, str] = model_versions or {}
+        # E10-S1: heartbeat frame counter (AC7).
+        self._heartbeat = heartbeat
         self._zone_counter = zone_counter
         self._budget = budget
         self._settings = settings
@@ -308,6 +315,7 @@ class OccupancyCallback:
             camera_id=self._camera_id,
             confidence=confidence,
             door_state="unknown",
+            model_versions=self._model_versions,
         )
         resp = await self._event_store_client.post(
             f"{self._settings.fusion_url}/candidates/door_obstruction",
@@ -375,6 +383,7 @@ class OccupancyCallback:
             camera_id=camera_id,
             confidence=confidence,
             near_door_id=near_door_id,
+            model_versions=self._model_versions,
         )
         envelope = EventEnvelope(
             journey_id=self._zone_counter._journey_holder.journey_id,
@@ -427,6 +436,10 @@ class OccupancyCallback:
         except Exception as exc:  # pragma: no cover — defensive against malformed buffers
             log.warning("callback.roi_extract_failed", camera_id=self._camera_id, error=str(exc))
             return
+
+        # E10-S1 AC7: count every processed frame toward the heartbeat window.
+        if self._heartbeat is not None:
+            self._heartbeat.record_frames(1)
 
         accepted: list[dict[str, Any]] = []
         bicycle_detections: list[tuple[float | None, tuple[float, float, float, float]]] = []

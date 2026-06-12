@@ -1,4 +1,4 @@
-"""Contract test — replay the exact body shapes inference posts to fusion.
+﻿"""Contract test — replay the exact body shapes inference posts to fusion.
 
 Story 4-5 locked the candidate POST contracts at:
 - POST {fusion_url}/candidates/door_obstruction — DoorObstructionPayload with door_state='unknown'
@@ -74,6 +74,7 @@ def test_door_obstruction_candidate_with_unknown_door_state_accepted(client: Tes
         "camera_id": "C1_DOOR_01",
         "confidence": None,
         "door_state": "unknown",
+        "model_versions": {"detector_arch": "yolox_s_leaky"},
     }
     with respx.mock(assert_all_called=False) as rmock:
         rmock.post("http://event-store-test/api/v1/events").mock(

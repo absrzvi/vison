@@ -48,7 +48,9 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-05-30  # code-review Round 1 2026-05-30: 1-6-prime-cloud-backend-sse-fanout patches applied (D-R1 SQL + D-R2 Alembic + P1-P12 + ingest.py timestamp bug fix); 66/66 tests pass
+last_updated: 2026-06-12  # dev-story 2026-06-12 (Amelia): 10-1 → review. All 24 ACs; shared 172 / inference 159 (90.95%) / fusion 155 (94.15%, mypy --strict) / cloud-backend 83 unit / CC vitest 243 — all green. Integration tests + migrations 0004/0005 need first CI run (no local Docker). Deviations from AC text documented in story Completion Notes.
+# dev-story 2026-06-12: 10-1-alert-confidence-and-ai-pipeline-health → in-progress (baseline 9d4a60d)
+# code-review Round 1 2026-05-30: 1-6-prime-cloud-backend-sse-fanout patches applied (D-R1 SQL + D-R2 Alembic + P1-P12 + ingest.py timestamp bug fix); 66/66 tests pass
 # create-story 2026-05-30: 1-6-prime-cloud-backend-sse-fanout → ready-for-dev (ratifies shipped alerts_sse.py against 7 BDD ACs from ADR-20; T1 adds event: field, T2 extends ALERT_EVENT_TYPES to luggage types, T3-T5 add integration test surface)
 # code-review 2026-05-21 (opus-4.7): 1-5-3-onboard-docker-compose → done; D1 resolved (service_started), 7 patches applied (env_prefix fixes, api_key fields, restart, start_period); 149 inference + 43 rtsp-ingest tests pass
 # code-review 2026-05-21 (opus-4.7): 1-5-2-rtsp-ingest-dockerfile → done; 4 patches applied (P1 env_prefix, P2 uvicorn host, P4 CLAUDE.md table); P3 dismissed; 5 deferred; 43 unit tests pass
@@ -156,8 +158,8 @@ development_status:
   # Pre-pilot blocker. Stories ordered by priority — implement in sequence (S1 → S2 → S3 → S4 → S5).
   # S1 scoped via grill-me + party-mode 2026-05-30: code-only, exec-failure playbook moved to S3, FP-rate measurement deferred to new S5.
   # S1 + S2 must land before Control Centre PostgreSQL contracts harden further.
-  epic-10: backlog
-  10-1-alert-confidence-and-ai-pipeline-health: ready-for-dev   # P0 — code-only: AlertRaisedPayload (confidence_score/basis/model_versions), INFERENCE_HEARTBEAT, fusion plumbing, cloud-backend kill-switch + endpoints (no UI), CC confidence chip + degraded banner + AI pipeline row. Full ACs in story file.
+  epic-10: in-progress
+  10-1-alert-confidence-and-ai-pipeline-health: review   # P0 — code-only: AlertRaisedPayload (confidence_score/basis/model_versions), INFERENCE_HEARTBEAT, fusion plumbing, cloud-backend kill-switch + endpoints (no UI), CC confidence chip + degraded banner + AI pipeline row. Full ACs in story file.
   10-2-operator-behavioural-telemetry: backlog                  # P0 — escalation_audit table + /api/v1/escalations-audit + silent-dismissal tracking + weekly effectiveness report
   10-3-conrad-claudia-sop-and-drill-cadence: backlog            # P1 — critical-alert SOP + routing decision matrix + ÖBB security handoff contract + drill cadence + exec-failure playbook (moved from S1)
   10-4-dwell-time-aware-alert-framing-and-kpi: backlog          # P2 — seconds_to_departure on alerts + delay-minutes-avoided KPI; Conductor App UI deferred to Phase 2

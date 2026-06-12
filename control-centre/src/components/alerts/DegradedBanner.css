@@ -1,0 +1,29 @@
+/* AC21: visually distinct from the reconnecting/connection banner —
+   amber-tinted surface, no spinner. */
+.degraded-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--obb-sev-medium);
+  border-radius: 6px;
+  background: var(--obb-surface-2);
+  color: var(--obb-text-on-dark-1);
+  font-size: var(--font-size-sm);
+  margin-bottom: 8px;
+}
+
+.degraded-banner__dismiss {
+  background: none;
+  border: none;
+  color: var(--obb-text-on-dark-3);
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
+.degraded-banner__dismiss:hover {
+  color: var(--obb-text-on-dark-1);
+}

@@ -1,4 +1,4 @@
-"""Accessibility → Ramp correlation — AC8 (R4)."""
+﻿"""Accessibility → Ramp correlation — AC8 (R4)."""
 from __future__ import annotations
 
 import httpx
@@ -32,6 +32,7 @@ async def test_note_accessibility_records_track_under_near_door_and_zone() -> No
         camera_id="C1_DOOR_01",
         confidence=None,
         near_door_id="door-1A",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     await accessibility_mod.note_accessibility_candidate(payload, ctx)
     assert ctx.find_recent_accessibility("car-1", "door-1A", window_s=60.0) == "trk-42"

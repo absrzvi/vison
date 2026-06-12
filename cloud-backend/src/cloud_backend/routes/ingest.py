@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..api.auth import require_api_key
 from ..database import get_db
 from ..routes.alerts_sse import ALERT_EVENT_TYPES, publish_alert
+from ..services.fanout_filter import alert_class_filter
+from ..services.heartbeat_ingest import upsert_heartbeat
 
 log = structlog.get_logger()
 
@@ -100,8 +102,16 @@ async def ingest_events(
         else:
             accepted += 1
             log.info("event_stored", event_id=ev.event_id, journey_id=ev.journey_id)
-            # Fan-out alert-class events to SSE subscribers immediately
-            if ev.event_type in ALERT_EVENT_TYPES:
+            # E10-S1 AC18: heartbeat upsert keyed by payload.train_id,
+            # last_seen is server-side NOW().
+            if ev.event_type == "INFERENCE_HEARTBEAT":
+                await upsert_heartbeat(db, ev.payload)
+            # Fan-out alert-class events to SSE subscribers immediately.
+            # E10-S1 AC13: kill-switch — disabled alert classes raised after
+            # disabled_at are stored but never fanned out to Control Centre.
+            if ev.event_type in ALERT_EVENT_TYPES and not await alert_class_filter.is_filtered(
+                db, event_type=ev.event_type, payload=ev.payload, t_raised=ts_dt
+            ):
                 publish_alert({
                     "event_id": ev.event_id,
                     "event_type": ev.event_type,

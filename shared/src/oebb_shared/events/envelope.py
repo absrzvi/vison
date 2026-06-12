@@ -44,7 +44,7 @@ class Event:
     vehicle_id: str
     event_type: EventType
     severity: Literal["critical", "warning", "info"]
-    source: Literal["inference", "fusion", "vlan-pollers"]
+    source: Literal["inference", "fusion", "vlan-pollers", "cloud-backend"]
     payload: dict[str, Any]
     event_id: str = field(default_factory=_new_uuid)
     timestamp: str = field(default_factory=_utc_now)
@@ -70,7 +70,8 @@ class EventEnvelope(BaseModel):
     timestamp: str = Field(default_factory=_utc_now)
     event_type: EventType
     severity: Literal["critical", "warning", "info"]
-    source: Literal["inference", "fusion", "vlan-pollers"]
+    # "cloud-backend" added E10-S1 for ALERT_CLASS_DISABLED/REENABLED admin audit events
+    source: Literal["inference", "fusion", "vlan-pollers", "cloud-backend"]
     schema_version: int = Field(default=1, ge=1)
     payload: dict[str, Any] = Field(default_factory=dict)
 

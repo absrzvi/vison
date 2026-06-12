@@ -435,3 +435,53 @@
   font-size: 11px;
   color: var(--obb-sev-critical);
 }
+
+/* E10-S1 AC20 — Model details disclosure (Freya micro-spec 2026-06-12).
+   Neutral surface; no severity colour in this section. */
+.esc-model-details {
+  margin-bottom: 12px;
+}
+
+.esc-model-details__toggle {
+  width: 100%;
+  color: var(--obb-text-on-dark-3);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.esc-model-details__body {
+  background: var(--obb-surface-2);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-top: 4px;
+}
+
+.esc-model-details__row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  padding: 2px 0;
+  font-size: var(--font-size-sm);
+}
+
+.esc-model-details__label {
+  color: var(--obb-text-on-dark-3);
+  min-width: 150px;
+}
+
+.esc-model-details__score {
+  font-family: var(--font-mono);
+  color: var(--obb-text-on-dark-1);
+}
+
+.esc-model-details__basis {
+  color: var(--obb-text-on-dark-2);
+}
+
+.esc-model-details__value {
+  font-family: var(--font-mono);
+  color: var(--obb-text-on-dark-2);
+  word-break: break-all;
+}

@@ -35,5 +35,10 @@ class EventType(StrEnum):
     CALIBRATION_DRIFT = "CALIBRATION_DRIFT"
     # Comfort scoring (ADR-18)
     COACH_COMFORT_INDEX = "COACH_COMFORT_INDEX"
+    # AI pipeline health (E10-S1)
+    INFERENCE_HEARTBEAT = "INFERENCE_HEARTBEAT"
+    # Alert-class kill-switch audit events (E10-S1)
+    ALERT_CLASS_DISABLED = "ALERT_CLASS_DISABLED"
+    ALERT_CLASS_REENABLED = "ALERT_CLASS_REENABLED"
     # Internal stream priority signal (ADR-18; never written to event-store)
     STREAM_PRIORITY = "STREAM_PRIORITY"

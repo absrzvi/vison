@@ -1,4 +1,4 @@
-"""Tests for EventEnvelope and all 17 payload models (E1-S2)."""
+﻿"""Tests for EventEnvelope and all 17 payload models (E1-S2)."""
 
 from __future__ import annotations
 
@@ -82,9 +82,13 @@ def test_event_type_has_23_members() -> None:
         # ADR-18
         "COACH_COMFORT_INDEX",
         "STREAM_PRIORITY",
+        # E10-S1
+        "INFERENCE_HEARTBEAT",
+        "ALERT_CLASS_DISABLED",
+        "ALERT_CLASS_REENABLED",
     }
     assert {e.value for e in EventType} == expected
-    assert len(EventType) == 23
+    assert len(EventType) == 26
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +157,7 @@ def test_envelope_invalid_source_raises() -> None:
 @pytest.mark.unit
 def test_payload_models_registry_complete() -> None:
     assert set(PAYLOAD_MODELS.keys()) == set(EventType)
-    assert len(PAYLOAD_MODELS) == 23
+    assert len(PAYLOAD_MODELS) == 26
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +174,7 @@ def test_occupancy_update_confidence_omitted_when_absent() -> None:
         occupancy_pct=0.71,
         capacity=200,
         service_tier="business",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     dumped = p.model_dump()
     assert "confidence" not in dumped
@@ -185,6 +190,7 @@ def test_occupancy_update_confidence_present_when_set() -> None:
         capacity=200,
         confidence=0.94,
         service_tier="business",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     dumped = p.model_dump()
     assert dumped["confidence"] == pytest.approx(0.94)
@@ -216,6 +222,9 @@ def test_alert_raised_payload() -> None:
         zone="vestibule-b",
         description="Occupancy exceeded 90% for more than 60 seconds.",
         auto_resolve_after_s=300,
+        confidence_score=0.91,
+        confidence_basis="model",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     assert p.alert_code == "OVERCROWDING"
     d = p.model_dump()
@@ -231,6 +240,9 @@ def test_alert_raised_payload_with_priority() -> None:
         zone=None,
         description="Overcrowding.",
         priority="escalated",
+        confidence_score=0.91,
+        confidence_basis="model",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     d = p.model_dump()
     assert d["priority"] == "escalated"
@@ -268,6 +280,7 @@ def test_luggage_rack_saturation_confidence_omitted() -> None:
         rack_id="car-2-rack-upper-left",
         fill_pct=0.95,
         item_count=7,
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     assert "confidence" not in p.model_dump()
 
@@ -282,6 +295,7 @@ def test_unattended_bag_payload() -> None:
         bbox={"x": 412, "y": 308, "w": 64, "h": 48},
         camera_id="cam-3-02",
         confidence=0.91,
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     assert p.model_dump()["confidence"] == pytest.approx(0.91)
 
@@ -295,6 +309,7 @@ def test_door_obstruction_payload() -> None:
         track_id="person-0117",
         camera_id="cam-1-door-L2",
         door_state="closing",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     assert "confidence" not in p.model_dump()
 
@@ -309,6 +324,7 @@ def test_accessibility_detected_payload() -> None:
         camera_id="cam-2-vest-b",
         confidence=0.89,
         near_door_id="car-2-door-R-1",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     assert p.assistance_type == ["wheelchair"]
     assert p.model_dump()["confidence"] == pytest.approx(0.89)
@@ -581,6 +597,7 @@ def test_confidence_omitted_in_json_serialisation() -> None:
         occupancy_pct=0.5,
         capacity=200,
         service_tier="standard",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     import json
     parsed = json.loads(p.model_dump_json())

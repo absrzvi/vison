@@ -39,6 +39,19 @@ async def handle(
         )
         return
 
+    # E10-S1 AC9: read camera confidence + provenance from the upstream payload
+    # before the car_id resolve; firmware version joins at emit time. Candidates
+    # without a detector score fail safe to 0.0 (lowest trust) — the alert is
+    # never dropped for missing confidence metadata.
+    confidence_score = payload.confidence if payload.confidence is not None else 0.0
+    upstream_versions = payload.model_versions or {"detector_arch": "unknown"}
+    if payload.confidence is None:
+        log.warning(
+            "door_obstruction.missing_confidence",
+            car_id=payload.car_id,
+            door_id=payload.door_id,
+        )
+
     # R3: normalise car_id through consist mapping (passthrough when absent).
     car_id = ctx.resolve_car_id(payload.car_id)
 
@@ -61,4 +74,10 @@ async def handle(
         alert_code="door_obstruction",
         car_id=car_id,
         description=description,
+        confidence_basis="fused",
+        confidence_score=confidence_score,
+        model_versions={
+            **upstream_versions,
+            "door_sensor_firmware": ctx.door_firmware_version,
+        },
     )

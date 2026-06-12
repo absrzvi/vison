@@ -100,12 +100,21 @@ class Enrichment:
         alert_code: str,
         car_id: str,
         description: str,
+        confidence_basis: Literal["model", "sensor", "fused"],
         zone: str | None = None,
+        confidence_score: float | None = None,
+        model_versions: dict[str, str] | None = None,
     ) -> None:
         """Build + POST an ALERT_RAISED envelope.
 
         ADR-18 T3: when ctx.station_approach is true, priority='escalated'.
         Severity is determined by ``_severity_for`` (FR9 lives there).
+
+        E10-S1 AC8: confidence_basis is keyword-only and required — a handler
+        that forgets it fails mypy --strict (and TypeError at runtime). The
+        per-basis invariants are enforced by AlertRaisedPayload's validator
+        BEFORE any POST (AC10 two-phase discipline: nothing leaves fusion with
+        inconsistent confidence metadata).
         """
         severity = _severity_for(alert_code, self._ctx.speed_kmh)
         priority: Literal["escalated", "normal"] = (
@@ -118,6 +127,9 @@ class Enrichment:
             zone=zone,
             description=description,
             priority=priority,
+            confidence_score=confidence_score,
+            confidence_basis=confidence_basis,
+            model_versions=model_versions if model_versions is not None else {},
         )
         envelope = self._build_envelope(
             EventType.ALERT_RAISED,

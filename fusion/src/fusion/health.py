@@ -199,11 +199,19 @@ def build_app(
             f"Suspected passenger fall detected by camera "
             f"({payload.camera_id}, track {payload.track_id})"
         )
+        # E10-S1 AC9: model-basis confidence from the candidate body. Missing
+        # confidence fails safe to 0.0 (lowest trust) rather than dropping a
+        # safety alert; missing provenance falls back to "unknown".
+        if payload.confidence is None:
+            log.warning("slip_fall.missing_confidence", car_id=car_id)
         try:
             await enricher.emit_alert(
                 alert_code="slip_fall",
                 car_id=car_id,
                 description=description,
+                confidence_basis="model",
+                confidence_score=payload.confidence if payload.confidence is not None else 0.0,
+                model_versions=payload.model_versions or {"detector_arch": "unknown"},
             )
         except httpx.HTTPError as exc:
             log.warning(

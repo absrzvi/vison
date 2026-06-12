@@ -1,0 +1,28 @@
+.confidence-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 9px;
+  font-size: var(--font-size-sm);
+  color: var(--obb-text-on-dark-3);
+  background: var(--obb-surface-2);
+  border: 1px solid var(--obb-border-dark);
+  white-space: nowrap;
+}
+
+.confidence-chip__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--obb-sev-medium);
+}
+
+.confidence-chip--medium,
+.confidence-chip--verify {
+  color: var(--obb-text-on-dark-2);
+}
+
+.confidence-chip--verify {
+  font-weight: 700;
+}

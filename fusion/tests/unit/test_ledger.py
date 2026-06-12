@@ -1,4 +1,4 @@
-"""Unit tests for the closed-ledger reconciliation engine (E4-S9, ADR-17).
+﻿"""Unit tests for the closed-ledger reconciliation engine (E4-S9, ADR-17).
 
 Covers AC1–AC9 and AC11 ledger branches. Uses tmp_path-scoped SQLite (per
 architecture line 173 — never :memory:). Fast timer tests use a short
@@ -68,6 +68,7 @@ def _occupancy(car_id: str, count: int, capacity: int = 200) -> OccupancyUpdateP
         occupancy_pct=count / capacity,
         capacity=capacity,
         service_tier="standard",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
 
 

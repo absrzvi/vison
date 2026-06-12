@@ -1,4 +1,4 @@
-"""Synthetic end-to-end pipeline — AC12.
+﻿"""Synthetic end-to-end pipeline — AC12.
 
 Drives: context push → door obstruction candidate (door closing) → assert
 exactly one ALERT_RAISED envelope POSTed with source='fusion'. Then push
@@ -84,6 +84,7 @@ def test_pipeline_normal_then_suppressed(client: TestClient) -> None:
                 "camera_id": "C1_DOOR_01",
                 "confidence": None,
                 "door_state": "unknown",
+                "model_versions": {"detector_arch": "yolox_s_leaky"},
             },
         )
         assert resp.status_code == 202
@@ -115,6 +116,7 @@ def test_pipeline_normal_then_suppressed(client: TestClient) -> None:
                 "camera_id": "C1_DOOR_01",
                 "confidence": None,
                 "door_state": "unknown",
+                "model_versions": {"detector_arch": "yolox_s_leaky"},
             },
         )
         assert resp.status_code == 202
@@ -222,6 +224,7 @@ def test_pipeline_depot_plus_maintenance_simultaneous(client: TestClient) -> Non
                 "camera_id": "C1_DOOR_01",
                 "confidence": None,
                 "door_state": "unknown",
+                "model_versions": {"detector_arch": "yolox_s_leaky"},
             },
         )
         assert resp.status_code == 202
@@ -247,6 +250,7 @@ def test_pipeline_ramp_deployed_with_recent_accessibility(client: TestClient) ->
                 "camera_id": "C1_DOOR_01",
                 "confidence": None,
                 "near_door_id": "door-1A",
+                "model_versions": {"detector_arch": "yolox_s_leaky"},
             },
         )
         assert resp.status_code == 202

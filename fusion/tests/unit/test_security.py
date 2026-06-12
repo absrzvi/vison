@@ -1,4 +1,4 @@
-"""Security tests — AST audits for Rule 8 (no os.environ.get) + payload schema checks."""
+﻿"""Security tests — AST audits for Rule 8 (no os.environ.get) + payload schema checks."""
 from __future__ import annotations
 
 import ast
@@ -86,6 +86,9 @@ def test_alert_raised_payload_schema_valid() -> None:
         zone=None,
         description="Door obstruction detected",
         priority="normal",
+        confidence_score=0.9,
+        confidence_basis="model",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     dumped = p.model_dump()
     for f in ("alert_id", "alert_code", "car_id", "description"):
@@ -125,6 +128,9 @@ def test_envelope_source_field_includes_fusion() -> None:
             "alert_code": "door_obstruction",
             "car_id": "car-1",
             "description": "Door obstruction detected",
+            "confidence_score": 0.9,
+            "confidence_basis": "model",
+            "model_versions": {"detector_arch": "yolox_s_leaky"},
         },
     )
     assert env.source == "fusion"
@@ -217,6 +223,9 @@ def test_no_raw_video_or_stream_url_in_envelope() -> None:
             car_id="car-1",
             description="Door obstruction on door-1A (person)",
             priority="normal",
+            confidence_score=0.9,
+            confidence_basis="model",
+            model_versions={"detector_arch": "yolox_s_leaky"},
         ).model_dump(),
         DoorObstructionPayload(
             car_id="car-1",
@@ -226,6 +235,7 @@ def test_no_raw_video_or_stream_url_in_envelope() -> None:
             camera_id="C1_DOOR_01",
             confidence=None,
             door_state="closed",
+            model_versions={"detector_arch": "yolox_s_leaky"},
         ).model_dump(),
         AccessibilityDetectedPayload(
             car_id="car-1",
@@ -235,6 +245,7 @@ def test_no_raw_video_or_stream_url_in_envelope() -> None:
             camera_id="C1_DOOR_01",
             confidence=None,
             near_door_id="door-1A",
+            model_versions={"detector_arch": "yolox_s_leaky"},
         ).model_dump(),
         RampDeployedPayload(
             car_id="car-1",
@@ -317,6 +328,7 @@ def test_no_raw_video_in_ledger_drift_observation_payload_or_logs(tmp_path) -> N
                         occupancy_pct=0.05,
                         capacity=200,
                         service_tier="standard",
+                        model_versions={"detector_arch": "yolox_s_leaky"},
                     ),
                     station_approach=False,
                 )

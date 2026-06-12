@@ -78,6 +78,7 @@ def test_occupancy_update_payload_schema_valid() -> None:
         capacity=200,
         confidence=None,
         service_tier="standard",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     dumped = p.model_dump()
     # Required fields always present.
@@ -154,6 +155,7 @@ def test_door_obstruction_payload_schema_valid() -> None:
         camera_id="C1_DOOR_01",
         confidence=None,
         door_state="open",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     dumped = p.model_dump()
     for f in ("car_id", "door_id", "obstruction_type", "track_id", "camera_id", "door_state"):
@@ -173,6 +175,7 @@ def test_accessibility_payload_schema_valid() -> None:
         camera_id="C1_DOOR_01",
         confidence=None,
         near_door_id="door-1A",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     dumped = p.model_dump()
     for f in ("car_id", "track_id", "assistance_type", "camera_id", "near_door_id"):
@@ -240,6 +243,7 @@ def test_envelope_matches_canonical_schema() -> None:
         capacity=200,
         confidence=None,
         service_tier="standard",
+        model_versions={"detector_arch": "yolox_s_leaky"},
     )
     env = EventEnvelope(
         journey_id="OBB-TEST_t1_20260519",

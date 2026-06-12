@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useFleetData } from '../../context/FleetContext';
 import { getSystemHealth } from '../../api/health';
 import { raiseMaintenanceTicket } from '../../api/maintenance';
+import { AIPipelineRow } from './AIPipelineRow';
 import './SystemHealth.css';
 
 // eslint-disable-next-line no-unused-vars
@@ -224,6 +225,9 @@ export function SystemHealth() {
             <span className="sh-summary-tile__label">fleet status</span>
           </div>
         </div>
+        {/* E10-S1 AC22: AI pipeline row has its own data source — render it
+            even when the train-grid fetch failed. */}
+        <AIPipelineRow />
         <div className="sh-error-state">
           <p>System health data unavailable</p>
           <button className="btn btn--secondary" onClick={fetchHealth}>Retry</button>
@@ -360,6 +364,9 @@ export function SystemHealth() {
           <span className="sh-summary-tile__label">last update</span>
         </div>
       </div>
+
+      {/* E10-S1 AC22: AI pipeline fleet row */}
+      <AIPipelineRow />
 
       {/* Body: grid + inline side-panel */}
       <div className="sh-body">

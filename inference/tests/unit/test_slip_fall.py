@@ -52,7 +52,9 @@ async def test_fall_detected_on_height_collapse_and_velocity() -> None:
 
     posted: list[Any] = []
 
-    async def mock_post_slip(car_id: str, track_id: int, camera_id: str) -> None:
+    async def mock_post_slip(
+        car_id: str, track_id: int, camera_id: str, confidence: float | None = None
+    ) -> None:
         posted.append({"car_id": car_id, "track_id": track_id, "camera_id": camera_id})
 
     zc._post_slip_fall_candidate = mock_post_slip  # type: ignore[method-assign]
@@ -83,7 +85,9 @@ async def test_no_fall_on_height_collapse_alone() -> None:
 
     posted: list[Any] = []
 
-    async def mock_post_slip(car_id: str, track_id: int, camera_id: str) -> None:
+    async def mock_post_slip(
+        car_id: str, track_id: int, camera_id: str, confidence: float | None = None
+    ) -> None:
         posted.append(True)
 
     zc._post_slip_fall_candidate = mock_post_slip  # type: ignore[method-assign]
@@ -109,7 +113,9 @@ async def test_no_fall_on_velocity_alone() -> None:
 
     posted: list[Any] = []
 
-    async def mock_post_slip(car_id: str, track_id: int, camera_id: str) -> None:
+    async def mock_post_slip(
+        car_id: str, track_id: int, camera_id: str, confidence: float | None = None
+    ) -> None:
         posted.append(True)
 
     zc._post_slip_fall_candidate = mock_post_slip  # type: ignore[method-assign]
@@ -132,7 +138,9 @@ async def test_no_fall_on_first_frame() -> None:
 
     posted: list[Any] = []
 
-    async def mock_post_slip(car_id: str, track_id: int, camera_id: str) -> None:
+    async def mock_post_slip(
+        car_id: str, track_id: int, camera_id: str, confidence: float | None = None
+    ) -> None:
         posted.append(True)
 
     zc._post_slip_fall_candidate = mock_post_slip  # type: ignore[method-assign]

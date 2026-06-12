@@ -56,6 +56,9 @@ class ContextPushModel(BaseModel):
     ramp_door_id: str | None = None
     ramp_station_id: str | None = None
 
+    # E10-S1 AC9: door controller firmware version from SNMP (absent keeps prior).
+    door_firmware_version: str | None = None
+
 
 class SlipFallCandidate(BaseModel):
     """Body shape inference posts to /candidates/alert_raised.
@@ -71,3 +74,7 @@ class SlipFallCandidate(BaseModel):
     car_id: str
     track_id: int
     camera_id: str
+    # E10-S1 AC9: detector confidence + provenance for the ALERT_RAISED metadata.
+    # Optional so legacy producers without the fields still validate.
+    confidence: float | None = None
+    model_versions: dict[str, str] | None = None

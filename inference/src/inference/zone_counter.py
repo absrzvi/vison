@@ -38,9 +38,13 @@ class ZoneCounter:
         settings: Settings,
         event_store_client: httpx.AsyncClient,
         journey_holder: JourneyHolder | None = None,
+        model_versions: dict[str, str] | None = None,
     ) -> None:
         self._settings = settings
         self._client = event_store_client
+        # E10-S1: provenance stamped onto detection payloads; wire() passes the
+        # computed dict, tests may omit (empty dict = no provenance).
+        self._model_versions: dict[str, str] = model_versions or {}
         # M13: journey_id may be updated at runtime by POST /context. Holder ties
         # outbound envelopes to the live trip without a container restart.
         self._journey_holder = journey_holder or JourneyHolder(
@@ -201,6 +205,7 @@ class ZoneCounter:
             capacity=state.capacity,
             confidence=None,
             service_tier=self._settings.service_tier,
+            model_versions=self._model_versions,
         )
         envelope = self._build_envelope(
             EventType.OCCUPANCY_UPDATE,
@@ -326,6 +331,7 @@ class ZoneCounter:
                         car_id=car_id,
                         track_id=track_id,
                         camera_id=camera_id or "unknown",
+                        confidence=det.get("confidence"),
                     )
             car_bboxes[track_id] = bbox
         # F2: prune stale track entries for tracks that left frame
@@ -335,8 +341,14 @@ class ZoneCounter:
 
     @DEFAULT_RETRY
     async def _post_slip_fall_candidate(
-        self, car_id: str, track_id: int, camera_id: str
+        self,
+        car_id: str,
+        track_id: int,
+        camera_id: str,
+        confidence: float | None = None,
     ) -> None:
+        # E10-S1 AC9: candidate body carries confidence + model_versions so fusion
+        # can populate AlertRaisedPayload's required confidence metadata.
         resp = await self._client.post(
             f"{self._settings.fusion_url}/candidates/alert_raised",
             json={
@@ -344,6 +356,8 @@ class ZoneCounter:
                 "car_id": car_id,
                 "track_id": track_id,
                 "camera_id": camera_id,
+                "confidence": confidence,
+                "model_versions": self._model_versions,
             },
         )
         resp.raise_for_status()

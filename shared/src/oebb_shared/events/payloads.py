@@ -6,9 +6,17 @@ Optional fields (e.g. confidence) are excluded from serialisation when not set.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_serializer
+from pydantic import (
+    BaseModel,
+    Field,
+    field_serializer,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from .envelope import TIMESTAMP_RE
 from .types import EventType
@@ -58,6 +66,7 @@ class OccupancyUpdatePayload(_BasePayload):
     capacity: Annotated[int, Field(ge=1)]
     confidence: _ConfidenceScore | None = None
     service_tier: _NonEmptyStr
+    model_versions: dict[str, str]  # E10-S1: producer provenance, stamped by inference
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
@@ -83,7 +92,11 @@ class OccupancyThresholdCrossedPayload(_BasePayload):
 
 
 class AlertRaisedPayload(_BasePayload):
-    """ALERT_RAISED — source: fusion. alert_id pairs with ALERT_RESOLVED."""
+    """ALERT_RAISED — source: fusion. alert_id pairs with ALERT_RESOLVED.
+
+    E10-S1: confidence_score/confidence_basis/model_versions are required.
+    Per-basis invariants enforced by _validate_confidence — no silent coercion.
+    """
 
     alert_id: _NonEmptyStr
     alert_code: _NonEmptyStr
@@ -92,6 +105,34 @@ class AlertRaisedPayload(_BasePayload):
     description: _NonEmptyStr
     auto_resolve_after_s: _NonNegInt | None = None
     priority: Literal["escalated", "normal"] | None = None
+    confidence_score: float | None
+    confidence_basis: Literal["model", "sensor", "fused"]
+    model_versions: dict[str, str]
+
+    @model_validator(mode="after")
+    def _validate_confidence(self) -> AlertRaisedPayload:
+        basis = self.confidence_basis
+        score = self.confidence_score
+        if basis == "sensor":
+            if score is not None:
+                raise ValueError("confidence_score must be None when confidence_basis == 'sensor'")
+            if self.model_versions:
+                raise ValueError("model_versions must be empty when confidence_basis == 'sensor'")
+        else:
+            if score is None or not (0.0 <= score <= 1.0):
+                raise ValueError(
+                    f"confidence_score must be a float in [0.0, 1.0] when "
+                    f"confidence_basis == {basis!r}"
+                )
+            if basis == "model" and not self.model_versions:
+                raise ValueError(
+                    "model_versions must be non-empty when confidence_basis == 'model'"
+                )
+            if basis == "fused" and len(self.model_versions) < 2:
+                raise ValueError(
+                    "model_versions must have >= 2 entries when confidence_basis == 'fused'"
+                )
+        return self
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
@@ -132,6 +173,7 @@ class LuggageRackSaturationPayload(_BasePayload):
     fill_pct: Annotated[float, Field(ge=0.0, le=1.0)]
     item_count: _NonNegInt
     confidence: _ConfidenceScore | None = None
+    model_versions: dict[str, str]  # E10-S1
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
@@ -153,6 +195,7 @@ class UnattendedBagPayload(_BasePayload):
     bbox: BoundingBox
     camera_id: _NonEmptyStr
     confidence: _ConfidenceScore | None = None
+    model_versions: dict[str, str]  # E10-S1
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
@@ -169,6 +212,7 @@ class DoorObstructionPayload(_BasePayload):
     camera_id: _NonEmptyStr
     confidence: _ConfidenceScore | None = None
     door_state: Literal["open", "closing", "closed", "unknown"]
+    model_versions: dict[str, str]  # E10-S1
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
@@ -192,6 +236,7 @@ class AccessibilityDetectedPayload(_BasePayload):
     camera_id: _NonEmptyStr
     confidence: _ConfidenceScore | None = None
     near_door_id: _NonEmptyStr
+    model_versions: dict[str, str]  # E10-S1
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
@@ -420,6 +465,40 @@ class StreamPriorityPayload(_BasePayload):
 
 
 # ---------------------------------------------------------------------------
+# E10-S1 — AI pipeline health + alert-class kill-switch payloads
+# ---------------------------------------------------------------------------
+
+
+class InferenceHeartbeatPayload(_BasePayload):
+    """INFERENCE_HEARTBEAT — source: inference, every 60s independent of detections."""
+
+    train_id: _NonEmptyStr
+    model_versions: dict[str, str]
+    frames_processed_window: _NonNegInt  # frames processed since last heartbeat
+    last_inference_at: datetime  # ISO-8601 UTC, with Z suffix
+    hailo_device_ok: bool
+
+    @field_validator("last_inference_at")
+    @classmethod
+    def _require_utc(cls, v: datetime) -> datetime:
+        if v.tzinfo is None or v.utcoffset() != timedelta(0):
+            raise ValueError("last_inference_at must be ISO-8601 UTC with Z suffix")
+        return v
+
+    @field_serializer("last_inference_at")
+    def _serialize_last_inference_at(self, v: datetime) -> str:
+        return v.isoformat().replace("+00:00", "Z")
+
+
+class AlertClassStatePayload(_BasePayload):
+    """ALERT_CLASS_DISABLED / ALERT_CLASS_REENABLED — source: cloud-backend admin API."""
+
+    alert_code: _NonEmptyStr
+    actor_name: _NonEmptyStr
+    source_ip: _NonEmptyStr
+
+
+# ---------------------------------------------------------------------------
 # Registry: EventType → payload model class
 # ---------------------------------------------------------------------------
 
@@ -450,4 +529,8 @@ PAYLOAD_MODELS: dict[EventType, type[_BasePayload]] = {
     # ADR-18
     EventType.COACH_COMFORT_INDEX: CoachComfortIndexPayload,
     EventType.STREAM_PRIORITY: StreamPriorityPayload,
+    # E10-S1
+    EventType.INFERENCE_HEARTBEAT: InferenceHeartbeatPayload,
+    EventType.ALERT_CLASS_DISABLED: AlertClassStatePayload,
+    EventType.ALERT_CLASS_REENABLED: AlertClassStatePayload,
 }

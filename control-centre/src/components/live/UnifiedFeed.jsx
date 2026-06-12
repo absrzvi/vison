@@ -23,6 +23,9 @@ export function UnifiedFeedSkeleton() {
   );
 }
 import { EscalationDetail } from './EscalationDetail';
+import { ConfidenceChip } from '../alerts/ConfidenceChip';
+import { DegradedBanner } from '../alerts/DegradedBanner';
+import { getConfidenceThresholds } from '../../api/confidenceThresholds';
 import { SOURCE_LABEL, SEV_CLASS } from '../../constants/escalation';
 import './UnifiedFeed.css';
 
@@ -52,9 +55,19 @@ export function UnifiedFeed({ escalations, activeFilter, onFilterChange, statusF
   const [localStatusFilter, setLocalStatusFilter] = useState(null);
   const [sevFilter, setSevFilter] = useState(null);
   const [newCount, setNewCount] = useState(0);
+  // E10-S1 AC20: thresholds fetched once on mount, session-cached in the client.
+  const [thresholds, setThresholds] = useState(null);
   const listRef = useRef(null);
   const isAtTopRef = useRef(true);
   const prevFilteredIdsRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getConfidenceThresholds()
+      .then(d => { if (!cancelled) setThresholds(d.per_class ?? null); })
+      .catch(() => { /* AC20: no thresholds → no chips; feed stays functional */ });
+    return () => { cancelled = true; };
+  }, []);
 
   // Use prop-controlled statusFilter if provided, otherwise local state
   const statusFilter = statusFilterProp !== undefined ? statusFilterProp : localStatusFilter;
@@ -162,6 +175,8 @@ export function UnifiedFeed({ escalations, activeFilter, onFilterChange, statusF
         </div>
       </div>
 
+      <DegradedBanner />
+
       <div className="unified-feed__list" ref={listRef} onScroll={handleScroll}>
         {newCount > 0 && (
           <div
@@ -188,6 +203,7 @@ export function UnifiedFeed({ escalations, activeFilter, onFilterChange, statusF
             <div className="feed-item__header">
               <span className={`badge ${SEV_CLASS[esc.severity]}`}>{SOURCE_LABEL[esc.type]}</span>
               <span className="feed-item__title">{esc.title}</span>
+              <ConfidenceChip escalation={esc} thresholds={thresholds} />
               <span className="feed-item__time">{esc.timestamp}</span>
             </div>
             <div className="feed-item__detail">{esc.detail}</div>

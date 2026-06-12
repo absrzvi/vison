@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     detection_classes: list[str] = ["person", "suitcase", "bicycle"]
     model_hef_path: str = "/models/yolox_s_leaky.hef"
 
+    # E10-S1: model provenance (AC5) + heartbeat cadence (AC7).
+    # git_sha is injected via ARG GIT_SHA in the Dockerfile; empty at startup is fatal.
+    git_sha: str = ""
+    model_labels_path: str = "/models/yolov8m.labels"
+    heartbeat_interval_s: float = 60.0
+
     fusion_url: str = "http://fusion:8090"
     accessibility_confidence_threshold: float = 0.80
     door_obstruction_min_frames: int = 2

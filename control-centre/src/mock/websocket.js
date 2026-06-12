@@ -144,6 +144,11 @@ function generateEscalations() {
       severity: 'red',
       status: 'unacknowledged',
       timestamp: '11:24',
+      // E10-S1: confidence metadata (model basis → chip renders)
+      alert_code: 'door_obstruction',
+      confidence_basis: 'model',
+      confidence_score: 0.96,
+      model_versions: { detector_arch: 'yolox_s_leaky', detector_hef: 'yolox_s_leaky.hef@ab12cd34ef56', detector_code: 'git:9d4a60df', detector_labels: 'labels@12ab34cd56ef' },
       stillFrame: {
         url: 'https://placehold.co/480x270/1E2430/9BA3AF?text=C3+door+cam+%E2%80%94+11%3A24%3A07',
         capturedAt: '11:24:07',
@@ -162,6 +167,11 @@ function generateEscalations() {
       severity: 'red',
       status: 'unacknowledged',
       timestamp: '11:09',
+      // E10-S1: medium-confidence example (0.70 < threshold 0.75, >= 0.6375)
+      alert_code: 'unattended_bag',
+      confidence_basis: 'model',
+      confidence_score: 0.70,
+      model_versions: { detector_arch: 'yolox_s_leaky', detector_code: 'git:9d4a60df' },
       stillFrame: {
         url: 'https://placehold.co/480x270/1E2430/9BA3AF?text=C5+overhead+%E2%80%94+11%3A09%3A14',
         capturedAt: '11:09:14',
@@ -180,6 +190,11 @@ function generateEscalations() {
       severity: 'red',
       status: 'unacknowledged',
       timestamp: '11:12',
+      // E10-S1: low-confidence example (< 0.85×threshold → Verify chip)
+      alert_code: 'slip_fall',
+      confidence_basis: 'model',
+      confidence_score: 0.41,
+      model_versions: { detector_arch: 'yolox_s_leaky', detector_code: 'git:9d4a60df' },
       stillFrame: {
         url: 'https://placehold.co/480x270/1E2430/9BA3AF?text=C1+overhead+%E2%80%94+11%3A12%3A00',
         capturedAt: '11:12:00',
