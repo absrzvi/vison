@@ -4,7 +4,7 @@ baseline_commit: 89cc1b9816b0c9282cd1e34333451496366e4e4f
 
 # Story 10.3: Critical-Alert Operational SOP & Drill Cadence
 
-Status: review
+Status: done
 
 <!-- Created 2026-06-13 via bmad-create-story (Claude). P1 — fourth story in Epic 10 (Operator Adoption & Trust).
      Source of truth: re-scoped E10-S3 in epics.md:2277-2303 (committed ca01651) + gap analysis Gap 1
