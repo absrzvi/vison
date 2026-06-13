@@ -298,7 +298,7 @@ async def get_detection_quality(
         text("""
             SELECT
                 CAST(CAST(timestamp AS timestamptz) AT TIME ZONE 'UTC' AS DATE)::text AS date,
-                COUNT(*)                                                                AS total_events,
+                COUNT(*)                                                       AS total_events,
                 COUNT(*) FILTER (
                     WHERE payload->>'fp_flag' IN ('true', '1', 'yes', 'True')
                 )                                                                      AS fp_count

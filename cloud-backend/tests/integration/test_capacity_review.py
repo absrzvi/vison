@@ -50,14 +50,16 @@ async def _seed(session_factory: async_sessionmaker[AsyncSession]) -> None:
                 queued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 status TEXT NOT NULL DEFAULT 'in_review',
                 CONSTRAINT ck_crq_priority_valid CHECK (priority IN ('low', 'medium', 'high')),
-                CONSTRAINT ck_crq_status_valid CHECK (status IN ('in_review', 'dismissed', 'unreviewed'))
+                CONSTRAINT ck_crq_status_valid
+                    CHECK (status IN ('in_review', 'dismissed', 'unreviewed'))
             )
         """))
 
         # Seed one CAPACITY_EXCEPTION event
         await conn.execute(
             text("""
-                INSERT INTO events(event_id,journey_id,vehicle_id,timestamp,event_type,severity,payload)
+                INSERT INTO events(event_id,journey_id,vehicle_id,timestamp,event_type,
+                                   severity,payload)
                 VALUES(:eid,'j1','VH-001',:ts,'CAPACITY_EXCEPTION','critical',:payload)
                 ON CONFLICT DO NOTHING
             """),
@@ -156,7 +158,10 @@ async def test_export_csv_headers(client: AsyncClient) -> None:
     assert "text/csv" in r.headers["content-type"]
     assert "attachment" in r.headers.get("content-disposition", "")
     lines = r.text.splitlines()
-    assert lines[0] == "exception_id,route,train_id,departure_date,priority,note,queued_by,queued_at,status"
+    expected_header = (
+        "exception_id,route,train_id,departure_date,priority,note,queued_by,queued_at,status"
+    )
+    assert lines[0] == expected_header
 
 
 @pytest.mark.integration

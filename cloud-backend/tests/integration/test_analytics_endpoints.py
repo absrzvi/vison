@@ -101,8 +101,8 @@ async def _seed(session_factory: async_sessionmaker[AsyncSession]) -> None:
         ]:
             await conn.execute(
                 text("INSERT INTO events(event_id,journey_id,vehicle_id,timestamp,event_type,"
-                     "severity,payload) VALUES(:eid,:jid,:vid,:ts,'OCCUPANCY_UPDATE','info',:payload)"
-                     " ON CONFLICT DO NOTHING"),
+                     "severity,payload) VALUES(:eid,:jid,:vid,:ts,'OCCUPANCY_UPDATE','info',"
+                     ":payload) ON CONFLICT DO NOTHING"),
                 {"eid": eid, "jid": jid, "vid": vid, "ts": ots, "payload": json.dumps(payload)},
             )
 
@@ -129,8 +129,8 @@ async def _seed(session_factory: async_sessionmaker[AsyncSession]) -> None:
         for i in range(5):
             await conn.execute(
                 text("INSERT INTO events(event_id,journey_id,vehicle_id,timestamp,event_type,"
-                     "severity,payload) VALUES(:eid,'j1','VH-001',:ts,'INFERENCE_RESULT','info',:payload)"
-                     " ON CONFLICT DO NOTHING"),
+                     "severity,payload) VALUES(:eid,'j1','VH-001',:ts,'INFERENCE_RESULT','info',"
+                     ":payload) ON CONFLICT DO NOTHING"),
                 {"eid": f"inf{i}", "ts": ts,
                  "payload": json.dumps({"confidence": 0.9, "fp_flag": False})},
             )

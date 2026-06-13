@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 import structlog
 from fastapi import APIRouter, Depends, Security
 from pydantic import BaseModel
@@ -16,7 +14,9 @@ log = structlog.get_logger()
 router = APIRouter(prefix="/api/v1/fleet", dependencies=[Security(require_api_key)])
 
 _SEVERITY_RANK = {"critical": 3, "warning": 2, "info": 1}
-_ALERT_TYPES = {"ALARM_ACTIVE", "ALERT_RAISED", "VESTIBULE_CONGESTION", "DOOR_OBSTRUCTION", "UNATTENDED_BAG"}
+_ALERT_TYPES = {
+    "ALARM_ACTIVE", "ALERT_RAISED", "VESTIBULE_CONGESTION", "DOOR_OBSTRUCTION", "UNATTENDED_BAG"
+}
 
 
 class CarSummary(BaseModel):

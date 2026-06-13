@@ -39,7 +39,9 @@ def test_raise_ticket_returns_201() -> None:
         r = client.post("/api/v1/maintenance/tickets", json=_VALID_BODY, headers=_HEADERS)
     assert r.status_code == 201
     body = r.json()
-    assert re.match(r"REF#[0-9A-F]{5}$", body["ticket_id"]), f"Unexpected ticket_id: {body['ticket_id']}"
+    assert re.match(r"REF#[0-9A-F]{5}$", body["ticket_id"]), (
+        f"Unexpected ticket_id: {body['ticket_id']}"
+    )
     assert "created_at" in body
     assert body["created_at"]  # non-empty
 

@@ -4,7 +4,7 @@ Security tests written first (RED phase) — they will fail until the router exi
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -77,7 +77,8 @@ def test_patch_preferences_body_operator_id_ignored() -> None:
                 json={"threshold_sec": 60, "operator_id": "evil-operator"},
                 headers=_HEADERS,
             )
-        # Request should succeed (200) and operator_id in response must equal API key, not "evil-operator"
+        # Request should succeed (200) and operator_id in response must equal
+        # the API key, not "evil-operator"
         assert r.status_code == 200
         body = r.json()
         assert body["operator_id"] != "evil-operator"

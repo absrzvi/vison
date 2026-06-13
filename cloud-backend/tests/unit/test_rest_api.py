@@ -166,10 +166,11 @@ def test_fleet_overview_empty() -> None:
 @pytest.mark.unit
 def test_alerts_stream_route_registered() -> None:
     """Verify /api/v1/alerts/stream exists and would return event-stream media type."""
-    from cloud_backend.routes.alerts_sse import alerts_stream
-
     import inspect
+
     from fastapi.responses import StreamingResponse
+
+    from cloud_backend.routes.alerts_sse import alerts_stream
 
     # Check the route is registered in the app
     routes = {r.path: r for r in app.routes if hasattr(r, "path")}  # type: ignore[attr-defined]

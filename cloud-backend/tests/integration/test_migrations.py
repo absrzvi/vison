@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -157,7 +157,7 @@ def test_duplicate_source_timestamp_raises_unique_violation(pg_url: str) -> None
                     VALUES (:jid, 'V001', 'RJ-0001', :start_time)
                     ON CONFLICT DO NOTHING
                 """),
-                {"jid": journey_id, "start_time": datetime(2026, 5, 17, 6, 0, 0, tzinfo=timezone.utc)},
+                {"jid": journey_id, "start_time": datetime(2026, 5, 17, 6, 0, 0, tzinfo=UTC)},
             )
 
         insert_sql = text("""
@@ -168,7 +168,7 @@ def test_duplicate_source_timestamp_raises_unique_violation(pg_url: str) -> None
                 (:event_id, :journey_id, :vehicle_id, :event_type, :severity, :source,
                  :ts, :source_ts, :payload)
         """)
-        _ts = datetime(2026, 5, 17, 6, 1, 0, tzinfo=timezone.utc)
+        _ts = datetime(2026, 5, 17, 6, 1, 0, tzinfo=UTC)
         base_params = {
             "journey_id": journey_id,
             "vehicle_id": "V001",
@@ -187,7 +187,8 @@ def test_duplicate_source_timestamp_raises_unique_violation(pg_url: str) -> None
             async with engine.begin() as conn:
                 await conn.execute(insert_sql, {"event_id": str(uuid.uuid4()), **base_params})
         cause = exc_info.value.orig
-        assert getattr(cause, "pgcode", None) == "23505" or getattr(cause, "sqlstate", None) == "23505"
+        code = getattr(cause, "pgcode", None) or getattr(cause, "sqlstate", None)
+        assert code == "23505"
 
         await engine.dispose()
 
@@ -241,6 +242,103 @@ def test_escalations_table_columns(pg_url: str) -> None:
         assert cols["confidence_score"][1] == "YES"
         assert cols["confidence_basis"][1] == "YES"
         assert cols["model_versions"][0] == "jsonb"
+
+    _run(_check())
+
+
+# ---------------------------------------------------------------------------
+# Story 10-2 AC1 + AC5 — escalation_audit table columns
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_escalation_audit_table_columns(pg_url: str) -> None:
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    async def _check() -> None:
+        engine = create_async_engine(pg_url)
+        async with engine.connect() as conn:
+            result = await conn.execute(
+                text("""
+                    SELECT column_name, data_type, is_nullable
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'escalation_audit'
+                    ORDER BY column_name
+                """)
+            )
+            cols = {row[0]: (row[1], row[2]) for row in result}
+        await engine.dispose()
+
+        # audit_id PK (TEXT); escalation_id FK matches escalations.escalation_id (uuid)
+        assert cols["audit_id"][1] == "NO"
+        assert cols["escalation_id"][0] == "uuid"
+        assert cols["escalation_id"][1] == "NO"
+        assert cols["transition"][1] == "NO"
+        assert cols["operator_id"][1] == "YES"  # NULL on raised
+        assert cols["alert_code"][1] == "NO"
+        assert cols["t_event"][0] == "timestamp with time zone"
+        assert cols["t_event"][1] == "NO"
+        assert cols["t_fired"][0] == "timestamp with time zone"
+        assert cols["t_fired"][1] == "NO"
+        assert cols["action_tags"][0] == "jsonb"
+        assert cols["action_tags"][1] == "YES"  # only on resolved
+        assert cols["dwell_focus_ms"][0] == "integer"
+        assert cols["dwell_focus_ms"][1] == "YES"  # only on silently_dismissed
+        assert cols["confidence_score"][0] == "double precision"
+        assert cols["confidence_score"][1] == "YES"
+        assert cols["confidence_basis"][1] == "YES"
+        assert cols["model_versions"][0] == "jsonb"
+
+    _run(_check())
+
+
+@pytest.mark.integration
+def test_escalation_audit_transition_check_constraint(pg_url: str) -> None:
+    """The transition CHECK rejects values outside the four-state taxonomy."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import IntegrityError
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    async def _check() -> None:
+        engine = create_async_engine(pg_url)
+        # Seed an escalation row first so the FK is satisfiable.
+        journey_id = f"V001_RJ-0001_{uuid.uuid4().hex[:8]}"
+        esc_id = str(uuid.uuid4())
+        t = datetime(2026, 6, 13, 6, 0, 0, tzinfo=UTC)
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("""
+                    INSERT INTO journeys (journey_id, vehicle_id, trip_number, start_time)
+                    VALUES (:jid, 'V001', 'RJ-0001', :t) ON CONFLICT DO NOTHING
+                """),
+                {"jid": journey_id, "t": t},
+            )
+            await conn.execute(
+                text("""
+                    INSERT INTO escalations
+                        (escalation_id, alert_id, alert_event_id, alert_code, journey_id,
+                         vehicle_id, status, t_fired)
+                    VALUES (:id, 'a1', :id, 'UNATTENDED_BAG', :jid, 'V001',
+                            'unacknowledged', :t)
+                """),
+                {"id": esc_id, "jid": journey_id, "t": t},
+            )
+
+        with pytest.raises(IntegrityError) as exc_info:
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text("""
+                        INSERT INTO escalation_audit
+                            (audit_id, escalation_id, transition, alert_code, t_event, t_fired)
+                        VALUES (:aid, :eid, 'bogus', 'UNATTENDED_BAG', :t, :t)
+                    """),
+                    {"aid": str(uuid.uuid4()), "eid": esc_id, "t": t},
+                )
+        cause = exc_info.value.orig
+        code = getattr(cause, "pgcode", None) or getattr(cause, "sqlstate", None)
+        assert code == "23514"  # check_violation
+        await engine.dispose()
 
     _run(_check())
 
