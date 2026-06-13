@@ -44,7 +44,7 @@
 /* P3-C: tile colour reflects worst fleet severity */
 .sh-summary-tile--issues .sh-summary-tile__value        { color: var(--obb-sev-medium); }
 .sh-summary-tile--issues-red .sh-summary-tile__value    { color: var(--obb-sev-critical); }
-.sh-summary-tile--issues-amber .sh-summary-tile__value  { color: var(--obb-sev-warning); }
+.sh-summary-tile--issues-amber .sh-summary-tile__value  { color: var(--obb-sev-medium); }
 
 .sh-summary-tile--clickable { cursor: pointer; }
 .sh-summary-tile--clickable:hover { background: var(--obb-surface-3); }
@@ -120,7 +120,7 @@
 
 /* P1-A: per-row severity left border */
 .sh-grid__row--sev-red   { border-left-color: var(--obb-sev-critical); }
-.sh-grid__row--sev-amber { border-left-color: var(--obb-sev-warning); }
+.sh-grid__row--sev-amber { border-left-color: var(--obb-sev-medium); }
 .sh-grid__row--sev-green { border-left-color: transparent; }
 
 .sh-grid__row--selected  { background: var(--obb-surface-3); }
@@ -142,7 +142,7 @@
   flex-shrink: 0;
 }
 .sh-sev-dot--red   { background: var(--obb-sev-critical); box-shadow: 0 0 4px var(--obb-sev-critical); }
-.sh-sev-dot--amber { background: var(--obb-sev-warning); }
+.sh-sev-dot--amber { background: var(--obb-sev-medium); }
 .sh-sev-dot--green { background: var(--obb-sev-normal); opacity: 0.4; }
 
 /* P2 fix: no row-level opacity — chip only */
@@ -166,7 +166,7 @@
   font-weight: 600;
 }
 .sh-since--red   { color: var(--obb-sev-critical); }
-.sh-since--amber { color: var(--obb-sev-warning); }
+.sh-since--amber { color: var(--obb-sev-medium); }
 .sh-since--green { color: var(--obb-text-on-dark-4); }
 .sh-since--ok    { color: var(--obb-text-on-dark-4); }
 
@@ -297,7 +297,7 @@
 }
 
 .sh-panel__elapsed {
-  color: var(--obb-sev-warning);
+  color: var(--obb-sev-medium);
   font-weight: 600;
 }
 
@@ -377,7 +377,7 @@
   font-weight: 700;
   color: var(--obb-sev-normal);
 }
-.sh-conn__status-badge--degraded { color: var(--obb-sev-warning); }
+.sh-conn__status-badge--degraded { color: var(--obb-sev-medium); }
 
 .sh-conn__lastseen {
   font-size: 11px;
@@ -406,8 +406,8 @@
 
 /* ── Staleness ─────────────────────────────────────────────── */
 
-.sh-summary-tile--stale { background: color-mix(in srgb, var(--obb-sev-warning) 5%, transparent); }
-.sh-summary-tile__value--stale { color: var(--obb-sev-warning); }
+.sh-summary-tile--stale { background: color-mix(in srgb, var(--obb-sev-medium) 5%, transparent); }
+.sh-summary-tile__value--stale { color: var(--obb-sev-medium); }
 
 /* ── Toast ─────────────────────────────────────────────────── */
 

@@ -18,7 +18,7 @@ function sevClass(severity) {
 
 function coachColor(pct) {
   if (pct >= 90) return 'var(--obb-sev-critical)';
-  if (pct >= 85) return 'var(--obb-sev-warning)';
+  if (pct >= 85) return 'var(--obb-sev-medium)';
   return 'var(--obb-sev-normal)';
 }
 
@@ -99,12 +99,12 @@ function WeeklyTrendChart({ trend, trainId }) {
           );
         })}
         <line x1={WT_PAD_L} y1={threshY} x2={WT_W - WT_PAD_R} y2={threshY}
-          stroke="var(--obb-sev-warning)" strokeWidth="1" strokeDasharray="4,3" opacity="0.7" />
+          stroke="var(--obb-sev-medium)" strokeWidth="1" strokeDasharray="4,3" opacity="0.7" />
         {peaks.map((v, i) => {
           const x = WT_PAD_L + i * barSlot + (barSlot - barW) / 2;
           const barH = (v / 100) * WT_CHART_H;
           const y = toY(v);
-          const color = v >= 85 ? 'var(--obb-sev-critical)' : 'var(--obb-sev-warning)';
+          const color = v >= 85 ? 'var(--obb-sev-critical)' : 'var(--obb-sev-medium)';
           const labelOffset = peaks.length - 1 - i;
           const label = labelOffset === 0 ? 'Today' : `−${labelOffset}`;
           return (

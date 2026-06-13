@@ -227,7 +227,7 @@
   transform: translateX(-50%);
 }
 .peak-hour-axis__tick--50 { left: 50%; }
-.peak-hour-axis__tick--85 { left: 85%; color: var(--obb-sev-warning); }
+.peak-hour-axis__tick--85 { left: 85%; color: var(--obb-sev-medium); }
 
 .peak-hour-row__bar {
   position: absolute;
@@ -245,7 +245,7 @@
   top: -2px;
   bottom: -2px;
   width: 2px;
-  background: var(--obb-sev-warning);
+  background: var(--obb-sev-medium);
   opacity: 0.7;
   z-index: 2;
   border-radius: 1px;
@@ -261,7 +261,7 @@
 /* P3 fix: days-over-threshold sub-label */
 .peak-hour-row__days-note {
   font-size: 10px;
-  color: var(--obb-sev-warning);
+  color: var(--obb-sev-medium);
   font-family: var(--font-mono);
   white-space: nowrap;
 }

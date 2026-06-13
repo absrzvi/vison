@@ -53,7 +53,7 @@
 }
 
 .esc-triage-tile__value--red   { color: var(--obb-sev-critical); }
-.esc-triage-tile__value--amber { color: var(--obb-sev-warning); }
+.esc-triage-tile__value--amber { color: var(--obb-sev-medium); }
 .esc-triage-tile__value--green { color: var(--obb-sev-normal); }
 
 .esc-triage-tile__label {
@@ -201,7 +201,7 @@
   color: var(--obb-text-on-dark-4);
 }
 .esc-card__status--unacknowledged { color: var(--obb-sev-critical); }
-.esc-card__status--acknowledged   { color: var(--obb-sev-warning); }
+.esc-card__status--acknowledged   { color: var(--obb-sev-medium); }
 .esc-card__status--resolved       { color: var(--obb-sev-normal); }
 
 .esc-card__actions {

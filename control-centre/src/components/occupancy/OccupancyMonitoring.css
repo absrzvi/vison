@@ -237,7 +237,7 @@
 }
 
 .occ-pill--dwell {
-  color: var(--obb-sev-warning);
+  color: var(--obb-sev-medium);
   background: rgba(232, 160, 32, 0.12);
   border: 1px solid rgba(232, 160, 32, 0.3);
 }
@@ -409,7 +409,7 @@
 .occ-dwell-alert__title {
   font-size: 12px;
   font-weight: 700;
-  color: var(--obb-sev-warning);
+  color: var(--obb-sev-medium);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -432,7 +432,7 @@
 }
 
 .occ-dwell-alert__crowding {
-  color: var(--obb-sev-warning);
+  color: var(--obb-sev-medium);
   font-weight: 600;
 }
 
@@ -723,7 +723,7 @@
 }
 
 .occ-metric--warn {
-  color: var(--obb-sev-warning);
+  color: var(--obb-sev-medium);
 }
 
 .occ-metric--crit {

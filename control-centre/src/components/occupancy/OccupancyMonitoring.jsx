@@ -36,7 +36,7 @@ function OccKpiStrip({ fleet, overThreshold, threshold, lastUpdate }) {
       <KpiCell
         label={`Over ${threshold}% Threshold`}
         value={overThreshold}
-        valueColor={overThreshold > 0 ? 'var(--obb-sev-warning)' : undefined}
+        valueColor={overThreshold > 0 ? 'var(--obb-sev-medium)' : undefined}
       />
       <div className="occ-kpi-divider" />
       <KpiCell
@@ -49,7 +49,7 @@ function OccKpiStrip({ fleet, overThreshold, threshold, lastUpdate }) {
       <KpiCell
         label="Last Update"
         value={stale ? 'Stale' : 'Live'}
-        valueColor={stale ? 'var(--obb-sev-warning)' : '#22C55E'}
+        valueColor={stale ? 'var(--obb-sev-medium)' : '#22C55E'}
         small
       />
     </div>
@@ -450,7 +450,7 @@ function CoachDetailPanel({ coach, isDwellTrain }) {
             <span className="occ-coach-detail__stat-label">Standing</span>
             <span
               className="occ-coach-detail__stat-value"
-              style={coach.standing > 0.4 * coach.headCount ? { color: 'var(--obb-sev-warning)' } : undefined}
+              style={coach.standing > 0.4 * coach.headCount ? { color: 'var(--obb-sev-medium)' } : undefined}
             >{coach.standing}</span>
           </div>
           {/* Horizontal divider between rows */}
@@ -462,7 +462,7 @@ function CoachDetailPanel({ coach, isDwellTrain }) {
               className="occ-coach-detail__stat-value"
               style={
                 coach.tempC > 26 ? { color: 'var(--obb-sev-critical)' } :
-                coach.tempC > 24 ? { color: 'var(--obb-sev-warning)' } : undefined
+                coach.tempC > 24 ? { color: 'var(--obb-sev-medium)' } : undefined
               }
             >{coach.tempC}°C</span>
           </div>
@@ -476,7 +476,7 @@ function CoachDetailPanel({ coach, isDwellTrain }) {
             <span className="occ-coach-detail__stat-label">Dwell Contrib</span>
             <span
               className="occ-coach-detail__stat-value"
-              style={{ color: dwellContrib ? 'var(--obb-sev-warning)' : 'var(--obb-sev-normal)' }}
+              style={{ color: dwellContrib ? 'var(--obb-sev-medium)' : 'var(--obb-sev-normal)' }}
             >{dwellContrib ? 'Active' : 'Normal'}</span>
           </div>
         </div>
@@ -534,7 +534,7 @@ function SummaryStats({ train, threshold, fleetRank }) {
       <div className="occ-stat">
         <span
           className="occ-stat__value"
-          style={{ color: overCoaches.length > 0 ? 'var(--obb-sev-warning)' : '#22C55E' }}
+          style={{ color: overCoaches.length > 0 ? 'var(--obb-sev-medium)' : '#22C55E' }}
         >
           {overCoaches.length}/{train.coaches.length}
         </span>

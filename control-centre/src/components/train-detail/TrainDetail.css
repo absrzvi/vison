@@ -54,7 +54,7 @@
 }
 
 .train-detail__route-delay {
-  color: var(--obb-sev-warning);
+  color: var(--obb-sev-medium);
   font-weight: 600;
   font-family: var(--font-mono);
 }
@@ -254,7 +254,7 @@
   filter: brightness(1.15);
 }
 .train-detail__alert-row--red   { border-left-color: var(--obb-sev-critical); background: rgba(255,59,59,0.06); }
-.train-detail__alert-row--amber { border-left-color: var(--obb-sev-warning);  background: rgba(255,152,0,0.06); }
+.train-detail__alert-row--amber { border-left-color: var(--obb-sev-medium);  background: rgba(255,152,0,0.06); }
 
 .train-detail__alert-type {
   font-size: 12px;

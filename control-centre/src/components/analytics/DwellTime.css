@@ -30,7 +30,7 @@
   display: inline-block;
   width: 12px;
   height: 8px;
-  background: var(--obb-sev-warning);
+  background: var(--obb-sev-medium);
   border-radius: 2px;
   opacity: 0.85;
 }
