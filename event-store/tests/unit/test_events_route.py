@@ -26,6 +26,7 @@ _VALID_ENVELOPE = {
         "occupancy_pct": 0.72,
         "capacity": 200,
         "service_tier": "standard",
+        "model_versions": {"detector_arch": "yolox_s_leaky"},  # E10-S1
     },
 }
 
@@ -172,6 +173,9 @@ def test_get_events_filter_by_event_type(client: TestClient) -> None:
             "alert_code": "slip_fall",
             "car_id": "car-1",
             "description": "fall detected",
+            "confidence_score": 0.91,
+            "confidence_basis": "model",
+            "model_versions": {"detector_arch": "yolox_s_leaky"},  # E10-S1
         },
     }
     client.post("/api/v1/events", json=_VALID_ENVELOPE)
@@ -200,6 +204,9 @@ def test_get_events_filter_by_min_severity(client: TestClient) -> None:
         "alert_code": "door_obstruction",
         "car_id": "car-1",
         "description": "door obstruction",
+        "confidence_score": 0.91,
+        "confidence_basis": "model",
+        "model_versions": {"detector_arch": "yolox_s_leaky"},  # E10-S1
     }
     client.post("/api/v1/events", json=warn_env)
 
@@ -228,6 +235,9 @@ def test_get_events_filter_combination(client: TestClient) -> None:
         "alert_code": "x",
         "car_id": "car-1",
         "description": "x",
+        "confidence_score": 0.91,
+        "confidence_basis": "model",
+        "model_versions": {"detector_arch": "yolox_s_leaky"},  # E10-S1
     }
     client.post("/api/v1/events", json=warn_env)
 

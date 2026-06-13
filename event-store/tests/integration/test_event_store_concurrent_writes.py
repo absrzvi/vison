@@ -40,6 +40,7 @@ def _envelope(writer_id: str, i: int) -> dict[str, object]:
             "occupancy_pct": (i % 200) / 200,
             "capacity": 200,
             "service_tier": "standard",
+            "model_versions": {"detector_arch": "yolox_s_leaky"},  # E10-S1
         },
     }
 

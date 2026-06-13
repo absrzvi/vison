@@ -33,6 +33,7 @@ def _occupancy(i: int, severity: str = "info") -> dict[str, object]:
             "occupancy_pct": i / 200,
             "capacity": 200,
             "service_tier": "standard",
+            "model_versions": {"detector_arch": "yolox_s_leaky"},  # E10-S1
         },
     }
 
@@ -50,6 +51,9 @@ def _alert(i: int) -> dict[str, object]:
             "alert_code": "slip_fall",
             "car_id": "car-1",
             "description": "fall detected",
+            "confidence_score": 0.91,
+            "confidence_basis": "model",
+            "model_versions": {"detector_arch": "yolox_s_leaky"},  # E10-S1
         },
     }
 
