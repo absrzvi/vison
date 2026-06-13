@@ -44,8 +44,10 @@ async function _get(path) {
   return res.json();
 }
 
-export function acknowledgeEscalation(id) {
-  return _post(`/api/v1/escalations/${encodeURIComponent(id)}/acknowledge`);
+export function acknowledgeEscalation(id, operatorId) {
+  return _post(`/api/v1/escalations/${encodeURIComponent(id)}/acknowledge`, {
+    operator_id: operatorId,
+  });
 }
 
 export function getTrainAlerts(trainId) {

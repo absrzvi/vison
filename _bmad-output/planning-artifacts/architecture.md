@@ -682,6 +682,22 @@ cloud-backend/tests/integration/test_alerts_sse.py
 
 **Supersedes (for landside scope only):** ADR-9 WebSocket Subscription Model. ADR-9 remains the **onboard** event-store fan-out contract (intra-CCU, retained as-is).
 
+#### ADR-21: Escalation Lifecycle Persistence (2026-06-13)
+
+**Context:** E2-S5 shipped the Control Centre acknowledge/resolve flow frontend-only; the backend endpoints (`POST /api/v1/escalations/{id}/acknowledge|resolve`) the CC calls were never implemented, and escalation lifecycle state lived only in client `FleetContext` (lost on reload). Behavioural telemetry (E10-S2) needs an authoritative server-side transition point to audit.
+
+**Decision (story E10-S6):**
+
+- A new `escalations` table holds one row per escalation, created at **ingest time** from `ALERT_RAISED` events. The PK `escalation_id` is the **ALERT_RAISED envelope `event_id`** (uuid) — the same id the Control Centre uses in its acknowledge/resolve URLs (`RealWebSocketClient.js` sets `id: event_id`). The payload `alert_id` is stored separately for `ALERT_RESOLVED` pairing. Confidence/provenance (`confidence_score`, `confidence_basis`, `model_versions`) are copied from the `AlertRaisedPayload` at row creation.
+- **State machine:** `unacknowledged → acknowledged → resolved`. `acknowledge` records `t_ack` + `ack_operator_id`; `resolve` records `t_resolve`, `resolve_operator_id`, `outcome`, `action_tags`. Re-transitions are idempotent (200); resolve-before-acknowledge is `409`; unknown id is `404`.
+- **Actor model:** the single operator is the landside Fleet Manager (no on-train conductor, no police/station alerting). `acknowledge` implies the required action was taken; `resolve` records the outcome via a 4-value `action_tags` taxonomy (`resolved_remotely`, `field_team_dispatched`, `false_alarm`, `no_action_needed`), stored as canonical keys (UI labels mapped server-side). This replaces the stale E2-S5 picker (`Conrad instructed`/`Police alerted`/…). PoC default pending ÖBB confirmation.
+- **Cross-operator convergence:** each transition fans out an `ESCALATION_UPDATED` frame via the existing `publish_alert` SSE path (ADR-20), satisfying E2-S5 AC4 (which previously relied on a backend broadcast that did not exist).
+- **Auth:** router-level `X-API-Key` (`require_api_key`), consistent with other CC-facing endpoints. Real per-operator identity (JWT) deferred to Epic 11; `operator_id` is the `VITE_OPERATOR_ID` approximation.
+
+**Migration:** `cloud-backend/migrations/versions/0006_escalations.py` — new table only, safe under concurrent reads. Indices on `status`, `alert_code`, `t_fired`.
+
+**Consumes/extends:** ADR-20 (SSE fan-out), the ingest loop (ADR-19 landside path). **Feeds:** E10-S2 `escalation_audit` (the audit hooks the transition points defined here).
+
 #### ADR-10: API Error Envelope
 
 **Decision:** Standard error response for all REST and WebSocket error conditions:

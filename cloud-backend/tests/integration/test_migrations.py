@@ -195,6 +195,57 @@ def test_duplicate_source_timestamp_raises_unique_violation(pg_url: str) -> None
 
 
 # ---------------------------------------------------------------------------
+# Story 10-6 AC1 + AC7 — escalations table columns
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_escalations_table_columns(pg_url: str) -> None:
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    async def _check() -> None:
+        engine = create_async_engine(pg_url)
+        async with engine.connect() as conn:
+            result = await conn.execute(
+                text("""
+                    SELECT column_name, data_type, is_nullable
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'escalations'
+                    ORDER BY column_name
+                """)
+            )
+            cols = {row[0]: (row[1], row[2]) for row in result}
+        await engine.dispose()
+
+        # PK = the ALERT_RAISED event_id (uuid, matches events.event_id type)
+        assert cols["escalation_id"][0] == "uuid"
+        assert cols["escalation_id"][1] == "NO"
+        assert cols["alert_id"][1] == "NO"
+        assert cols["alert_event_id"][0] == "uuid"
+        assert cols["alert_code"][1] == "NO"
+        assert cols["journey_id"][1] == "NO"
+        assert cols["vehicle_id"][1] == "NO"
+        assert cols["status"][1] == "NO"
+        assert cols["t_fired"][0] == "timestamp with time zone"
+        assert cols["t_fired"][1] == "NO"
+        assert cols["t_ack"][0] == "timestamp with time zone"
+        assert cols["t_ack"][1] == "YES"
+        assert cols["t_resolve"][0] == "timestamp with time zone"
+        assert cols["t_resolve"][1] == "YES"
+        assert cols["ack_operator_id"][1] == "YES"
+        assert cols["resolve_operator_id"][1] == "YES"
+        assert cols["outcome"][1] == "YES"
+        assert cols["action_tags"][0] == "jsonb"
+        assert cols["confidence_score"][0] == "double precision"
+        assert cols["confidence_score"][1] == "YES"
+        assert cols["confidence_basis"][1] == "YES"
+        assert cols["model_versions"][0] == "jsonb"
+
+    _run(_check())
+
+
+# ---------------------------------------------------------------------------
 # AC4 — column comment on journey_id in both tables
 # ---------------------------------------------------------------------------
 

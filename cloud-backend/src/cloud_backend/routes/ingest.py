@@ -106,6 +106,35 @@ async def ingest_events(
             # last_seen is server-side NOW().
             if ev.event_type == "INFERENCE_HEARTBEAT":
                 await upsert_heartbeat(db, ev.payload)
+            # E10-S6 AC2: create the authoritative escalation row from ALERT_RAISED.
+            # escalation_id = the envelope event_id (the id the Control Centre uses in
+            # its acknowledge/resolve URLs); alert_id from payload pairs ALERT_RESOLVED.
+            if ev.event_type == "ALERT_RAISED":
+                await db.execute(
+                    text("""
+                        INSERT INTO escalations
+                            (escalation_id, alert_id, alert_event_id, alert_code,
+                             journey_id, vehicle_id, status, t_fired,
+                             confidence_score, confidence_basis, model_versions)
+                        VALUES
+                            (:escalation_id, :alert_id, :alert_event_id, :alert_code,
+                             :journey_id, :vehicle_id, 'unacknowledged', :t_fired,
+                             :confidence_score, :confidence_basis, :model_versions)
+                        ON CONFLICT (escalation_id) DO NOTHING
+                    """),
+                    {
+                        "escalation_id": ev.event_id,
+                        "alert_id": ev.payload.get("alert_id"),
+                        "alert_event_id": ev.event_id,
+                        "alert_code": ev.payload.get("alert_code"),
+                        "journey_id": ev.journey_id,
+                        "vehicle_id": ev.vehicle_id,
+                        "t_fired": ts_dt,
+                        "confidence_score": ev.payload.get("confidence_score"),
+                        "confidence_basis": ev.payload.get("confidence_basis"),
+                        "model_versions": json.dumps(ev.payload.get("model_versions", {})),
+                    },
+                )
             # Fan-out alert-class events to SSE subscribers immediately.
             # E10-S1 AC13: kill-switch — disabled alert classes raised after
             # disabled_at are stored but never fanned out to Control Centre.

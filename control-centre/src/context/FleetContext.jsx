@@ -292,7 +292,7 @@ export function FleetProvider({ children }) {
   const acknowledge = useCallback(async (id) => {
     setEscalationActionState(prev => ({ ...prev, [id]: 'pending' }));
     try {
-      await acknowledgeEscalation(id);
+      await acknowledgeEscalation(id, OPERATOR_ID);
       // Only apply optimistic update if escalation hasn't already moved past 'acknowledged'
       // (guards against a WS 'resolved' arriving before this REST response).
       setEscalations(prev =>

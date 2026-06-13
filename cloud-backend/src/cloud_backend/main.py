@@ -11,6 +11,7 @@ from .routes.alerts_sse import router as alerts_router
 from .routes.analytics import router as analytics_router
 from .routes.capacity_review import capacity_review_router
 from .routes.config import router as config_router
+from .routes.escalations import router as escalations_router
 from .routes.fleet import router as fleet_router
 from .routes.health import router as health_router
 from .routes.ingest import router as ingest_router
@@ -42,6 +43,7 @@ app.include_router(config_router)
 app.include_router(ai_pipeline_router)
 app.include_router(maintenance_router)
 app.include_router(preferences_router)
+app.include_router(escalations_router)
 
 
 @app.on_event("startup")

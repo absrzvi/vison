@@ -6,12 +6,10 @@ import { useFleetData } from '../../context/FleetContext';
 import './EscalationDetail.css';
 
 const ACTION_TAGS = [
-  'Passenger assisted',
-  'Police alerted',
-  'Station notified',
-  'Conrad instructed',
-  'No action required',
-  'Other',
+  'Resolved remotely',
+  'Field team dispatched',
+  'False alarm',
+  'No action needed',
 ];
 
 const SEV_ACCENT = {
