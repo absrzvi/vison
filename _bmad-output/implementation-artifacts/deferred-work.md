@@ -1,5 +1,22 @@
 ﻿# Deferred Work
 
+## RESOLVED 2026-06-13: cloud-backend integration suite — 4 pre-existing failures (task_cdd39efb)
+
+Spun off from 10-1 as `task_cdd39efb` (baseline `9d4a60d`, 2026-06-07 — an architecture-docs commit; untouched by any 10-1 code commit). Reproduced under Docker/testcontainers; the "`:param::jsonb` insert-helper bug" label was an oversimplification — there is no shared insert helper (no `conftest.py` in cloud-backend) and the four had **four distinct root causes**, all pre-existing test-vs-schema drift:
+
+| Test | Root cause (live traceback) | Fix |
+|------|------------------------------|-----|
+| `test_postgres_schema::test_event_insert_idempotent` | `:payload::jsonb` cast — asyncpg rewrites binds to `$1…$8` but leaves `:payload::jsonb` → `syntax error at or near ":"` | dropped `::jsonb` cast (plain `:payload`, matching production + every other test) |
+| `test_migrations::test_duplicate_source_timestamp_raises_unique_violation` | insert omitted NOT-NULL `vehicle_id` → `23502` fired before the intended `23505` unique violation | added `vehicle_id` to columns/values/base_params |
+| `test_analytics_endpoints::test_heatmap_has_null_for_empty_cells` | **time bomb** — hardcoded `2026-05-18` occupancy timestamps fell outside the rolling `range=7d` heatmap window (now 2026-06-13) → empty cells → `None in []` failed | anchored seed timestamps to `now-1d`, preserving the 09:00/14:00 hour buckets |
+| `test_alerts_sse::test_non_allow_listed_event_persisted_but_not_pushed` | inner OCCUPANCY_UPDATE payload missing `model_versions`, now **required** by `OccupancyUpdatePayload` (10-1 provenance) → 422 | added `model_versions` to the payload |
+
+**Verification:** cloud-backend integration 44 passed / 0 failed (was 40/4); unit 86 passed; no new ruff errors (pre-existing E501s in these files left untouched per surgical-changes rule); test-only, zero `src/` change.
+
+**Follow-up spun off (`task_6d7f88a2`):** fix #4 is a real signal — any producer still emitting these event types without `model_versions` is now 422-rejected at ingest. Task audits all inference/fusion producer sites for compliance. Tracks toward Epic 9 (CI/CD hardening, NFR13).
+
+---
+
 ## Deferred from: code review of 10-1-alert-confidence-and-ai-pipeline-health chunk 1/4 (2026-06-12)
 
 - **`model_versions or {}` wiring footgun** [inference/zone_counter.py, callback.py] — production guarded by fatal startup provenance, but a future wire() miss ships `model_versions: {}` silently on detection payloads; add a startup warning when provenance is absent outside tests

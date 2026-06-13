@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncGenerator, Generator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -89,11 +89,15 @@ async def _seed(session_factory: async_sessionmaker[AsyncSession]) -> None:
                  "sev": sev, "payload": json.dumps(payload)},
             )
 
-        # OCCUPANCY_UPDATE — sparse: only j1/hour=9 and j2/hour=14
+        # OCCUPANCY_UPDATE — sparse: only j1/hour=9 and j2/hour=14.
+        # Anchor to a recent date so rows fall inside the rolling `range` window
+        # (the heatmap query filters timestamp >= now - range); fixed dates would
+        # drift out of the window as wall-clock time advances.
+        _day = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
         for eid, jid, vid, ots, payload in [
-            ("oc1", "j1", "VH-001", "2026-05-18T09:30:00+00:00", {"occupancy_pct": 80.0}),
-            ("oc2", "j1", "VH-001", "2026-05-18T09:45:00+00:00", {"occupancy_pct": 85.0}),
-            ("oc3", "j2", "VH-002", "2026-05-18T14:00:00+00:00", {"occupancy_pct": 40.0}),
+            ("oc1", "j1", "VH-001", f"{_day}T09:30:00+00:00", {"occupancy_pct": 80.0}),
+            ("oc2", "j1", "VH-001", f"{_day}T09:45:00+00:00", {"occupancy_pct": 85.0}),
+            ("oc3", "j2", "VH-002", f"{_day}T14:00:00+00:00", {"occupancy_pct": 40.0}),
         ]:
             await conn.execute(
                 text("INSERT INTO events(event_id,journey_id,vehicle_id,timestamp,event_type,"

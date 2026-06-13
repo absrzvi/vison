@@ -104,7 +104,7 @@ async def test_event_insert_idempotent(pg_url: str) -> None:
                  severity, source, schema_version, payload)
             VALUES
                 (:event_id, :journey_id, :vehicle_id, :timestamp, :event_type,
-                 :severity, :source, :schema_version, :payload::jsonb)
+                 :severity, :source, :schema_version, :payload)
             ON CONFLICT (event_id) DO NOTHING
         """)
         r1 = await conn.execute(insert, params)

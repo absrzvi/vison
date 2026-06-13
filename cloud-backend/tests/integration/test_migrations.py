@@ -162,15 +162,16 @@ def test_duplicate_source_timestamp_raises_unique_violation(pg_url: str) -> None
 
         insert_sql = text("""
             INSERT INTO events
-                (event_id, journey_id, event_type, severity, source,
+                (event_id, journey_id, vehicle_id, event_type, severity, source,
                  timestamp, source_timestamp, payload)
             VALUES
-                (:event_id, :journey_id, :event_type, :severity, :source,
+                (:event_id, :journey_id, :vehicle_id, :event_type, :severity, :source,
                  :ts, :source_ts, :payload)
         """)
         _ts = datetime(2026, 5, 17, 6, 1, 0, tzinfo=timezone.utc)
         base_params = {
             "journey_id": journey_id,
+            "vehicle_id": "V001",
             "event_type": "OCCUPANCY_UPDATE",
             "severity": "info",
             "source": "inference",

@@ -488,6 +488,7 @@ async def test_non_allow_listed_event_persisted_but_not_pushed(
                     "occupancy_pct": 0.25,
                     "capacity": 40,
                     "service_tier": "standard",
+                    "model_versions": {"detector_arch": "yolox_s_leaky"},
                 },
             }],
         }
