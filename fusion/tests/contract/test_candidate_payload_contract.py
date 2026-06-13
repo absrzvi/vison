@@ -13,12 +13,14 @@ the actual integer hailotracker id inference emits at ``zone_counter.py:329``.
 """
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 
 import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
+from oebb_shared.events import EventEnvelope, EventType
 
 from fusion.comfort_index import ComfortIndexState
 from fusion.config import Settings
@@ -145,3 +147,85 @@ def test_context_push_extra_field_returns_422(client: TestClient) -> None:
     body = {"unknown_field": True}
     resp = client.post("/context", json=body)
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Producer → shared-schema boundary (story 10-1 model_versions audit).
+#
+# The 202-only tests above cannot catch a broken model_versions invariant: the
+# /candidates/* handlers are fail-safe (Pattern 3 — they return 202 even when
+# AlertRaisedPayload construction raises). These tests capture the envelope
+# fusion ACTUALLY POSTs to event-store and validate it against the real shared
+# EventEnvelope, which transitively runs AlertRaisedPayload._validate_confidence.
+# This is the contract that the landside ingest boundary (cloud-backend) enforces
+# with HTTP 422 — so if fusion emits an alert that violates the per-basis
+# model_versions floor, it would be rejected at ingest. These tests fail FAST in
+# that case instead of letting a silently-dropped alert reach production.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.contract
+def test_slip_fall_emitted_envelope_validates_against_shared_schema(
+    client: TestClient,
+) -> None:
+    """slip_fall is model-basis: model_versions must be non-empty. Inference may
+    omit it; fusion's ``payload.model_versions or {...}`` fallback must keep it
+    non-empty so the emitted ALERT_RAISED clears AlertRaisedPayload's
+    model-basis invariant at the ingest boundary."""
+    body = {
+        "alert_type": "slip_fall",
+        "car_id": "car-1",
+        "track_id": 42,
+        "camera_id": "C1_DOOR_01",
+        # confidence + model_versions deliberately omitted — exercises fusion's
+        # fail-safe fallback (zone_counter may post a legacy body without them).
+    }
+    with respx.mock(assert_all_called=True) as rmock:
+        route = rmock.post("http://event-store-test/api/v1/events").mock(
+            return_value=httpx.Response(201)
+        )
+        resp = client.post("/candidates/alert_raised", json=body)
+    assert resp.status_code == 202
+    # Capture what fusion actually sent and validate it against the shared schema.
+    sent = route.calls.last.request
+    envelope = EventEnvelope.model_validate(json.loads(sent.content))
+    assert envelope.event_type == EventType.ALERT_RAISED.value
+    assert envelope.payload["confidence_basis"] == "model"
+    # model-basis invariant: non-empty model_versions (the fallback supplied it).
+    assert envelope.payload["model_versions"]
+
+
+@pytest.mark.contract
+def test_door_obstruction_emitted_envelope_validates_against_shared_schema(
+    client: TestClient,
+) -> None:
+    """door_obstruction is fused-basis: model_versions must have >= 2 entries.
+    Fusion joins the upstream detector provenance with the door-sensor firmware
+    version — proving that join keeps the fused floor satisfied end-to-end."""
+    body = {
+        "car_id": "car-1",
+        "door_id": "door-1A",
+        "obstruction_type": "person",
+        "track_id": "42",
+        "camera_id": "C1_DOOR_01",
+        "confidence": 0.88,
+        "door_state": "unknown",
+        "model_versions": {"detector_arch": "yolox_s_leaky"},
+    }
+    # ZFR-derived door state must be 'closing'/'closed' for the alert to emit.
+    client.post(
+        "/context",
+        json={"door_state": {"car-1:door-1A": "closing"}},
+    )
+    with respx.mock(assert_all_called=True) as rmock:
+        route = rmock.post("http://event-store-test/api/v1/events").mock(
+            return_value=httpx.Response(201)
+        )
+        resp = client.post("/candidates/door_obstruction", json=body)
+    assert resp.status_code == 202
+    sent = route.calls.last.request
+    envelope = EventEnvelope.model_validate(json.loads(sent.content))
+    assert envelope.event_type == EventType.ALERT_RAISED.value
+    assert envelope.payload["confidence_basis"] == "fused"
+    # fused-basis invariant: >= 2 model_versions entries (detector + door firmware).
+    assert len(envelope.payload["model_versions"]) >= 2
