@@ -50,7 +50,7 @@ src/inference/
 ### Two runtimes, one process
 
 `main.py` runs two concurrent runtimes:
-1. **GStreamer pipeline** — runs on a daemon thread (`threading.Thread`, one per camera). GStreamer owns its own main loop; do not call GStreamer APIs from the asyncio loop.
+1. **GStreamer pipeline** — runs on ONE daemon thread (`threading.Thread`) hosting a single multiplexed pipeline (N sources → hailoroundrobin → one hailonet → one VDevice; P-M16). GStreamer owns its own main loop; do not call GStreamer APIs from the asyncio loop.
 2. **uvicorn/asyncio** — runs on the main thread. FastAPI handlers execute here.
 
 Cross-runtime dispatch uses `asyncio.run_coroutine_threadsafe(coro, loop_holder.loop)` — the loop reference is captured in `LoopHolder` during the lifespan startup and passed into callbacks that need to schedule async work from the GStreamer thread.

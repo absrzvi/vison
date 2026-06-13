@@ -170,37 +170,37 @@ def _log_heartbeat_task_exit(task: "asyncio.Task[None]") -> None:
 
 
 def _make_pipeline_thread(
-    callback: OccupancyCallback,
+    callbacks: list[OccupancyCallback],
     settings: Settings,
-    readiness: ReadinessHolder,
+    readiness: list[ReadinessHolder],
 ) -> threading.Thread:
-    """Return a daemon thread that runs one InferencePipeline.
+    """Return a daemon thread that runs the ONE multiplexed InferencePipeline.
 
-    M6/M7 fix: readiness is set True only when the pipeline thread signals it on first
-    successful buffer (via callback._readiness), NOT immediately after t.start(). On
-    pipeline crash the thread wrapper flips ready→False.
+    P-M16: a single pipeline multiplexes all cameras (N sources → hailoroundrobin →
+    one hailonet → one VDevice). No per-camera thread fan-out — that was the worst
+    case for CCU decode load and would skew the bench toward a self-inflicted
+    decode bottleneck.
 
-    F2: readiness is the per-camera holder passed through here only for the finally
-    flip; InferencePipeline reads it from callback._readiness directly.
+    M6/M7 fix: readiness is set True only when the pipeline signals it on first
+    successful buffer per stream (via callback._readiness in InferencePipeline._dispatch),
+    NOT immediately after t.start(). On pipeline crash the wrapper flips every
+    holder ready→False.
     """
     from inference.pipeline import InferencePipeline  # noqa: PLC0415
 
-    pipeline = InferencePipeline(callback=callback, settings=settings)
+    pipeline = InferencePipeline(callbacks=callbacks, settings=settings)
 
     def _run() -> None:
         try:
             pipeline.run()
         except Exception as exc:
-            log.critical(
-                "main.pipeline_crashed",
-                camera_id=callback.camera_id,
-                error=str(exc),
-            )
+            log.critical("main.pipeline_crashed", error=str(exc))
         finally:
-            readiness.ready = False
-            log.warning("main.pipeline_exited", camera_id=callback.camera_id)
+            for r in readiness:
+                r.ready = False
+            log.warning("main.pipeline_exited", camera_count=len(callbacks))
 
-    return threading.Thread(target=_run, name=f"gst-{callback.camera_id}", daemon=True)
+    return threading.Thread(target=_run, name="gst-multiplexed", daemon=True)
 
 
 def main() -> None:  # pragma: no cover — integration entry point
@@ -252,14 +252,11 @@ def main() -> None:  # pragma: no cover — integration entry point
             app.state.event_client = client
             app.state.callbacks = callbacks
 
-            threads = [
-                _make_pipeline_thread(cb, settings, r)
-                for cb, r in zip(callbacks, cam_readiness, strict=True)
-            ]
-            for t in threads:
-                t.start()
+            # P-M16: ONE multiplexed pipeline thread for all cameras (not one per camera).
+            pipeline_thread = _make_pipeline_thread(callbacks, settings, cam_readiness)
+            pipeline_thread.start()
 
-            log.info("main.pipeline_threads_started", count=len(threads))
+            log.info("main.pipeline_started", camera_count=len(callbacks))
             try:
                 yield
             finally:

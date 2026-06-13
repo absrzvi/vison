@@ -40,7 +40,14 @@ class Settings(BaseSettings):
     vestibule_congestion_score_threshold: float = 0.75
     slip_fall_height_collapse_threshold: float = 0.5
     slip_fall_velocity_threshold: float = 50.0
-    pipeline_fps: float = 3.0
+    # Per-stream counting frame rate. Door-line tripwire counting needs 5 FPS
+    # (a passenger spends ~1–2 s crossing a threshold) — see camera-allocation
+    # bench case 2026-06-07 and architecture §Hailo-8 Capacity Budget. NOT video
+    # frame rate; the 10fps P1 ceiling is the schedule cap, not the counting need.
+    pipeline_fps: float = Field(default=5.0, gt=0.0)
+    # Single multiplexed hailonet batches across the round-robin'd sources
+    # (architecture: N sources → hailoroundrobin → ONE hailonet batch_size=8).
+    pipeline_batch_size: int = Field(default=8, gt=0)
 
     # P-D2: service_tier sourced via env INFERENCE_SERVICE_TIER, not hardcoded.
     service_tier: str = "standard"
