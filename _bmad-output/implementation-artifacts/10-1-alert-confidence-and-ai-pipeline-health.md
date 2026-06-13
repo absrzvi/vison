@@ -4,9 +4,9 @@ baseline_commit: 9d4a60dff0597b0d598c99c7fa6ed60bcb7f294f
 
 # Story 10.1: Alert Confidence Metadata, Kill-Switch & AI Pipeline Health
 
-Status: in-progress
+Status: done
 
-<!-- Round-2 review (2026-06-13): all decisions + patches resolved & verified (shared 192 / event-store 84 / fusion 155 / inference 26 green). Held at in-progress pending FIRST CI run of integration tests + Alembic migrations 0004/0005 (no local Docker) and tracking of R2-D1 (multiplexed pipeline >1-camera NotImplementedError — hardware-bring-up blocker). Flip to done once CI is green. -->
+<!-- DONE 2026-06-13: all 4 review chunks covered (R1 shared+inference, R2 egress+pipeline, R3 fusion+cloud-backend+control-centre); all review decisions + patches resolved & verified; R2-D1 multiplexed pipeline RESOLVED (commit 2cf0f89). FIRST integration run (Docker up 2026-06-13) GREEN for all 10-1-gating tests: test_killswitch_fanout (3/3 — live+replay+in-flight+audit, AC11-14/ST5), test_inference_heartbeat_ingest (AC18), test_migrations test_upgrade_head_idempotent + events/journeys columns (Alembic 0004+0005 apply cleanly & idempotently). event-store integration 27/27 green (egress anonymisation + WAGON). The 4 unrelated cloud-backend integration failures (:param::jsonb insert-helper bug in test_postgres_schema/test_migrations-dup/test_alerts_sse/test_analytics) are PRE-EXISTING on baseline 9d4a60d, untouched by any 10-1 commit — spun off as task_cdd39efb. -->
 
 
 <!-- Created 2026-05-30 via grill-me + party-mode session. Code-only scope — exec-failure playbook content moved to E10-S3. Renamed from "exec-failure-playbook-and-confidence-metadata" → "alert-confidence-and-ai-pipeline-health" to reflect actual shipped surface. -->
