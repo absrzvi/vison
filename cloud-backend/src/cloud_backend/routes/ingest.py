@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Security
+from fastapi import APIRouter, Depends, Security
 from oebb_shared.events.envelope import SUPPORTED_SCHEMA_VERSIONS, EventEnvelope
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..api.auth import require_api_key
 from ..database import get_db
 from ..routes.alerts_sse import ALERT_EVENT_TYPES, publish_alert
+from ..services.escalation_audit import record_raised
 from ..services.fanout_filter import alert_class_filter
 from ..services.heartbeat_ingest import upsert_heartbeat
 
@@ -67,7 +68,9 @@ async def ingest_events(
             {
                 "journey_id": ev.journey_id,
                 "vehicle_id": ev.vehicle_id,
-                "trip_number": ev.journey_id.split("_")[1] if "_" in ev.journey_id else ev.journey_id,
+                "trip_number": (
+                    ev.journey_id.split("_")[1] if "_" in ev.journey_id else ev.journey_id
+                ),
                 "start_time": ts_dt,
             },
         )
@@ -122,7 +125,7 @@ async def ingest_events(
                     has_alert_code=bool(alert_code),
                 )
             elif ev.event_type == "ALERT_RAISED":
-                await db.execute(
+                esc_result: CursorResult[tuple[()]] = await db.execute(  # type: ignore[assignment]
                     text("""
                         INSERT INTO escalations
                             (escalation_id, alert_id, alert_event_id, alert_code,
@@ -147,6 +150,21 @@ async def ingest_events(
                         "model_versions": json.dumps(ev.payload.get("model_versions", {})),
                     },
                 )
+                # E10-S2 AC1: one 'raised' audit row per new escalation. Gate on the
+                # escalations insert rowcount so a re-raised ALERT_RAISED (ON CONFLICT
+                # DO NOTHING) does not append a duplicate audit row.
+                if esc_result.rowcount == 1:
+                    await record_raised(
+                        db,
+                        escalation_id=ev.event_id,
+                        # Guaranteed truthy by the not-(alert_id and alert_code) guard
+                        # above; str() narrows the untyped-payload Any|None to str.
+                        alert_code=str(alert_code),
+                        t_fired=ts_dt,
+                        confidence_score=ev.payload.get("confidence_score"),
+                        confidence_basis=ev.payload.get("confidence_basis"),
+                        model_versions=ev.payload.get("model_versions", {}),
+                    )
             # Fan-out alert-class events to SSE subscribers immediately.
             # E10-S1 AC13: kill-switch — disabled alert classes raised after
             # disabled_at are stored but never fanned out to Control Centre.

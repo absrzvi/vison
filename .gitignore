@@ -81,3 +81,6 @@ parse_lint.py
 openssh
 tappas_check/
 *.docx
+
+# E10-S2: weekly alert-effectiveness reports are generated CI artifacts, not source
+cloud-backend/reports/

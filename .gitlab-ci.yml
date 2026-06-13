@@ -3,6 +3,7 @@ stages:
   - security
   - test
   - build
+  - report
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -159,3 +160,23 @@ build:cloud-backend:
     - docker build -f cloud-backend/Dockerfile -t oebb/cloud-backend:$CI_COMMIT_SHORT_SHA .
   only:
     - master
+
+# ── Report ──────────────────────────────────────────────────────────────────────
+
+# E10-S2 AC4 / D4: weekly alert-effectiveness report. cloud-backend has no
+# in-process scheduler, so scheduling is EXTERNAL — configure a GitLab CI
+# scheduled pipeline (CI/CD → Schedules) for Monday 06:00 UTC. The job runs only
+# on schedule-triggered pipelines and connects to the live DB via the masked
+# DATABASE_URL CI variable. The generated markdown is exposed as a build artifact.
+report:alert-effectiveness:
+  stage: report
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  script:
+    - pip install -e shared/
+    - pip install -e "cloud-backend/[dev]"
+    - cd cloud-backend && python -m cloud_backend.services.alert_effectiveness_report
+  artifacts:
+    paths:
+      - cloud-backend/reports/
+    expire_in: 90 days

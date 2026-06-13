@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { SOURCE_LABEL, SEV_CLASS } from '../../constants/escalation';
 import { useFleetData } from '../../context/FleetContext';
+import { emitSilentlyDismissed } from '../../lib/telemetry/dismissal';
 import './EscalationDetail.css';
+
+const OPERATOR_ID = import.meta.env.VITE_OPERATOR_ID ?? 'operator-unknown';
 
 const ACTION_TAGS = [
   'Resolved remotely',
@@ -119,6 +122,78 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  // Silent-dismissal telemetry (story 10-2 AC2 / D5). Mirror status in a ref so the
+  // unmount/beforeunload cleanup reads the CURRENT status, not the stale closure
+  // value captured when the effect ran (project-context.md stale-closure trap).
+  const statusRef = useRef(escalation?.status);
+  useEffect(() => { statusRef.current = escalation?.status; }, [escalation?.status]);
+
+  // dwell_focus_ms = accumulated tab-FOCUSED time, not wall-clock. Accumulate
+  // visible intervals across visibilitychange; a panel left open on a background
+  // tab does not inflate dwell.
+  const escIdRef = useRef(escalation?.id);
+  useEffect(() => { escIdRef.current = escalation?.id; }, [escalation?.id]);
+
+  useEffect(() => {
+    if (!escalation?.id) return undefined;
+
+    const tViewed = new Date().toISOString();
+    const mountedAt = Date.now();
+    let dwellFocusMs = 0;
+    let emitted = false;
+    // Count from now only if the tab is currently visible.
+    let focusStart = document.visibilityState === 'visible' ? Date.now() : null;
+    // React StrictMode mounts, synchronously unmounts, then remounts in dev. That
+    // throwaway unmount would emit a spurious dwell≈0 beacon. Skipping cleanups that
+    // fire within this window suppresses it; a real human view always exceeds it.
+    const MIN_VIEW_MS = 100;
+
+    const flushFocus = () => {
+      if (focusStart !== null) {
+        dwellFocusMs += Date.now() - focusStart;
+        focusStart = null;
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        if (focusStart === null) focusStart = Date.now();
+      } else {
+        flushFocus();
+      }
+    };
+
+    const emitIfUnacknowledged = () => {
+      // Guard against a double emit if both beforeunload and unmount-cleanup fire.
+      if (emitted) return;
+      // Suppress the StrictMode throwaway-unmount beacon (see MIN_VIEW_MS).
+      if (Date.now() - mountedAt < MIN_VIEW_MS) return;
+      if (statusRef.current !== 'unacknowledged') return;
+      emitted = true;
+      flushFocus();
+      emitSilentlyDismissed({
+        escalationId: escIdRef.current,
+        operatorId: OPERATOR_ID,
+        tViewed,
+        tDismissed: new Date().toISOString(),
+        dwellFocusMs,
+      });
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    // beforeunload covers tab close / browser quit (unmount does not fire then).
+    window.addEventListener('beforeunload', emitIfUnacknowledged);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('beforeunload', emitIfUnacknowledged);
+      // Route change / parent clearing the selection → component unmounts here.
+      emitIfUnacknowledged();
+    };
+  // Re-arm per escalation id: opening a different escalation starts a fresh dwell
+  // window. status is read via statusRef inside, so it is intentionally not a dep.
+  }, [escalation?.id]);
 
   const toggleTag = (tag) => {
     setSelectedTags(prev =>

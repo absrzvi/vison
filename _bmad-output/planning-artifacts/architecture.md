@@ -698,6 +698,23 @@ cloud-backend/tests/integration/test_alerts_sse.py
 
 **Consumes/extends:** ADR-20 (SSE fan-out), the ingest loop (ADR-19 landside path). **Feeds:** E10-S2 `escalation_audit` (the audit hooks the transition points defined here).
 
+#### ADR-22: Behavioural Telemetry & Alert Effectiveness (2026-06-13)
+
+**Context:** Measuring whether alerts change operator behaviour (E10-S2) requires every escalation lifecycle transition recorded as operator-attributable telemetry, queryable as funnels, and summarised weekly — so that after the pilot we can identify which alert classes have the highest ack-to-action rate, which are silently dismissed, and which confidence thresholds need retuning. ADR-21 established the authoritative transition points this audits.
+
+**Decision (story E10-S2):**
+
+- **Append-only `escalation_audit`, one row per transition** (`raised | acknowledged | resolved | silently_dismissed`), NOT one mutable row per escalation. A full lifecycle is 3+ rows. This makes the funnel a simple `GROUP BY alert_code, transition` and preserves per-event timestamps. The FK `escalation_id` matches `escalations.escalation_id` (uuid, per ADR-21). Each row **denormalises** `t_fired`, `alert_code`, `confidence_*`, `model_versions` from the escalations row at transition time, so the funnel needs no join back to `events`. `action_tags` (canonical keys) populate only on `resolved`; `dwell_focus_ms` only on `silently_dismissed`; `operator_id` is NULL on `raised`.
+- **Audit writes hook ADR-21's transition points**, inside the same DB transaction and gated by the same `rowcount==1` guard, so idempotent / concurrent-loser transitions never double-write. acknowledged/resolved use `INSERT … SELECT FROM escalations` to read the freshly-written transition time atomically.
+- **Silent dismissal** is the one transition ADR-21 does not capture (a non-action: the operator opens an unacknowledged panel and leaves without acknowledging). The CC detects it client-side and POSTs `…/silently-dismissed`; the backend re-checks status server-side and only appends an audit row while still `unacknowledged` (the client may race a concurrent ack). `dwell_focus_ms` is **focus-time** (visibilitychange-gated), not wall-clock. The beacon uses `fetch(…, { keepalive: true })` — the documented sendBeacon successor — because it survives page unload **and** can send the `X-API-Key` header that auth requires (plain `navigator.sendBeacon` cannot set headers).
+- **Funnel window is computed on the DB clock, not the app clock.** When `from`/`to` are omitted the window defaults to `[NOW() - 7d, NOW()]` evaluated in SQL (`COALESCE`), not a Python `datetime.now()`. A Python upper bound dropped acknowledged rows whose `t_event` was stamped by Postgres `NOW()` a few ms ahead of the app clock — a real undercount under app↔DB clock skew. Latency percentiles use `PERCENTILE_CONT(…) WITHIN GROUP (…) FILTER (WHERE transition='acknowledged')`; null-confidence (`sensor`-basis) rows never break aggregation.
+- **Weekly report has no in-process scheduler.** cloud-backend has only a FastAPI startup hook — no APScheduler/Celery. The report ships as an idempotent callable + thin CLI (`python -m cloud_backend.services.alert_effectiveness_report`), invoked by a **GitLab CI scheduled pipeline** (Monday 06:00 UTC, `rules: - if: $CI_PIPELINE_SOURCE == "schedule"`), consistent with ADR-12. Output is a CI artifact, gitignored from source.
+- **GDPR (NFR6):** the only operator-identifying field persisted is `operator_id` (the `VITE_OPERATOR_ID` approximation from ADR-21; Epic 11 replaces with JWT identity). No name/email/face/bbox/passenger PII enters the audit log.
+
+**Migration:** `cloud-backend/migrations/versions/0007_escalation_audit.py` — new table only, safe under concurrent reads. Indices on `alert_code`, `operator_id`, `t_fired`.
+
+**Consumes/extends:** ADR-21 (transition points + escalations schema), ADR-10 (error envelope, reused for the funnel's 422), ADR-12 (GitLab CI scheduling).
+
 #### ADR-10: API Error Envelope
 
 **Decision:** Standard error response for all REST and WebSocket error conditions:

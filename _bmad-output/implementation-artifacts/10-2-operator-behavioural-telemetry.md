@@ -1,6 +1,10 @@
+---
+baseline_commit: 7afda88e48cb3fa36488fc330bead8ade01bb35c
+---
+
 # Story 10.2: Operator Behavioural Telemetry
 
-Status: ready-for-dev
+Status: review
 
 <!-- Created 2026-06-13 via bmad-create-story (Amelia).
      DEPENDS ON 10-6 (escalation-lifecycle-persistence) — must land first. 10-6 builds the `escalations`
@@ -49,27 +53,27 @@ Given migration `0007_escalation_audit.py` (`down_revision="0006"`), then it cre
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — migration `0007_escalation_audit.py`** (AC1, AC5)
-  - [ ] `revision="0007"`, `down_revision="0006"` (10-6 adds 0006). Columns per AC1; `transition` CHECK constraint; `JSONB` for `action_tags`/`model_versions`; `TIMESTAMP(timezone=True)`. Indices `ix_escalation_audit_alert_code`, `_operator_id`, `_t_fired`.
-  - [ ] Extend [test_migrations.py](../../cloud-backend/tests/integration/test_migrations.py) with `test_escalation_audit_table_columns`; confirm idempotency test green.
-- [ ] **T2 — audit-write on transition** (AC1)
-  - [ ] **READ FIRST (UPDATE file):** 10-6's `cloud-backend/src/cloud_backend/routes/escalations.py` (acknowledge/resolve handlers) and `routes/ingest.py` (ALERT_RAISED→escalations upsert). Append an `escalation_audit` insert at each transition point: `raised` (in ingest, alongside the 10-6 escalations upsert), `acknowledged`/`resolved` (in 10-6's endpoints). Reuse the same DB transaction.
-  - [ ] RED tests: ingest ALERT_RAISED → 1 `raised` audit row; acknowledge → +1 `acknowledged` row; resolve → +1 `resolved` row.
-- [ ] **T3 — silently-dismissed endpoint + audit** (AC2)
-  - [ ] In 10-6's `routes/escalations.py`: `POST /{escalation_id}/silently-dismissed` (body `{operator_id, t_viewed, t_dismissed, dwell_focus_ms}`). Guard: only append audit row if the escalation is still `unacknowledged` (server-side re-check — client may race a concurrent ack). Does NOT change `escalations.status`. Returns `204`.
-- [ ] **T4 — funnel endpoint** (AC3)
-  - [ ] New `cloud-backend/src/cloud_backend/routes/escalations_audit.py`: `APIRouter(prefix="/api/v1/escalations-audit", dependencies=[Security(require_api_key)])`. `from_: str|None = Query(None, alias="from")` (‘from’ is a Python keyword), `to`, `alert_code`. Validate ISO; reuse analytics `_parse_range`/error shape ([analytics.py:39-58](../../cloud-backend/src/cloud_backend/routes/analytics.py)).
-  - [ ] Single aggregation query: `GROUP BY alert_code`, conditional counts per `transition`, `PERCENTILE_CONT(0.5/0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (t_event - t_fired)))` filtered to `acknowledged` rows, `action_tag_distribution` via `jsonb_object_agg` or Python rollup over `resolved` rows' `action_tags`.
-  - [ ] Pydantic response model in `cloud-backend/src/cloud_backend/api/escalations_audit.py`; `response_model=None` to allow the 422 JSONResponse path. Register router in [main.py](../../cloud-backend/src/cloud_backend/main.py).
-- [ ] **T5 — CC silent-dismissal telemetry** (AC2, D5)
-  - [ ] **READ FIRST (UPDATE file):** [control-centre/src/components/live/EscalationDetail.jsx](../../control-centre/src/components/live/EscalationDetail.jsx) — see Dev Notes §EscalationDetail. Add `control-centre/src/lib/telemetry/dismissal.js`: `emitSilentlyDismissed({escalationId, operatorId, tViewed, tDismissed, dwellFocusMs})` using `navigator.sendBeacon` to the AC2 endpoint.
-  - [ ] In EscalationDetail: on mount capture `t_viewed`; wire `visibilitychange` to accumulate focus-time into a `useRef`; on unmount cleanup AND `beforeunload`, if `statusRef.current === 'unacknowledged'`, emit dismissal. Mirror `escalation.status` + dwell counters via `useRef` (stale-closure trap — Dev Notes).
-  - [ ] **Browser-verify** (control-centre/CLAUDE.md): open an unack escalation, navigate away → confirm beacon fires with correct dwell; acknowledge then navigate → confirm NO beacon. Check console clean.
-- [ ] **T6 — weekly report callable** (AC4, D4)
-  - [ ] `cloud-backend/src/cloud_backend/services/alert_effectiveness_report.py`: `async def generate_alert_effectiveness_report(db, iso_year, iso_week) -> Path`. Structure mirrors the service-module precedent [heartbeat_ingest.py](../../cloud-backend/src/cloud_backend/services/heartbeat_ingest.py). Idempotent write to `reports/alert-effectiveness-{YYYY-WW}.md`.
-  - [ ] Thin CLI entrypoint (`python -m cloud_backend.services.alert_effectiveness_report`) + a `.gitlab-ci.yml` scheduled job (Monday 06:00 UTC, `rules: - if: $CI_PIPELINE_SOURCE == "schedule"`) — **Tier 3, CI config on shared infra, default permission mode required**. Configure the schedule in GitLab CI/CD → Schedules.
-- [ ] **T7 — gates + GDPR** (AC6): cloud-backend `pytest` (≥80%), `ruff`, `mypy`; CC `lint`+`vitest`; grep audit-write paths to confirm no PII field beyond `operator_id` is persisted.
-- [ ] **T8 — ADR** (freshness): extend **ADR-21** (added by 10-6) or add **ADR-22 "Behavioural Telemetry & Alert Effectiveness"** documenting `escalation_audit` append-only semantics, silent-dismissal detection, and the external report schedule. Same commit.
+- [x] **T1 — migration `0007_escalation_audit.py`** (AC1, AC5)
+  - [x] `revision="0007"`, `down_revision="0006"`. Columns per AC1; `transition` CHECK constraint; `JSONB` for `action_tags`/`model_versions`; `TIMESTAMP(timezone=True)`. Indices `ix_escalation_audit_alert_code`, `_operator_id`, `_t_fired`. **Reconciliation:** `escalation_id` is `UUID(as_uuid=False)` (FK must match 10-6's `escalations.escalation_id` uuid PK), not TEXT as AC1 loosely stated.
+  - [x] Extended [test_migrations.py](../../cloud-backend/tests/integration/test_migrations.py) with `test_escalation_audit_table_columns` + `test_escalation_audit_transition_check_constraint`; idempotency test green against real Postgres.
+- [x] **T2 — audit-write on transition** (AC1)
+  - [x] New `services/escalation_audit.py` helpers; hooked into `routes/ingest.py` (`raised`, gated on escalations-insert rowcount) and `routes/escalations.py` ack/resolve handlers (gated on the same `rowcount==1` guard, INSERT…SELECT before commit reads fresh `t_ack`/`t_resolve`).
+  - [x] RED→GREEN integration tests: raised/full-lifecycle (3 rows), idempotent ack/resolve no-double-write, re-ingest no-double-write, empty-payload no-row.
+- [x] **T3 — silently-dismissed endpoint + audit** (AC2)
+  - [x] `POST /{escalation_id}/silently-dismissed` in `routes/escalations.py` (body `{operator_id, t_viewed, t_dismissed, dwell_focus_ms}`). Server-side re-check: appends audit row only while `unacknowledged`; never changes `escalations.status`; returns `204`. Tests: row+204, skip-when-acked, 404, 401.
+- [x] **T4 — funnel endpoint** (AC3)
+  - [x] New `routes/escalations_audit.py`: router-level `Security(require_api_key)`, `from`/`to` ISO params + `alert_code`. **Window computed on DB clock** (`COALESCE(:from, NOW()-7d)` / `COALESCE(:to, NOW())`) — fixed a real app↔DB clock-skew undercount (see Completion Notes).
+  - [x] Single `GROUP BY alert_code` aggregation: conditional counts per transition, `PERCENTILE_CONT(0.5/0.95) WITHIN GROUP (… FILTER acknowledged)`, action_tag_distribution via `LATERAL jsonb_array_elements_text` + Python rollup.
+  - [x] Pydantic `AlertFunnel` in `api/escalations_audit.py`; `response_model=None`. Registered in [main.py](../../cloud-backend/src/cloud_backend/main.py). Unit (auth/422) + integration (aggregation/null-confidence/filter) tests.
+- [x] **T5 — CC silent-dismissal telemetry** (AC2, D5)
+  - [x] `control-centre/src/lib/telemetry/dismissal.js`: `emitSilentlyDismissed(...)`. **D5 deviation (approved):** uses `fetch(…, {keepalive:true})` not `navigator.sendBeacon` — sendBeacon cannot send the `X-API-Key` header auth requires; keepalive is the documented successor that survives unload AND sends headers.
+  - [x] EscalationDetail: mount `t_viewed`, `visibilitychange` focus-time accumulation in `useRef`, status mirrored in `useRef`, emit on unmount + `beforeunload` while unacknowledged. Double-emit + StrictMode-throwaway guards. Vitest for dismissal.js (4 tests).
+  - [x] **Browser-verified** (Claude Preview): unack→navigate-away fired exactly 1 keepalive beacon with correct dwell (11.4s) + `X-API-Key`; acknowledge→navigate fired NO beacon; console clean (only pre-existing mock-mode `fetchTrainAlerts` noise).
+- [x] **T6 — weekly report callable** (AC4, D4)
+  - [x] `services/alert_effectiveness_report.py`: `generate_alert_effectiveness_report(db, iso_year, iso_week) -> Path` — retune candidates, median ack latency, alert_class_state enable/disable events, silent-dismissal rate. Idempotent overwrite. Empty-week safe (no divide-by-zero). TypedDicts for mypy --strict.
+  - [x] Thin CLI (`python -m cloud_backend.services.alert_effectiveness_report`) + `.gitlab-ci.yml` `report` stage scheduled job (Mon 06:00 UTC, `rules: schedule`). `reports/` gitignored (CI artifact). **GitLab CI/CD → Schedules must be configured in the GitLab UI (manual infra step).**
+- [x] **T7 — gates + GDPR** (AC6): cloud-backend `pytest` **168 passed, 82.74% cov** (≥80); `ruff` + `mypy --strict` clean package-wide; CC `vitest` **247 passed**, eslint clean on new files; audit-write paths grepped — **no PII beyond `operator_id`**.
+- [x] **T8 — ADR**: added **ADR-22 "Behavioural Telemetry & Alert Effectiveness"** to [architecture.md](../planning-artifacts/architecture.md) — append-only audit semantics, silent-dismissal detection, keepalive-vs-sendBeacon, DB-clock funnel window, external report schedule, GDPR.
 
 ## Dev Notes
 
@@ -113,8 +117,58 @@ cloud-backend `pytest -m unit`/`-m integration` (testcontainers), ≥80% coverag
 
 ### Agent Model Used
 
+Amelia (claude-opus-4-8[1m]) — dev-story workflow, 2026-06-13.
+
 ### Debug Log References
+
+- **Funnel undercount (clock skew) — root-caused + fixed.** The full suite intermittently failed `test_funnel_*` with `count_acknowledged`/`count_resolved` lower than the raw table. Isolated via a throwaway diagnostic test: a raw session saw 3 acknowledged rows while the HTTP funnel saw 0–1 *in the same moment*. Cause: the default funnel upper bound was a Python `datetime.now(UTC)`, ~26 ms **behind** the Postgres clock; acknowledged/resolved audit rows are stamped with DB `NOW()` (`t_ack`/`t_resolve`), so they fell *after* the Python `:to` and were excluded. `raised` rows (stamped from the Python-parsed ingest timestamp) were unaffected, which is why only post-raise transitions undercounted. Fix: compute the default window entirely in SQL — `COALESCE(:from, NOW()-7d)` / `COALESCE(:to, NOW())`. Verified deterministic across 5+ full-suite runs. This is a genuine production bug under app↔DB clock skew, not a test artifact.
 
 ### Completion Notes List
 
+- **All 6 ACs satisfied.** escalation_audit append-only (AC1), silent-dismissal endpoint + CC beacon (AC2), funnel with DB-clock window + percentiles + tag distribution (AC3), idempotent weekly report callable + CLI + GitLab schedule (AC4), migration 0007 safe+indexed (AC5), gates+GDPR (AC6).
+- **Schema reconciliation (AC1):** `escalation_audit.escalation_id` is `UUID(as_uuid=False)` to match 10-6's `escalations.escalation_id` PK type for the FK — AC1's "TEXT" predated 10-6's locked uuid type. `audit_id` PK stays TEXT as specified.
+- **D5 deviation (user-approved):** the dismissal beacon uses `fetch(…, {keepalive:true})` instead of `navigator.sendBeacon`. sendBeacon cannot set the `X-API-Key` header the endpoint's auth requires; keepalive fetch is the documented sendBeacon successor — survives page unload AND sends headers. Confirmed with the user before deviating from the locked D5 mechanism.
+- **React StrictMode guard:** the dwell-tracking effect's cleanup would emit a spurious `dwell≈0` beacon during StrictMode's dev-only throwaway mount/unmount. Suppressed via a `MIN_VIEW_MS=100` mount-age guard (StrictMode remount is synchronous; a real human view always exceeds it). Browser-verified: open now fires 0 beacons; genuine view + navigate fires exactly 1.
+- **Browser verification (mandatory, control-centre/CLAUDE.md):** both AC2 flows verified in Claude Preview against the mock dev server with a fetch spy. Scenario A (unack → close/route-change): 1 keepalive beacon, `POST …/silently-dismissed`, `X-API-Key` present, real focus-time dwell, snake_case body. Scenario B (acknowledge → close): 0 beacons. Console clean apart from pre-existing mock-mode `fetchTrainAlerts` JSON-parse errors (no backend wired in mock mode — unrelated to this story).
+- **Pre-existing debt cleared out-of-band:** a background cleanup task (spawned during this story to fix package-wide pre-existing ruff/mypy debt flagged at baseline 7afda88) added a `None`-guard to `routes/preferences.py:138` and cleared the remaining ruff violations. As a result `mypy --strict src/` and `ruff check src/ tests/` are now clean **package-wide** (31 files). `preferences.py` is **not** part of this story's feature — attributed to that cleanup task. I also fixed two pre-existing `ingest.py` ruff errors (unused `HTTPException` import + one long line) since I was editing that file and they block the shared lint gate.
+- **GDPR (NFR6):** all three audit-write sites persist only `operator_id` as operator-identifying data (the `VITE_OPERATOR_ID` approximation; Epic 11 replaces with JWT). No name/email/face/bbox/passenger PII. Grep-confirmed.
+- **D3 PoC default still pending ÖBB confirmation** (action-tag taxonomy, inherited from 10-6) — non-blocking.
+- **Manual infra step (Tier 3):** the GitLab CI **Schedule** (Monday 06:00 UTC) for the `report:alert-effectiveness` job must be created in the GitLab UI (CI/CD → Schedules) and the `DATABASE_URL` CI variable set (masked). The `.gitlab-ci.yml` job + `rules: schedule` gate are in place; the schedule itself is a GitLab-side configuration.
+
 ### File List
+
+**cloud-backend — new:**
+- `cloud-backend/migrations/versions/0007_escalation_audit.py`
+- `cloud-backend/src/cloud_backend/services/escalation_audit.py`
+- `cloud-backend/src/cloud_backend/routes/escalations_audit.py`
+- `cloud-backend/src/cloud_backend/api/escalations_audit.py`
+- `cloud-backend/src/cloud_backend/services/alert_effectiveness_report.py`
+- `cloud-backend/tests/integration/test_escalation_audit.py`
+- `cloud-backend/tests/unit/test_escalations_audit_security.py`
+
+**cloud-backend — modified:**
+- `cloud-backend/src/cloud_backend/routes/ingest.py` (raised audit hook + pre-existing ruff fixes)
+- `cloud-backend/src/cloud_backend/routes/escalations.py` (ack/resolve audit hooks + silently-dismissed endpoint)
+- `cloud-backend/src/cloud_backend/api/escalations.py` (`SilentlyDismissedRequest`)
+- `cloud-backend/src/cloud_backend/main.py` (register escalations_audit router)
+- `cloud-backend/tests/integration/test_migrations.py` (escalation_audit column + CHECK tests)
+
+**control-centre — new:**
+- `control-centre/src/lib/telemetry/dismissal.js`
+- `control-centre/src/lib/telemetry/__tests__/dismissal.test.js`
+
+**control-centre — modified:**
+- `control-centre/src/components/live/EscalationDetail.jsx` (dwell tracking + dismissal emission)
+
+**repo / infra:**
+- `.gitlab-ci.yml` (`report` stage + scheduled `report:alert-effectiveness` job)
+- `.gitignore` (`cloud-backend/reports/`)
+- `_bmad-output/planning-artifacts/architecture.md` (ADR-22)
+
+**Not attributable to this story** (out-of-band cleanup task): `cloud-backend/src/cloud_backend/routes/preferences.py`.
+
+### Change Log
+
+| Date | Change |
+|---|---|
+| 2026-06-13 | E10-S2 implemented: escalation_audit (Alembic 0007), audit-write hooks at all 3 transitions + silently-dismissed endpoint, funnel `GET /escalations-audit`, CC dismissal beacon (keepalive fetch), weekly report callable + GitLab CI schedule, ADR-22. Fixed a real app↔DB clock-skew funnel undercount (DB-clock window). cloud-backend 168 pass / 82.74% cov; CC 247 vitest pass; ruff+mypy --strict clean package-wide; browser-verified. Status → review. |

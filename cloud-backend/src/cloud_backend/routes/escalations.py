@@ -13,15 +13,21 @@ from __future__ import annotations
 import json
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Security
+from fastapi import APIRouter, Depends, HTTPException, Response, Security
 from sqlalchemy import text
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.auth import require_api_key
-from ..api.escalations import ACTION_TAG_KEYS, AckRequest, ResolveRequest
+from ..api.escalations import (
+    ACTION_TAG_KEYS,
+    AckRequest,
+    ResolveRequest,
+    SilentlyDismissedRequest,
+)
 from ..database import get_db
 from ..routes.alerts_sse import publish_alert
+from ..services.escalation_audit import record_silently_dismissed, record_transition
 
 log = structlog.get_logger()
 
@@ -76,10 +82,20 @@ async def acknowledge_escalation(
             """),
             {"id": escalation_id, "op": body.operator_id},
         )
-        await db.commit()
         # Review R1: only fan out + log when this request actually transitioned the
         # row. Under a concurrent ack race the loser matches 0 rows — no duplicate
-        # SSE frame, no duplicate log.
+        # SSE frame, no duplicate log. E10-S2: same gate guards the audit write so a
+        # losing/idempotent ack does not append a duplicate 'acknowledged' row.
+        # The audit INSERT...SELECT runs before commit (same transaction) and after
+        # the UPDATE so it reads the freshly written t_ack.
+        if result.rowcount == 1:
+            await record_transition(
+                db,
+                escalation_id=escalation_id,
+                transition="acknowledged",
+                operator_id=body.operator_id,
+            )
+        await db.commit()
         if result.rowcount == 1:
             _publish_lifecycle(escalation_id, "acknowledged")
             log.info(
@@ -129,8 +145,18 @@ async def resolve_escalation(
                 "tags": json.dumps(keys),
             },
         )
-        await db.commit()
         # Review R1: fan out + log only when this request transitioned the row.
+        # E10-S2: same gate guards the audit write. The INSERT...SELECT runs before
+        # commit and after the UPDATE so it reads the freshly written t_resolve and
+        # action_tags (canonical keys) off the escalations row.
+        if result.rowcount == 1:
+            await record_transition(
+                db,
+                escalation_id=escalation_id,
+                transition="resolved",
+                operator_id=body.operator_id,
+            )
+        await db.commit()
         if result.rowcount == 1:
             _publish_lifecycle(escalation_id, "resolved")
             log.info(
@@ -140,3 +166,39 @@ async def resolve_escalation(
             )
 
     return {"escalation_id": escalation_id, "status": "resolved"}
+
+
+@router.post("/{escalation_id}/silently-dismissed", status_code=204)
+async def silently_dismiss_escalation(
+    escalation_id: str,
+    body: SilentlyDismissedRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """E10-S2 AC2: record that an operator viewed an unacknowledged escalation and
+    left without acknowledging. A non-action — it never changes escalations.status.
+
+    Server-side re-check: only append the audit row while the escalation is still
+    unacknowledged. The client may race a concurrent ack (another operator, or this
+    operator in another tab); a dismissal that lost the race is silently ignored.
+    """
+    status = await _get_status(db, escalation_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail={"detail": "escalation not found"})
+
+    if status == "unacknowledged":
+        await record_silently_dismissed(
+            db,
+            escalation_id=escalation_id,
+            operator_id=body.operator_id,
+            t_event=body.t_dismissed,
+            dwell_focus_ms=body.dwell_focus_ms,
+        )
+        await db.commit()
+        log.info(
+            "escalation_silently_dismissed",
+            escalation_id=escalation_id,
+            operator_id=body.operator_id,
+            dwell_focus_ms=body.dwell_focus_ms,
+        )
+
+    return Response(status_code=204)

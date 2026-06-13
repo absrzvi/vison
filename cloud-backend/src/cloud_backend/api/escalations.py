@@ -7,6 +7,8 @@ labels are display-only. PoC default pending ÖBB confirmation (D3).
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 # UI label → canonical key. Landside Fleet Manager outcomes only (no conductor,
@@ -27,3 +29,15 @@ class ResolveRequest(BaseModel):
     outcome: str = Field(min_length=1, max_length=200)
     action_tags: list[str] = Field(min_length=1)
     operator_id: str = Field(min_length=1)
+
+
+class SilentlyDismissedRequest(BaseModel):
+    """Telemetry beacon (E10-S2 AC2) — the operator viewed an unacknowledged
+    escalation and left without acknowledging. dwell_focus_ms is tab-focused time
+    (visibilitychange-gated), not wall-clock; t_viewed/t_dismissed are the
+    client-side view window, retained for context."""
+
+    operator_id: str = Field(min_length=1)
+    t_viewed: datetime
+    t_dismissed: datetime
+    dwell_focus_ms: int = Field(ge=0)
