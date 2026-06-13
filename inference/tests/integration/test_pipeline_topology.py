@@ -192,3 +192,135 @@ def test_non_person_detection_classes_rejected(pipeline_mod: Any, door_callbacks
     wide = Settings(detection_classes=["person", "suitcase"])
     with pytest.raises(ValueError, match="person-only"):
         pipeline_mod.InferencePipeline(callbacks=door_callbacks, settings=wide)
+
+
+# ---------------------------------------------------------------------------
+# R2-D1: multi-source dispatch / stream-id resolution.
+#
+# The string-builder tests above never invoke _dispatch, so the multiplexed
+# routing path was untested — and previously raised NotImplementedError on the
+# first buffer of any >1-camera deploy. These tests exercise the real routing.
+# ---------------------------------------------------------------------------
+
+
+def _routable_callback(camera_id: str) -> Any:
+    """A callable stub callback with a real ReadinessHolder and call recorder.
+
+    _dispatch reads ``callback._readiness`` and invokes ``callback(buffer, user_data)``,
+    so the stub needs both — the duck-typed build-string stub above has neither.
+    """
+    from inference.models import ReadinessHolder
+
+    calls: list[tuple[Any, Any]] = []
+
+    def _cb(buffer: Any, user_data: Any) -> None:
+        calls.append((buffer, user_data))
+
+    cb = _cb  # function object; _dispatch calls it directly
+    cb._readiness = ReadinessHolder(camera_id=camera_id, ready=False)  # type: ignore[attr-defined]
+    cb.camera_id = camera_id  # type: ignore[attr-defined]
+    cb._rtsp_url = f"rtsp://cam/{camera_id}"  # type: ignore[attr-defined]
+    cb.calls = calls  # type: ignore[attr-defined]
+    return cb
+
+
+def _stub_hailo_with_stream_id(stream_id: str) -> Any:
+    """A `hailo` module stub whose ROI returns the given stream-id string.
+
+    Mirrors how _resolve_stream_index reads identity:
+    ``hailo.get_roi_from_buffer(buffer).get_stream_id()``.
+    """
+    roi = types.SimpleNamespace(get_stream_id=lambda: stream_id)
+    return types.SimpleNamespace(get_roi_from_buffer=lambda buffer: roi)
+
+
+@pytest.fixture
+def dispatch_pipe(pipeline_mod: Any, settings: Settings) -> Any:
+    """A 3-camera InferencePipeline whose callbacks record their invocations."""
+    cbs = [_routable_callback(f"C1_DOOR_{i:02d}") for i in range(3)]
+    pipe = pipeline_mod.InferencePipeline(callbacks=cbs, settings=settings)
+    return pipe
+
+
+@pytest.mark.integration
+def test_dispatch_routes_each_stream_to_its_own_callback(
+    pipeline_mod: Any, dispatch_pipe: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A buffer stamped sink_<n> must reach ONLY callback n and flip ONLY its readiness."""
+    pipe = dispatch_pipe
+    for index in range(3):
+        buffer = object()
+        monkeypatch.setattr(
+            pipeline_mod, "hailo", _stub_hailo_with_stream_id(f"sink_{index}")
+        )
+        pipe._dispatch(buffer, None)
+        # routed to the right callback…
+        assert pipe._by_stream[index].calls == [(buffer, None)]
+        # …and to no other callback
+        for other in range(3):
+            if other != index:
+                assert pipe._by_stream[other].calls == []
+        # readiness flipped True only for this stream
+        assert pipe._by_stream[index]._readiness.ready is True
+        # reset recorder for the next iteration's cross-check
+        pipe._by_stream[index].calls.clear()
+
+
+@pytest.mark.integration
+def test_dispatch_misroute_is_caught(
+    pipeline_mod: Any, dispatch_pipe: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Guard: a buffer for stream 2 must NOT land on callback 0.
+
+    This is the test the original code lacked — if a future stream-id convention
+    change silently mapped every buffer to index 0, this fails loudly.
+    """
+    pipe = dispatch_pipe
+    buffer = object()
+    monkeypatch.setattr(pipeline_mod, "hailo", _stub_hailo_with_stream_id("sink_2"))
+    pipe._dispatch(buffer, None)
+    assert pipe._by_stream[2].calls == [(buffer, None)]
+    assert pipe._by_stream[0].calls == []
+    assert pipe._by_stream[1].calls == []
+
+
+@pytest.mark.integration
+def test_dispatch_unknown_stream_id_drops_without_raising(
+    pipeline_mod: Any, dispatch_pipe: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unmappable stream-id must drop the buffer (no raise, no mis-route).
+
+    Regression for R2-D1: the GStreamer callback path must never raise — a raise
+    there tears down the pipeline thread and wedges /health/ready at 503.
+    """
+    pipe = dispatch_pipe
+    # stream-id with no trailing index, and an out-of-range index — both unresolvable.
+    for bad_id in ("camera_front", "sink_99"):
+        monkeypatch.setattr(pipeline_mod, "hailo", _stub_hailo_with_stream_id(bad_id))
+        pipe._dispatch(object(), None)  # must not raise
+    for index in range(3):
+        assert pipe._by_stream[index].calls == []
+        assert pipe._by_stream[index]._readiness.ready is False
+
+
+@pytest.mark.integration
+def test_dispatch_single_source_skips_stream_id_read(
+    pipeline_mod: Any, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One camera ⇒ index 0 fast path, even if hailo is unavailable / id is blank."""
+    cb = _routable_callback("C1_DOOR_00")
+    pipe = pipeline_mod.InferencePipeline(callbacks=[cb], settings=settings)
+    monkeypatch.setattr(pipeline_mod, "hailo", None)  # would force _UNKNOWN if read
+    buffer = object()
+    pipe._dispatch(buffer, None)
+    assert cb.calls == [(buffer, None)]
+    assert cb._readiness.ready is True
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("stream_id", "expected"),
+    [("sink_0", 0), ("sink_7", 7), ("src_3", 3), ("3", 3), ("", -1), ("front", -1)],
+)
+def test_parse_stream_index(pipeline_mod: Any, stream_id: str, expected: int) -> None:
+    assert pipeline_mod._parse_stream_index(stream_id) == expected
