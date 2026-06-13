@@ -63,6 +63,27 @@ _ACCESSIBILITY = {
 }
 
 
+_WAGON_EXIT = {
+    "event_id": "c1b2c3d4-e5f6-4789-abcd-ef1234567892",
+    "journey_id": _JOURNEY,
+    "vehicle_id": "V001",
+    "timestamp": "2026-05-17T10:00:02Z",
+    "event_type": "WAGON_EXIT",
+    "severity": "info",
+    "source": "inference",
+    "schema_version": 1,
+    "payload": {
+        "track_id": 312,
+        "coach_from": "car-3",
+        "coach_to": "car-4",
+        "camera_id": "cam-3-gangway-fwd",
+        "traversal": "from_to",
+        "confidence": 0.88,
+        "expect_orphan": False,
+    },
+}
+
+
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     db_file = str(tmp_path / "test.db")
@@ -96,6 +117,23 @@ def test_egress_strips_bag_pii(client: TestClient) -> None:
     # Operational fields survive — the alert stays actionable for operators.
     assert payload["car_id"] == "car-3"
     assert payload["dwell_s"] == 180.0
+
+
+@pytest.mark.integration
+def test_egress_strips_wagon_pii(client: TestClient) -> None:
+    """WAGON_EXIT on the wire: camera_id dropped (locality tied to a tracked
+    person), int track_id tokenised to a str. (Round-2 P1+P2.)"""
+    assert client.post("/api/v1/events", json=_WAGON_EXIT).status_code == 201
+
+    r = client.get("/api/v1/events", params={"event_type": "WAGON_EXIT"})
+    assert r.status_code == 200
+    payload = r.json()["data"][0]["payload"]
+    assert "camera_id" not in payload
+    assert isinstance(payload["track_id"], str)
+    assert payload["track_id"].startswith("tk_")
+    # Operational fields survive — the traversal is still reconcilable in-cloud.
+    assert payload["coach_from"] == "car-3"
+    assert payload["coach_to"] == "car-4"
 
 
 @pytest.mark.integration

@@ -4,7 +4,10 @@ baseline_commit: 9d4a60dff0597b0d598c99c7fa6ed60bcb7f294f
 
 # Story 10.1: Alert Confidence Metadata, Kill-Switch & AI Pipeline Health
 
-Status: review
+Status: in-progress
+
+<!-- Round-2 review (2026-06-13): all decisions + patches resolved & verified (shared 192 / event-store 84 / fusion 155 / inference 26 green). Held at in-progress pending FIRST CI run of integration tests + Alembic migrations 0004/0005 (no local Docker) and tracking of R2-D1 (multiplexed pipeline >1-camera NotImplementedError — hardware-bring-up blocker). Flip to done once CI is green. -->
+
 
 <!-- Created 2026-05-30 via grill-me + party-mode session. Code-only scope — exec-failure playbook content moved to E10-S3. Renamed from "exec-failure-playbook-and-confidence-metadata" → "alert-confidence-and-ai-pipeline-health" to reflect actual shipped surface. -->
 
@@ -292,6 +295,41 @@ so that procurement conversations have a credible answer to "what happens when t
 - [x] [Review][Defer] `model_versions or {}` wiring footgun — production path is guarded (fatal at startup) but a future wiring miss ships empty provenance silently; consider startup warning [inference/src/inference/zone_counter.py:47, callback.py] — deferred, hardening
 - [x] [Review][Defer] Provenance cache keyed by nothing — second call with different Settings returns stale dict; single-call invariant undocumented outside tests [inference/src/inference/model_provenance.py:26] — deferred, hardening
 - [x] [Review][Defer] `git_sha` content not validated — whitespace/junk build-arg yields garbage `detector_code` fleet-wide [inference/src/inference/model_provenance.py:41] — deferred, hardening
+
+## Senior Developer Review (AI) — Round 2 (egress-anonymisation + pipeline-reconcile delta, 2026-06-13)
+
+<!-- Scope: post-R1 delta `89c5f24..HEAD` (22 files, 1197+/130-). Three adversarial layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor — all completed, none failed. Blind+Edge independently corroborated findings D1 and P1. Acceptance Auditor cleared the AC surface (egress preserves all AC-required fields; pipeline reconcile does not break AC5–7 heartbeat/provenance). -->
+
+### Decision-needed — RESOLVED (Abbas, 2026-06-13)
+
+- [x] [Review][Decision] **Fail-open default at egress boundary** → **RESOLVED: close it now (fail-closed).** `anonymise_envelope` returns the payload verbatim for any `event_type` not in `_DROP_EVENT_TYPES`/`_DROP_FIELDS`/`_TOKENISE_TRACK_ID`, leaking `VESTIBULE_CONGESTION`, `CAMERA_DEGRADED`/`CAMERA_RECOVERED` (raw `camera_id`), and free-text `ALERT_RAISED.description`. Promoted to Patch P3 (fail-closed default + CI drift test). [shared/src/oebb_shared/events/anonymise.py:80-100]
+- [x] [Review][Decision] **`bbox`/`camera_id` relaxed required→Optional** → **RESOLVED: accept the relaxation** (covered by contract test; deliberate so the redacted shape re-validates cloud-side; residual producer-omission risk accepted for PoC). No code change. [shared/src/oebb_shared/events/payloads.py:202-211,226-234]
+- [x] [Review][Decision] **32-bit anonymisation token collision risk** → **RESOLVED: bump to 16 hex (64-bit).** Promoted to Patch P4. [shared/src/oebb_shared/events/anonymise.py:52]
+
+### Patch (unambiguous fixes) — ALL APPLIED (Abbas chose "apply every patch", 2026-06-13)
+
+- [x] [Review][Patch] **WAGON_EXIT/WAGON_ENTRY token type mismatch stalls cloud-sync permanently (BLOCKER)** — FIXED: `WagonExitPayload.track_id`/`WagonEntryPayload.track_id` widened `int`→`int | str` (int from producer/tripwire, str "tk_…" token after egress; both re-validate on cloud ingest). Re-validation contract test `test_redacted_payloads_pass_eventenvelope_revalidation` extended to cover WAGON_EXIT/WAGON_ENTRY — this test now genuinely exercises the boundary that 422'd. [shared/src/oebb_shared/events/payloads.py:404-441 · shared/tests/contract/test_anonymise.py]
+- [x] [Review][Patch] **WAGON_EXIT/WAGON_ENTRY leak `camera_id` to the cloud** — FIXED: `camera_id` added to `_DROP_FIELDS` for both wagon types; `WagonExit/EntryPayload.camera_id` made `_NonEmptyStr | None` + `_drop_none` serializer (same pattern as BAG/DOOR) so the redacted shape re-validates. New `test_egress_strips_wagon_pii` integration test asserts camera_id absent + track_id tokenised on the wire. [shared/src/oebb_shared/events/anonymise.py:72-79 · payloads.py:404-441 · event-store/tests/integration/test_egress_anonymisation.py]
+- [x] [Review][Patch] **(P3, from Decision 1) Fail-closed egress default** — FIXED: added explicit `_PASS_THROUGH_EVENT_TYPES` allow-list; `anonymise_envelope` now withholds any event type absent from all policy buckets (`_KNOWN_EVENT_TYPES`). Three new drift-guard contract tests: `test_every_event_type_has_an_egress_policy` (every EventType except internal STREAM_PRIORITY must be classified — fails CI on a new unclassified type), `test_egress_policy_buckets_are_disjoint`, `test_unknown_event_type_is_withheld`. [shared/src/oebb_shared/events/anonymise.py · shared/tests/contract/test_anonymise.py]
+- [x] [Review][Patch] **(P4, from Decision 3) Widen anonymisation token to 64-bit** — FIXED: `_TOKEN_LEN` 8→16 hex; comment updated. [shared/src/oebb_shared/events/anonymise.py:86-89]
+
+**Verification (2026-06-13, model claude-fable-5):** shared 192 passed (mypy --strict clean, ruff: only the pre-existing `expect_orphan` E501 on baseline 89c5f24 — untouched per surgical-change rule), event-store 84 passed (incl. new WAGON egress test), fusion 155 passed, inference 26 wagon/tripwire passed. Zero regressions.
+
+### Defer (real, but hardware-gated or out of this change's scope)
+
+- [x] [Review][Defer] **Multiplexed pipeline cannot dispatch with >1 camera** — `_resolve_stream_index` raises `NotImplementedError` for `len(self._by_stream) != 1`, yet `main.py` ships the multi-source path and the topology test seeds 24 cameras. First buffer on any real multi-camera deploy raises on the GStreamer callback path → either tears down the pipeline thread (`_run` finally flips all readiness→False, `/health/ready` wedged at 503) or silently drops every buffer. String-builder tests pass because they never invoke `_dispatch`. [inference/src/inference/pipeline.py `_resolve_stream_index`/`_dispatch` · main.py `_run`] — deferred: self-labelled `HARDWARE-VERIFY pending`; only exercisable/fixable on-device (no local Hailo, matches story's "integration tests need first CI run" caveat). **Must be tracked as a hardware-bring-up blocker before any multi-camera run.**
+- [x] [Review][Defer] **No partial-batch flush timeout** — fps=5 × batch=8 with no `hailonet` flush/leaky-queue timeout: when active producers drop below 8 (dead/quiet cameras), the last partial batch waits for an 8th frame indefinitely; tripwire-counting latency degrades silently. [inference/src/inference/pipeline.py `_source_branch`/INFERENCE_PIPELINE call · config.py:pipeline_batch_size] — deferred: pipeline tuning needs real device timing; pairs with the hardware-bring-up item above.
+- [x] [Review][Defer] **`anonymise_page` has no per-row error isolation** — one row that raises inside `anonymise_envelope` (e.g. a non-dict payload from DB corruption) 500s the entire `GET /api/v1/events` page, stalling cloud-sync on a poison row. Fail-closed (won't leak) but brittle availability coupling. [event-store/src/event_store/egress_privacy.py:35-44] — deferred, hardening (per-row try/except + skip-and-log, aligns with event-store "untrusted input boundary").
+
+### Dismissed (documented intent / false positive / accepted decision) — 6
+
+- `bbox`/`camera_id` required→Optional relaxation — **accepted** (Abbas 2026-06-13): deliberate so redacted shape re-validates cloud-side, covered by a contract test; producer-omission risk accepted for PoC. No code change.
+
+- Dev-key fallback "fail-open / weakens token secrecy" — **documented & sanctioned** in event-store/CLAUDE.md + `egress_privacy.py` docstring ("fall back to a fixed dev key and emit a startup WARN… Production MUST set the env var"); same posture as `EVENT_STORE_API_KEY`.
+- `next_cursor` advances on all-withheld page → cloud-sync stall — **documented invariant** in event-store/CLAUDE.md ("`next_cursor` derived from the RAW DB page, before redaction… or cloud-sync would stall"); event-store side is correct, the rest is a cloud-sync consumer contract outside this diff.
+- `response_model=None` loses FastAPI response-schema guarantee — **documented & intended** (payload validated on ingest; cloud-backend re-validates); Auditor itself rated it acceptable.
+- `_resolve_stream_index` ignores its args — sub-observation of the multi-camera defer; not separately actionable.
+- `RAMP_DEPLOYED.triggered_by_track_id` → constant `"redacted"` asymmetry — the documented policy (anonymise.py docstring); non-empty value passes validation; no defect.
 
 ## Dev Agent Record
 

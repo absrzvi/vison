@@ -19,7 +19,14 @@ from __future__ import annotations
 import pytest
 
 from oebb_shared.events import EventEnvelope, anonymise_envelope
+from oebb_shared.events.anonymise import (
+    _DROP_EVENT_TYPES,
+    _KNOWN_EVENT_TYPES,
+    _PASS_THROUGH_EVENT_TYPES,
+    _REDACT_IN_PLACE_EVENT_TYPES,
+)
 from oebb_shared.events.payloads import DoorObstructionPayload, UnattendedBagPayload
+from oebb_shared.events.types import EventType
 
 _KEY = b"contract-test-key"
 _ALT_KEY = b"a-different-key"
@@ -69,6 +76,65 @@ _ACCESSIBILITY_PAYLOAD = {
     "model_versions": {"detector_arch": "yolox_s_leaky"},
 }
 
+# WAGON traversal payloads carry an INT track_id from the producer; egress
+# tokenises it to a str. Both shapes must survive EventEnvelope re-validation.
+_WAGON_EXIT_PAYLOAD = {
+    "track_id": 312,
+    "coach_from": "car-3",
+    "coach_to": "car-4",
+    "camera_id": "cam-3-gangway-fwd",
+    "traversal": "from_to",
+    "confidence": 0.88,
+    "expect_orphan": False,
+}
+
+_WAGON_ENTRY_PAYLOAD = {
+    "track_id": 312,
+    "coach_from": "car-3",
+    "coach_to": "car-4",
+    "camera_id": "cam-4-gangway-aft",
+    "traversal": "from_to",
+    "confidence": 0.91,
+}
+
+
+# ---------------------------------------------------------------------------
+# Fail-closed drift guard (Round-2 P3): every EventType must have an explicit
+# egress policy, so a new PII-bearing type cannot leak by default.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.contract
+def test_every_event_type_has_an_egress_policy() -> None:
+    """Adding an EventType without classifying it (drop / pass-through /
+    redact-in-place) must fail here, forcing a conscious egress decision.
+
+    STREAM_PRIORITY is the only exemption — it is an internal command never
+    written to event-store, so it never reaches the egress boundary."""
+    classified = _KNOWN_EVENT_TYPES
+    expected = {e.value for e in EventType} - {"STREAM_PRIORITY"}
+    missing = expected - classified
+    assert not missing, (
+        f"EventType(s) with no egress anonymisation policy: {sorted(missing)}. "
+        "Add each to a bucket in anonymise.py (drop / pass-through / drop-fields "
+        "/ tokenise) after deciding what is cloud-safe."
+    )
+
+
+@pytest.mark.contract
+def test_egress_policy_buckets_are_disjoint() -> None:
+    """A type must live in exactly one bucket — overlapping policy is ambiguous."""
+    assert _DROP_EVENT_TYPES.isdisjoint(_PASS_THROUGH_EVENT_TYPES)
+    assert _DROP_EVENT_TYPES.isdisjoint(_REDACT_IN_PLACE_EVENT_TYPES)
+    assert _PASS_THROUGH_EVENT_TYPES.isdisjoint(_REDACT_IN_PLACE_EVENT_TYPES)
+
+
+@pytest.mark.contract
+def test_unknown_event_type_is_withheld() -> None:
+    """An event type with no policy fails closed (withheld), never passed raw."""
+    env = _env("SOME_FUTURE_PII_EVENT", {"face_descriptor": [0.1, 0.2]})
+    assert anonymise_envelope(env, secret=_KEY) is None
+
 
 # ---------------------------------------------------------------------------
 # Article 9 — special-category event must NOT cross the boundary
@@ -94,29 +160,8 @@ def test_accessibility_detected_is_withheld() -> None:
     [
         ("UNATTENDED_BAG", _BAG_PAYLOAD),
         ("DOOR_OBSTRUCTION", _DOOR_PAYLOAD),
-        (
-            "WAGON_EXIT",
-            {
-                "track_id": 312,
-                "coach_from": "car-3",
-                "coach_to": "car-4",
-                "camera_id": "cam-3-gangway-fwd",
-                "traversal": "from_to",
-                "confidence": 0.88,
-                "expect_orphan": False,
-            },
-        ),
-        (
-            "WAGON_ENTRY",
-            {
-                "track_id": 312,
-                "coach_from": "car-3",
-                "coach_to": "car-4",
-                "camera_id": "cam-4-gangway-aft",
-                "traversal": "from_to",
-                "confidence": 0.91,
-            },
-        ),
+        ("WAGON_EXIT", _WAGON_EXIT_PAYLOAD),
+        ("WAGON_ENTRY", _WAGON_ENTRY_PAYLOAD),
     ],
 )
 def test_track_id_is_tokenised(event_type: str, payload: dict) -> None:
@@ -285,6 +330,11 @@ def test_redacted_payloads_pass_eventenvelope_revalidation() -> None:
     for event_type, payload in (
         ("UNATTENDED_BAG", _BAG_PAYLOAD),
         ("DOOR_OBSTRUCTION", _DOOR_PAYLOAD),
+        # WAGON events carry an int track_id that egress tokenises to a str —
+        # the redacted str MUST still validate against the int|str field, or the
+        # cloud-backend ingest batch 422s and cloud-sync stalls. (Round-2 P1.)
+        ("WAGON_EXIT", _WAGON_EXIT_PAYLOAD),
+        ("WAGON_ENTRY", _WAGON_ENTRY_PAYLOAD),
     ):
         red = anonymise_envelope(_env(event_type, payload), secret=_KEY)
         assert red is not None

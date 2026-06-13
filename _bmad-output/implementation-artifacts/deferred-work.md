@@ -452,3 +452,10 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - **D3** — No CI project-name isolation (`-p` flag on compose); parallel CI runs collide on port 8001 and `onboard_event_store_data` volume — PoC posture, revisit before fleet CI
 - **D4** — GET assertion uses `grep -q "SMOKE-TEST"` not structured jq validation — acceptable for smoke test, upgrade if false positives emerge
 - **D5** — Smoke test doesn't exercise event-store cursor pagination or event_type/severity filters — deferred, out of smoke scope
+
+
+## Deferred from: code review of 10-1-alert-confidence-and-ai-pipeline-health Round 2 (2026-06-13)
+
+- **R2-D1** — Multiplexed inference pipeline cannot dispatch with >1 camera: `_resolve_stream_index` raises `NotImplementedError` for `len(self._by_stream) != 1`, yet `main.py` ships the multi-source path and the topology test seeds 24 cameras. First buffer on any real multi-camera deploy raises on the GStreamer callback path → pipeline thread teardown (`/health/ready` wedged at 503) or silent buffer drop. Self-labelled `HARDWARE-VERIFY pending`; only fixable on-device. **HARDWARE-BRING-UP BLOCKER — must be resolved before any multi-camera run.** [inference/src/inference/pipeline.py `_resolve_stream_index`/`_dispatch`, main.py `_run`]
+- **R2-D2** — No partial-batch flush timeout (fps=5 × batch=8): when active producers drop below 8 (dead/quiet cameras) the last partial batch waits for an 8th frame indefinitely; tripwire-counting latency degrades silently. Pipeline tuning needs real device timing; pairs with R2-D1. [inference/src/inference/pipeline.py `_source_branch`, config.py:pipeline_batch_size]
+- **R2-D3** — `anonymise_page` has no per-row error isolation: one row that raises inside `anonymise_envelope` (e.g. a non-dict payload from DB corruption) 500s the entire `GET /api/v1/events` page, stalling cloud-sync on a poison row. Fail-closed (no leak) but brittle. Add per-row try/except + skip-and-log, aligns with event-store "untrusted input boundary." [event-store/src/event_store/egress_privacy.py:35-44]

@@ -402,26 +402,45 @@ TraversalStr = Literal["from_to", "to_from"]
 
 
 class WagonExitPayload(_BasePayload):
-    """WAGON_EXIT — person tracked crossing from one coach to the next."""
+    """WAGON_EXIT — person tracked crossing from one coach to the next.
 
-    track_id: int
+    track_id is int from the on-train producer (tripwire) and becomes a str
+    "tk_…" token after egress anonymisation; camera_id is Optional so the
+    anonymiser can DROP it on the train→cloud boundary (camera locality tied to a
+    tracked person). On-train producers always populate camera_id; the None case
+    exists only for the redacted cloud copy. See events/anonymise.py.
+    """
+
+    track_id: int | str
     coach_from: _NonEmptyStr
     coach_to: _NonEmptyStr
-    camera_id: _NonEmptyStr
+    camera_id: _NonEmptyStr | None = None
     traversal: TraversalStr
     confidence: Annotated[float, Field(ge=0.0, le=1.0)]
     expect_orphan: bool = False  # True when crossing is known to be unreconcilable (e.g. to_from on fwd camera)
 
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: Any) -> dict[str, Any]:
+        return _drop_none(handler(self), "camera_id")
+
 
 class WagonEntryPayload(_BasePayload):
-    """WAGON_ENTRY — same track_id confirmed entering adjacent coach."""
+    """WAGON_ENTRY — same track_id confirmed entering adjacent coach.
 
-    track_id: int
+    track_id int→str token and Optional camera_id for the same egress reason as
+    WagonExitPayload.
+    """
+
+    track_id: int | str
     coach_from: _NonEmptyStr
     coach_to: _NonEmptyStr
-    camera_id: _NonEmptyStr
+    camera_id: _NonEmptyStr | None = None
     traversal: TraversalStr
     confidence: Annotated[float, Field(ge=0.0, le=1.0)]
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: Any) -> dict[str, Any]:
+        return _drop_none(handler(self), "camera_id")
 
 
 class LedgerDriftObservationPayload(_BasePayload):

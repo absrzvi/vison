@@ -48,7 +48,8 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-17
-last_updated: 2026-06-12  # dev-story 2026-06-12 (Amelia): 10-1 → review. All 24 ACs; shared 172 / inference 159 (90.95%) / fusion 155 (94.15%, mypy --strict) / cloud-backend 83 unit / CC vitest 243 — all green. Integration tests + migrations 0004/0005 need first CI run (no local Docker). Deviations from AC text documented in story Completion Notes.
+last_updated: 2026-06-13  # code-review Round 2 (claude-fable-5): 10-1 → in-progress. Post-R1 delta (egress anonymisation + pipeline reconcile) reviewed by 3 adversarial layers. 3 decisions resolved (fail-closed egress, accept bbox/camera_id relaxation, 64-bit token), 4 patches applied + verified (P1 WAGON int|str token blocker + re-validation test, P2 WAGON camera_id drop, P3 fail-closed egress + drift tests, P4 64-bit token): shared 192 / event-store 84 / fusion 155 / inference 26 wagon — all green, mypy --strict clean. 3 defers (R2-D1 multiplexed-pipeline >1-cam NotImplementedError = hardware-bring-up blocker; R2-D2 no partial-batch flush; R2-D3 anonymise_page per-row isolation) in deferred-work.md. Held in-progress pending FIRST CI run of integration tests + Alembic 0004/0005.
+# dev-story 2026-06-12 (Amelia): 10-1 → review. All 24 ACs; shared 172 / inference 159 (90.95%) / fusion 155 (94.15%, mypy --strict) / cloud-backend 83 unit / CC vitest 243 — all green. Integration tests + migrations 0004/0005 need first CI run (no local Docker). Deviations from AC text documented in story Completion Notes.
 # dev-story 2026-06-12: 10-1-alert-confidence-and-ai-pipeline-health → in-progress (baseline 9d4a60d)
 # code-review Round 1 2026-05-30: 1-6-prime-cloud-backend-sse-fanout patches applied (D-R1 SQL + D-R2 Alembic + P1-P12 + ingest.py timestamp bug fix); 66/66 tests pass
 # create-story 2026-05-30: 1-6-prime-cloud-backend-sse-fanout → ready-for-dev (ratifies shipped alerts_sse.py against 7 BDD ACs from ADR-20; T1 adds event: field, T2 extends ALERT_EVENT_TYPES to luggage types, T3-T5 add integration test surface)
@@ -159,7 +160,7 @@ development_status:
   # S1 scoped via grill-me + party-mode 2026-05-30: code-only, exec-failure playbook moved to S3, FP-rate measurement deferred to new S5.
   # S1 + S2 must land before Control Centre PostgreSQL contracts harden further.
   epic-10: in-progress
-  10-1-alert-confidence-and-ai-pipeline-health: review   # P0 — code-only: AlertRaisedPayload (confidence_score/basis/model_versions), INFERENCE_HEARTBEAT, fusion plumbing, cloud-backend kill-switch + endpoints (no UI), CC confidence chip + degraded banner + AI pipeline row. Full ACs in story file.
+  10-1-alert-confidence-and-ai-pipeline-health: in-progress   # P0 — code-only: AlertRaisedPayload (confidence_score/basis/model_versions), INFERENCE_HEARTBEAT, fusion plumbing, cloud-backend kill-switch + endpoints (no UI), CC confidence chip + degraded banner + AI pipeline row. Full ACs in story file. Code-review R2 (2026-06-13) resolved + applied 4 patches; held in-progress pending first CI run of integration tests + Alembic 0004/0005 (no local Docker). Flip to done when CI green.
   10-2-operator-behavioural-telemetry: backlog                  # P0 — escalation_audit table + /api/v1/escalations-audit + silent-dismissal tracking + weekly effectiveness report
   10-3-conrad-claudia-sop-and-drill-cadence: backlog            # P1 — critical-alert SOP + routing decision matrix + ÖBB security handoff contract + drill cadence + exec-failure playbook (moved from S1)
   10-4-dwell-time-aware-alert-framing-and-kpi: backlog          # P2 — seconds_to_departure on alerts + delay-minutes-avoided KPI; Conductor App UI deferred to Phase 2
