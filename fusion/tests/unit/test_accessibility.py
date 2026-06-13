@@ -1,4 +1,4 @@
-﻿"""Accessibility → Ramp correlation — AC8 (R4)."""
+"""Accessibility → Ramp correlation — AC8 (R4)."""
 from __future__ import annotations
 
 import httpx

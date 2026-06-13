@@ -470,7 +470,17 @@ class StreamPriorityPayload(_BasePayload):
 
 
 class InferenceHeartbeatPayload(_BasePayload):
-    """INFERENCE_HEARTBEAT — source: inference, every 60s independent of detections."""
+    """INFERENCE_HEARTBEAT — source: inference, every 60s independent of detections.
+
+    Consumer notes (E10-S1 review R1):
+    - hailo_device_ok is a camera-pipeline-readiness proxy (any pipeline ready),
+      NOT a direct Hailo device-handle check — the handle is not reachable
+      off-device. A true handle check is deferred to hardware bring-up.
+    - last_inference_at is seeded at container start, so a pipeline that has
+      never produced a frame reports a fresh timestamp with
+      frames_processed_window == 0. Treat frames==0 + a young timestamp as
+      "not yet inferring", not as proof of health.
+    """
 
     train_id: _NonEmptyStr
     model_versions: dict[str, str]

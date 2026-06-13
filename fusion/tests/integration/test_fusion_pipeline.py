@@ -1,4 +1,4 @@
-﻿"""Synthetic end-to-end pipeline — AC12.
+"""Synthetic end-to-end pipeline — AC12.
 
 Drives: context push → door obstruction candidate (door closing) → assert
 exactly one ALERT_RAISED envelope POSTed with source='fusion'. Then push

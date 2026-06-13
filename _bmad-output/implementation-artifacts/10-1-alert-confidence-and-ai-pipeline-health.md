@@ -1,4 +1,4 @@
-﻿---
+---
 baseline_commit: 9d4a60dff0597b0d598c99c7fa6ed60bcb7f294f
 ---
 
@@ -277,6 +277,22 @@ so that procurement conversations have a credible answer to "what happens when t
   - [x] T7.5 Gates: vitest green, npm run lint green
 - [x] T8 — Full quality gate + story wrap-up (AC23–24): all package suites, mypy --strict where configured, ruff, coverage gates; File List + Change Log; status → review
 
+### Review Findings — Round 1, chunk 1/4 (shared + inference, 2026-06-12) — ALL RESOLVED
+
+- [x] [Review][Patch] D1→(a) Schema-version posture: ACCEPTED greenfield — deploy-order constraint documented in Known limitations [story file]
+- [x] [Review][Patch] D2→(a) `hailo_device_ok` proxy: documented in Completion Notes + `InferenceHeartbeatPayload` docstring [shared/.../payloads.py, story file]
+- [x] [Review][Patch] D3→(a) `last_inference_at` cold-start: documented in Completion Notes + payload docstring [story file]
+- [x] [Review][Patch] Heartbeat loop dies silently on non-httpx exceptions — guarded whole emit body (`except Exception`); supervised task with `_log_heartbeat_task_exit` done-callback [inference/heartbeat.py, main.py]
+- [x] [Review][Patch] Flaky heartbeat loop test — replaced finite side_effect with a stateful coro; added cadence + envelope-ValidationError-survival + interval>0 tests [inference/tests/unit/test_heartbeat.py]
+- [x] [Review][Patch] UTF-8 BOMs stripped from 11 committed files (re-saved UTF-8 no-BOM) [shared + 9 fusion test files + story md]
+- [x] [Review][Patch] HEF parse path guarded — `HEF(...)` wrapped in RuntimeError; empty network-group list → RuntimeError; +2 tests [inference/model_provenance.py]
+- [x] [Review][Patch] `heartbeat_interval_s` now `Field(gt=0.0)`; +rejection test [inference/config.py]
+- [x] [Review][Patch] Test renamed `test_event_type_has_expected_members`; stale "17 payload models" docstring fixed [shared/tests/unit/test_event_envelope.py]
+- [x] [Review][Patch] Story doc gaps — counter-reset, hailo_device_ok, last_inference_at, source-widening, AC6-vacuous all added to Completion Notes [story file]
+- [x] [Review][Defer] `model_versions or {}` wiring footgun — production path is guarded (fatal at startup) but a future wiring miss ships empty provenance silently; consider startup warning [inference/src/inference/zone_counter.py:47, callback.py] — deferred, hardening
+- [x] [Review][Defer] Provenance cache keyed by nothing — second call with different Settings returns stale dict; single-call invariant undocumented outside tests [inference/src/inference/model_provenance.py:26] — deferred, hardening
+- [x] [Review][Defer] `git_sha` content not validated — whitespace/junk build-arg yields garbage `detector_code` fleet-wide [inference/src/inference/model_provenance.py:41] — deferred, hardening
+
 ## Dev Agent Record
 
 ### Implementation Plan
@@ -301,6 +317,11 @@ so that procurement conversations have a credible answer to "what happens when t
   - AC6 `hef_bottleneck_fps`: no such metric exists anywhere; startup log uses `settings.pipeline_fps` under that key — reviewer to confirm or rename.
   - Missing-confidence fail-safe: slip-fall/door candidates without a detector score emit `confidence_score=0.0` (lowest trust, renders "Verify") + WARNING log instead of dropping the safety alert; missing provenance → `{"detector_arch": "unknown"}`.
   - Deliverable path `cloud_backend/config/confidence_thresholds.py` required converting `config.py` → `config/__init__.py` (git mv; imports unchanged).
+  - **AC7 counter reset (review R1):** `frames_processed_window` resets only after a SUCCESSFUL emit — on event-store outage frames accumulate into the next window. AC7 literal says "counter reset after emit"; the success-only reset keeps the window truthful across outages (test `test_event_store_unreachable_does_not_raise` asserts 5+2=7). Accepted as intentional.
+  - **AC7 `hailo_device_ok` (review R1 — D2a):** spec says "Hailo device handle health"; the real handle is not reachable off-device, so the implementation uses `any(camera pipeline ready)` as the proxy. Accepted for PoC; a true device-handle check is deferred to hardware bring-up day. Documented in the `InferenceHeartbeatPayload` docstring.
+  - **AC7 `last_inference_at` cold-start (review R1 — D3a):** seeded with container construction time, so a pipeline that has never produced a frame reports a fresh timestamp alongside `frames_processed_window=0`. Consumers MUST treat `frames_processed_window=0` + young `last_inference_at` as "not yet inferring", not health. (cloud-backend AI-pipeline state rule already keys off `last_seen`, not this field.)
+  - **Envelope `source` Literal widened (review R1):** `EventEnvelope.source` / `Event.source` gained `"cloud-backend"` to carry ALERT_CLASS_DISABLED/REENABLED admin audit events (AC14). Beyond AC14's literal text (types + dispatch + payload); ratified in review R1.
+  - **AC6 producer coverage (review R1):** `UnattendedBagPayload` and `LuggageRackSaturationPayload` have no production emit site in `inference/src` today — `model_versions` stamping is verified on the 3 live emit sites (DoorObstruction, Accessibility, OccupancyUpdate). The now-required field forces compliance on any future producer.
 - **Integration tests (testcontainers) written but NOT run locally — Docker unavailable on this machine.** `test_killswitch_fanout.py`, `test_inference_heartbeat_ingest.py`, and both new Alembic migrations (0004, 0005) need their first execution in CI.
 - **Pre-existing, untouched (surgical-change rule):** shared/cloud-backend ruff violations + cloud-backend `preferences.py` mypy errors + CC eslint react-hooks v7 errors all reproduce on baseline commit 9d4a60d; my files add zero new violations.
 - EscalationDetail "Model details" placement per Freya micro-spec `_bmad-output/design-artifacts/D-UX-Design/2026-06-12-escalation-detail-model-details.md`. Freya's consistency note (still-frame `% conf` chip vs `confidence_score`) left as-is — mock-only field today; flagged for the real-data story.
@@ -389,3 +410,4 @@ so that procurement conversations have a credible answer to "what happens when t
 - Confidence thresholds require code deploy to change (mutability deferred to Epic 11).
 - Kill-switch operated by Nomad on-call via curl during PoC (UI deferred to Epic 11).
 - "Degraded" banner copy includes "Nomad has been notified" — Saga flagged this still leaks Nomad-shaped vocabulary into ÖBB's surface. WDS Phase 4 review item before pilot.
+- **Deploy-order constraint (review R1 — D1a):** the new required confidence/`model_versions` fields were added under `schema_version=1` (greenfield, no backfill — `SUPPORTED_SCHEMA_VERSIONS` stays `{1}`). Onboard containers (producers) MUST be upgraded before cloud-backend (consumer) so the consumer never re-validates a pre-upgrade event missing the new required fields. A future field addition that must survive mixed-version fleets requires a `schema_version` bump + compat shim.

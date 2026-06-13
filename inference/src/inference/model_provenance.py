@@ -57,7 +57,17 @@ def compute_model_versions(settings: Settings) -> dict[str, str]:
             f"model provenance: cannot read labels file at {labels_path}: {exc}"
         ) from exc
 
-    detector_arch = str(HEF(str(hef_path)).get_network_group_names()[0])
+    try:
+        network_groups = HEF(str(hef_path)).get_network_group_names()
+    except Exception as exc:  # noqa: BLE001 — hailo_platform raises bare exceptions
+        raise RuntimeError(
+            f"model provenance: cannot parse HEF at {hef_path}: {exc}"
+        ) from exc
+    if not network_groups:
+        raise RuntimeError(
+            f"model provenance: HEF at {hef_path} reports no network groups"
+        )
+    detector_arch = str(network_groups[0])
     _cached = {
         "detector_arch": detector_arch,
         "detector_hef": f"{hef_path.name}@{hashlib.sha256(hef_bytes).hexdigest()[:12]}",

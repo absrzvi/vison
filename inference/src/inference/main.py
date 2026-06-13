@@ -158,6 +158,17 @@ def wire(
     return budget, journey_holder, callbacks, app
 
 
+def _log_heartbeat_task_exit(task: "asyncio.Task[None]") -> None:
+    """Surface a heartbeat-loop crash. The loop swallows per-emit failures, so the
+    only way it ends is cancellation (clean shutdown) or an unexpected escape —
+    the latter must not vanish into an unobserved task exception."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:  # pragma: no cover — defensive; emit_once catches everything
+        log.critical("main.heartbeat_loop_crashed", error=str(exc))
+
+
 def _make_pipeline_thread(
     callback: OccupancyCallback,
     settings: Settings,
@@ -232,6 +243,7 @@ def main() -> None:  # pragma: no cover — integration entry point
                 heartbeat=heartbeat,
             )
             heartbeat_task = asyncio.create_task(heartbeat.run())
+            heartbeat_task.add_done_callback(_log_heartbeat_task_exit)
             # Patch E: append routes into the already-created app so uvicorn's reference
             # stays valid. include_router only works before app startup; route list append
             # is the safe runtime alternative.

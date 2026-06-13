@@ -58,29 +58,33 @@ class HeartbeatEmitter:
             frames = self._frames
             last_at = self._last_inference_at
 
-        payload = InferenceHeartbeatPayload(
-            train_id=self._settings.vehicle_id,
-            model_versions=self._model_versions,
-            frames_processed_window=frames,
-            last_inference_at=last_at,
-            hailo_device_ok=self._device_ok(),
-        )
-        envelope = EventEnvelope(
-            journey_id=self._journey_holder.journey_id,
-            vehicle_id=self._settings.vehicle_id,
-            event_type=EventType.INFERENCE_HEARTBEAT,
-            severity="info",
-            source="inference",
-            schema_version=self._settings.schema_version,
-            payload=payload.model_dump(mode="json"),
-        )
+        # Whole body is guarded: payload/envelope construction can raise
+        # (ValidationError) just as the POST can (HTTPError). Both must be
+        # caught so a single bad heartbeat never kills the loop — the loop is
+        # the fleet-health signal; it dying silently is the worst outcome.
         try:
+            payload = InferenceHeartbeatPayload(
+                train_id=self._settings.vehicle_id,
+                model_versions=self._model_versions,
+                frames_processed_window=frames,
+                last_inference_at=last_at,
+                hailo_device_ok=self._device_ok(),
+            )
+            envelope = EventEnvelope(
+                journey_id=self._journey_holder.journey_id,
+                vehicle_id=self._settings.vehicle_id,
+                event_type=EventType.INFERENCE_HEARTBEAT,
+                severity="info",
+                source="inference",
+                schema_version=self._settings.schema_version,
+                payload=payload.model_dump(mode="json"),
+            )
             resp = await self._client.post(
                 f"{self._settings.event_store_url}/api/v1/events",
                 json=envelope.model_dump(mode="json"),
             )
             resp.raise_for_status()
-        except httpx.HTTPError as exc:
+        except Exception as exc:  # noqa: BLE001 — loop must outlive any single failure
             log.warning(
                 "heartbeat.emit_failed",
                 train_id=self._settings.vehicle_id,
@@ -92,7 +96,11 @@ class HeartbeatEmitter:
             self._frames -= frames
 
     async def run(self) -> None:
-        """Heartbeat loop. Cancelled at shutdown via task.cancel()."""
+        """Heartbeat loop. Cancelled at shutdown via task.cancel().
+
+        emit_once swallows its own failures, so the only exception that can
+        escape this loop is CancelledError at shutdown — which must propagate.
+        """
         while True:
             await asyncio.sleep(self._settings.heartbeat_interval_s)
             await self.emit_once()

@@ -1,4 +1,4 @@
-﻿"""Tests for EventEnvelope and all 17 payload models (E1-S2)."""
+"""Tests for EventEnvelope and all payload models (E1-S2; extended E10-S1)."""
 
 from __future__ import annotations
 
@@ -49,12 +49,12 @@ def _make_envelope(**overrides: object) -> EventEnvelope:
 
 
 # ---------------------------------------------------------------------------
-# AC1 — EventType has exactly 17 members
+# AC1 — EventType has exactly the expected members
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit
-def test_event_type_has_23_members() -> None:
+def test_event_type_has_expected_members() -> None:
     expected = {
         "OCCUPANCY_UPDATE",
         "OCCUPANCY_THRESHOLD_CROSSED",

@@ -1,4 +1,10 @@
-# Deferred Work
+﻿# Deferred Work
+
+## Deferred from: code review of 10-1-alert-confidence-and-ai-pipeline-health chunk 1/4 (2026-06-12)
+
+- **`model_versions or {}` wiring footgun** [inference/zone_counter.py, callback.py] — production guarded by fatal startup provenance, but a future wire() miss ships `model_versions: {}` silently on detection payloads; add a startup warning when provenance is absent outside tests
+- **Provenance cache keyed by nothing** [inference/model_provenance.py] — module-level `_cached` ignores its `settings` arg; key on (hef_path, labels_path, git_sha) or document the single-call invariant in the module docstring
+- **`git_sha` content not validated** [inference/model_provenance.py] — emptiness-only check; junk/whitespace `GIT_SHA` build-arg yields garbage `detector_code` provenance fleet-wide; add hex + min-length check
 
 ## Deferred from: code review of 1-6-prime-cloud-backend-sse-fanout (2026-05-30)
 

@@ -1,4 +1,4 @@
-﻿"""Health endpoints + readiness cache + ramp/door fallback paths — AC1, AC8."""
+"""Health endpoints + readiness cache + ramp/door fallback paths — AC1, AC8."""
 from __future__ import annotations
 
 import json

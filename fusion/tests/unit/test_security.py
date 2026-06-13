@@ -1,4 +1,4 @@
-﻿"""Security tests — AST audits for Rule 8 (no os.environ.get) + payload schema checks."""
+"""Security tests — AST audits for Rule 8 (no os.environ.get) + payload schema checks."""
 from __future__ import annotations
 
 import ast

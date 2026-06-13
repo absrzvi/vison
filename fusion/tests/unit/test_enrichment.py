@@ -1,4 +1,4 @@
-﻿"""Enrichment envelope construction + station_approach escalation — AC7, AC11."""
+"""Enrichment envelope construction + station_approach escalation — AC7, AC11."""
 from __future__ import annotations
 
 import httpx

@@ -1,4 +1,4 @@
-﻿"""Contract test — replay the exact body shapes inference posts to fusion.
+"""Contract test — replay the exact body shapes inference posts to fusion.
 
 Story 4-5 locked the candidate POST contracts at:
 - POST {fusion_url}/candidates/door_obstruction — DoorObstructionPayload with door_state='unknown'

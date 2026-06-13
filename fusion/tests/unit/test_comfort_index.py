@@ -1,4 +1,4 @@
-﻿"""Unit tests for the Coach Comfort Index engine (E4-S10, ADR-18).
+"""Unit tests for the Coach Comfort Index engine (E4-S10, ADR-18).
 
 Covers AC1, AC2, AC3, AC4, AC5, AC6 from the story spec. Suppression-gate
 behaviour (AC5) is verified at the handler layer in ``test_health.py``;

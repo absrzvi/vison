@@ -1,4 +1,4 @@
-﻿"""Occupancy passthrough — AC10 (ADR-15)."""
+"""Occupancy passthrough — AC10 (ADR-15)."""
 from __future__ import annotations
 
 import logging

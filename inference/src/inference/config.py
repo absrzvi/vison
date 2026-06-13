@@ -5,6 +5,7 @@ No os.environ.get() calls anywhere in this module — Rule 8.
 """
 from __future__ import annotations
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,7 +31,7 @@ class Settings(BaseSettings):
     # git_sha is injected via ARG GIT_SHA in the Dockerfile; empty at startup is fatal.
     git_sha: str = ""
     model_labels_path: str = "/models/yolov8m.labels"
-    heartbeat_interval_s: float = 60.0
+    heartbeat_interval_s: float = Field(default=60.0, gt=0.0)
 
     fusion_url: str = "http://fusion:8090"
     accessibility_confidence_threshold: float = 0.80

@@ -115,19 +115,55 @@ async def test_event_store_unreachable_does_not_raise() -> None:
 
 @pytest.mark.asyncio
 async def test_run_loop_honours_cadence_and_survives_errors() -> None:
-    client = MagicMock()
     resp = MagicMock()
     resp.raise_for_status = MagicMock()
-    # First call fails, subsequent succeed — loop must keep going.
-    client.post = AsyncMock(side_effect=[httpx.ConnectError("down"), resp, resp, resp])
+    # First call fails, all subsequent succeed — loop must keep going and must
+    # not exhaust a finite side_effect (which would raise StopIteration and kill
+    # the task, masking the very resilience this test checks).
+    calls = {"n": 0}
+
+    async def _post(*_a: object, **_k: object) -> MagicMock:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.ConnectError("down")
+        return resp
+
+    client = MagicMock()
+    client.post = _post
     emitter = _make_emitter(client, interval=0.01)
 
     task = asyncio.create_task(emitter.run())
     await asyncio.sleep(0.06)
+    assert not task.done()  # loop survived the first-call failure
     task.cancel()
-    try:
+    with pytest.raises(asyncio.CancelledError):
         await task
-    except asyncio.CancelledError:
-        pass
 
-    assert client.post.await_count >= 2
+    # Cadence: at ~10ms interval over ~60ms we expect several emits, not one.
+    assert calls["n"] >= 2
+
+
+@pytest.mark.asyncio
+async def test_emit_once_survives_envelope_validation_error() -> None:
+    """A heartbeat that fails payload/envelope construction (not just the POST)
+    must be swallowed too — the loop is the fleet-health signal and must outlive
+    any single bad heartbeat."""
+    client = _ok_client()
+    emitter = _make_emitter(client)
+    # Force envelope construction to raise by corrupting the journey_id to an
+    # invalid pattern the strict EventEnvelope rejects.
+    emitter._journey_holder.journey_id = "not-a-valid-journey-id"
+
+    await emitter.emit_once()  # must not raise
+
+    assert client.post.await_count == 0  # failed before the POST
+
+
+def test_heartbeat_interval_must_be_positive() -> None:
+    """heartbeat_interval_s <= 0 would busy-loop the emitter; config rejects it."""
+    import pydantic
+
+    with pytest.raises(pydantic.ValidationError):
+        Settings(heartbeat_interval_s=0)
+    with pytest.raises(pydantic.ValidationError):
+        Settings(heartbeat_interval_s=-1.0)

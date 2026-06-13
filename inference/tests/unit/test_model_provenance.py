@@ -93,6 +93,25 @@ def test_missing_labels_file_raises(
         model_provenance.compute_model_versions(settings)
 
 
+def test_empty_network_group_list_raises(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hef_cls = MagicMock()
+    hef_cls.return_value.get_network_group_names.return_value = []
+    monkeypatch.setattr(model_provenance, "HEF", hef_cls)
+    with pytest.raises(RuntimeError, match="no network groups"):
+        model_provenance.compute_model_versions(settings)
+
+
+def test_corrupt_hef_parse_raises_runtime_error(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hef_cls = MagicMock(side_effect=ValueError("corrupt HEF magic bytes"))
+    monkeypatch.setattr(model_provenance, "HEF", hef_cls)
+    with pytest.raises(RuntimeError, match="cannot parse HEF"):
+        model_provenance.compute_model_versions(settings)
+
+
 def test_missing_hef_file_raises(
     fixture_files: tuple[str, str], fake_hef: MagicMock
 ) -> None:
