@@ -187,6 +187,15 @@ def build_app(
                 door_id=payload.door_id,
                 error=str(exc),
             )
+        except Exception as exc:  # noqa: BLE001 — Pattern 3: handler must never raise
+            # A malformed candidate (e.g. model_versions collapsing below the
+            # fused-basis >=2 floor) must not 500 this fire-and-forget endpoint.
+            log.warning(
+                "candidate.door_obstruction.emit_failed",
+                car_id=payload.car_id,
+                door_id=payload.door_id,
+                error=str(exc),
+            )
         return {"received": True}
 
     @app.post("/candidates/alert_raised", status_code=202)
@@ -214,6 +223,12 @@ def build_app(
                 model_versions=payload.model_versions or {"detector_arch": "unknown"},
             )
         except httpx.HTTPError as exc:
+            log.warning(
+                "candidate.alert_raised.emit_failed",
+                car_id=car_id,
+                error=str(exc),
+            )
+        except Exception as exc:  # noqa: BLE001 — Pattern 3: handler must never raise
             log.warning(
                 "candidate.alert_raised.emit_failed",
                 car_id=car_id,

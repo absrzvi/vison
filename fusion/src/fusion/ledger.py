@@ -252,6 +252,22 @@ class CoachLedger:
         for an already-pending track_id is dropped with a DEBUG log to defend
         against at-least-once inference retries (review P2).
         """
+        # Fusion is on-train, upstream of egress anonymisation: track_id is the
+        # raw int from the producer and camera_id is always present. The shared
+        # payload widened these (int|str / Optional) only for the redacted cloud
+        # copy, which never reaches fusion. Narrow here so the ledger's int-keyed
+        # machinery stays type-safe; a redacted event arriving is a wiring bug —
+        # skip it rather than corrupt the ledger.
+        if not isinstance(payload.track_id, int) or payload.camera_id is None:
+            log.warning(
+                "ledger.wagon_exit_unexpected_redacted",
+                track_id=payload.track_id,
+                camera_id=payload.camera_id,
+            )
+            return
+        track_id: int = payload.track_id
+        camera_id: str = payload.camera_id
+
         coach_from = payload.coach_from
         coach_to = payload.coach_to
         self._seen_wagon.add(coach_from)
@@ -261,12 +277,12 @@ class CoachLedger:
         # expect_orphan exits arm no pending entry — duplicate orphan exits are
         # still a bug but harder to detect at this layer without a separate
         # "recently-seen orphan" cache; deferred.
-        if not payload.expect_orphan and payload.track_id in self._pending_exits:
+        if not payload.expect_orphan and track_id in self._pending_exits:
             log.debug(
                 "ledger.wagon_exit_duplicate",
                 reason="duplicate_pending_exit",
-                track_id=payload.track_id,
-                camera_id=payload.camera_id,
+                track_id=track_id,
+                camera_id=camera_id,
                 coach_from=coach_from,
             )
             return
@@ -279,8 +295,8 @@ class CoachLedger:
             self._persist(coach_from)
             log.info(
                 "ledger.wagon_exit",
-                track_id=payload.track_id,
-                camera_id=payload.camera_id,
+                track_id=track_id,
+                camera_id=camera_id,
                 coach_from=coach_from,
                 coach_to=coach_to,
                 expect_orphan=True,
@@ -292,21 +308,21 @@ class CoachLedger:
 
         ts_utc = _utc_now_iso()
         pending = _PendingExit(
-            track_id=payload.track_id,
-            camera_id=payload.camera_id,
+            track_id=track_id,
+            camera_id=camera_id,
             coach_from=coach_from,
             coach_to=coach_to,
             ts_utc=ts_utc,
         )
 
         # Schedule timeout — see _schedule_timeout for closed-loop safety.
-        pending.timer_handle = self._schedule_timeout(payload.track_id)
-        self._pending_exits[payload.track_id] = pending
+        pending.timer_handle = self._schedule_timeout(track_id)
+        self._pending_exits[track_id] = pending
 
         log.info(
             "ledger.wagon_exit",
-            track_id=payload.track_id,
-            camera_id=payload.camera_id,
+            track_id=track_id,
+            camera_id=camera_id,
             coach_from=coach_from,
             coach_to=coach_to,
             expect_orphan=False,
@@ -314,12 +330,23 @@ class CoachLedger:
 
     async def on_wagon_entry(self, payload: WagonEntryPayload) -> None:
         """AC4 — reconcile matching exit; cancel timer BEFORE state mutation (P10)."""
+        # Narrow the egress-widened fields — see on_wagon_exit for the rationale.
+        if not isinstance(payload.track_id, int) or payload.camera_id is None:
+            log.warning(
+                "ledger.wagon_entry_unexpected_redacted",
+                track_id=payload.track_id,
+                camera_id=payload.camera_id,
+            )
+            return
+        track_id: int = payload.track_id
+        camera_id: str = payload.camera_id
+
         coach_from = payload.coach_from
         coach_to = payload.coach_to
         self._seen_wagon.add(coach_from)
         self._seen_wagon.add(coach_to)
 
-        pending = self._pending_exits.pop(payload.track_id, None)
+        pending = self._pending_exits.pop(track_id, None)
         if pending is not None and pending.timer_handle is not None:
             # P10: cancel BEFORE any further work.
             pending.timer_handle.cancel()
@@ -333,8 +360,8 @@ class CoachLedger:
             self._persist(coach_to)
             log.info(
                 "ledger.wagon_entry_orphan",
-                track_id=payload.track_id,
-                camera_id=payload.camera_id,
+                track_id=track_id,
+                camera_id=camera_id,
                 coach_from=coach_from,
                 coach_to=coach_to,
                 reason="orphan_entry",
@@ -354,8 +381,8 @@ class CoachLedger:
 
         log.info(
             "ledger.wagon_entry_reconciled",
-            track_id=payload.track_id,
-            camera_id=payload.camera_id,
+            track_id=track_id,
+            camera_id=camera_id,
             coach_from=coach_from,
             coach_to=coach_to,
         )

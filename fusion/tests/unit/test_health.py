@@ -262,6 +262,41 @@ def test_door_obstruction_emit_failure_returns_202() -> None:
 
 
 @pytest.mark.unit
+def test_door_obstruction_payload_validation_error_returns_202() -> None:
+    """R3 P fusi-1: a candidate whose model_versions collapses below the
+    fused-basis >=2 floor raises ValidationError inside emit_alert (NOT an
+    httpx error). Pattern 3 requires 202, not 500 — the handler must catch the
+    validation raise, not only httpx.HTTPError."""
+    ctx = ContextState(
+        journey_id="OBB-TEST_t1_20260520",
+        vehicle_id="OBB-TEST",
+        door_state={"car-1:door-1A": "closed"},
+    )
+    # door_firmware_version stays "unknown" (default), so a payload whose only
+    # model_versions key is door_sensor_firmware collapses to a single entry.
+    client = _make_client(ctx)
+    with respx.mock(assert_all_called=False) as rmock:
+        rmock.post("http://event-store-test/api/v1/events").mock(
+            return_value=httpx.Response(201, json={"data": {"stored": True}})
+        )
+        resp = client.post(
+            "/candidates/door_obstruction",
+            json={
+                "car_id": "car-1",
+                "door_id": "door-1A",
+                "obstruction_type": "person",
+                "track_id": "42",
+                "camera_id": "C1_DOOR_01",
+                "confidence": 0.9,
+                "door_state": "closed",
+                "model_versions": {"door_sensor_firmware": "fw-1"},
+            },
+        )
+    assert resp.status_code == 202
+    client.close()
+
+
+@pytest.mark.unit
 def test_accessibility_candidate_endpoint_updates_ctx_only() -> None:
     ctx = ContextState(journey_id="OBB-TEST_t1_20260520", vehicle_id="OBB-TEST")
     client = _make_client(ctx)
