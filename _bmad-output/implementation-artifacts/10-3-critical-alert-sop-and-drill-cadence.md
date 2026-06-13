@@ -4,7 +4,7 @@ baseline_commit: 89cc1b9816b0c9282cd1e34333451496366e4e4f
 
 # Story 10.3: Critical-Alert Operational SOP & Drill Cadence
 
-Status: ready-for-dev
+Status: review
 
 <!-- Created 2026-06-13 via bmad-create-story (Claude). P1 — fourth story in Epic 10 (Operator Adoption & Trust).
      Source of truth: re-scoped E10-S3 in epics.md:2277-2303 (committed ca01651) + gap analysis Gap 1
@@ -98,24 +98,24 @@ then the SOP contains **no** "Conrad assesses / Conrad unreachable" branch, **no
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — Create the operational-procedures directory + critical-alert SOP** (AC1, AC5, AC6)
-  - [ ] Create `_bmad-output/operational-procedures/` (new directory).
-  - [ ] Write `critical-alert-sop.md`: critical-class definition (alert_codes + `confidence_score >= 0.85` gate per D2/D3), the four branches (conductorless / Fernverkehr / landside-unreachable / dead-zone), each with a named ÖBB ops role and the amber-window time budget (D4).
-  - [ ] Ensure NO Conrad-as-human branch, NO police/station handoff, NO "ÖBB security notified" tag (AC6).
-  - [ ] Reference the four shipped landside action tags by their canonical keys (AC5).
-- [ ] **T2 — Critical-alert decision matrix** (AC2, AC5, D2, D6)
-  - [ ] Write `alert-routing-matrix.md` as a table keyed on `alert_code`, with columns: confidence bucket, speed bucket, location, train type, routing decision, ÖBB ops owner (`TBD`), signoff date (`TBD`).
-  - [ ] List concrete critical-class `alert_code` strings (grep fusion `emit_alert` call sites for the real producer strings — do not invent); mark unknown codes → advisory-only default.
-  - [ ] Add the `TBD — ÖBB fleet-config source` note on the train-type column (D6).
-- [ ] **T3 — Drill cadence + pilot kickoff checklist** (AC3)
-  - [ ] Write `drill-cadence.md`: monthly tabletop + quarterly live drills, with the Fernverkehr onboard-conductor participation note.
-  - [ ] Create `pilot-kickoff-checklist.md` with the drill-cadence line item + stubs for other kickoff gates (ÖBB signoffs, train-type metadata confirmation).
-- [ ] **T4 — Cross-link from gap analysis** (AC4)
-  - [ ] Add "Closed by E10-S3 →" links to `critical-alert-sop.md` and `alert-routing-matrix.md` in [owning-the-gap-ai-pm-analysis.md](../planning-artifacts/owning-the-gap-ai-pm-analysis.md) Gap 1.
-- [ ] **T5 — Honour the shipped Conrad naming** (D5)
-  - [ ] Confirm the SOP/matrix language uses "Conrad = on-train platform source" and proposes NO code renames; the `project-actor-model-conrad` memory is the authority (no memory write needed — it exists).
-- [ ] **T6 — Self-review against AC5/AC6 consistency** before handoff
-  - [ ] Verify every shipped-contract reference (action tags, confidence basis, escalation lifecycle) matches 10-1/10-6/10-2 — no invented mechanisms.
+- [x] **T1 — Create the operational-procedures directory + critical-alert SOP** (AC1, AC5, AC6)
+  - [x] Create `_bmad-output/operational-procedures/` (new directory).
+  - [x] Write `critical-alert-sop.md`: critical-class definition (alert_codes + `confidence_score >= 0.85` gate per D2/D3), the four branches (conductorless / Fernverkehr / landside-unreachable / dead-zone), each with a named ÖBB ops role and the amber-window time budget (D4).
+  - [x] Ensure NO Conrad-as-human branch, NO police/station handoff, NO "ÖBB security notified" tag (AC6).
+  - [x] Reference the four shipped landside action tags by their canonical keys (AC5).
+- [x] **T2 — Critical-alert decision matrix** (AC2, AC5, D2, D6)
+  - [x] Write `alert-routing-matrix.md` as a table keyed on `alert_code`, with columns: confidence bucket, speed bucket, location, train type, routing decision, ÖBB ops owner (`TBD`), signoff date (`TBD`).
+  - [x] List concrete critical-class `alert_code` strings (grep fusion `emit_alert` call sites for the real producer strings — do not invent); mark unknown codes → advisory-only default.
+  - [x] Add the `TBD — ÖBB fleet-config source` note on the train-type column (D6).
+- [x] **T3 — Drill cadence + pilot kickoff checklist** (AC3)
+  - [x] Write `drill-cadence.md`: monthly tabletop + quarterly live drills, with the Fernverkehr onboard-conductor participation note.
+  - [x] Create `pilot-kickoff-checklist.md` with the drill-cadence line item + stubs for other kickoff gates (ÖBB signoffs, train-type metadata confirmation).
+- [x] **T4 — Cross-link from gap analysis** (AC4)
+  - [x] Add "Closed by E10-S3 →" links to `critical-alert-sop.md` and `alert-routing-matrix.md` in [owning-the-gap-ai-pm-analysis.md](../planning-artifacts/owning-the-gap-ai-pm-analysis.md) Gap 1.
+- [x] **T5 — Honour the shipped Conrad naming** (D5)
+  - [x] Confirm the SOP/matrix language uses "Conrad = on-train platform source" and proposes NO code renames; the `project-actor-model-conrad` memory is the authority (no memory write needed — it exists).
+- [x] **T6 — Self-review against AC5/AC6 consistency** before handoff
+  - [x] Verify every shipped-contract reference (action tags, confidence basis, escalation lifecycle) matches 10-1/10-6/10-2 — no invented mechanisms.
 
 ## Dev Notes
 
@@ -153,8 +153,38 @@ Per the FULL-FILE-READS persistent rule: the rule targets *source files marked U
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context)
+
+### Pre-Flight (adapted for documentation-only story)
+
+- **Assumptions:** RGB-tests / mypy / Playwright / QA-score / security-sentinel gates are N/A — this story ships markdown, not code (D1). DoD enforced = AC satisfaction + AC5/AC6 internal-consistency self-review + cross-links resolve. Amber window = 10 min (D4 default). Critical codes = verified producer strings `slip_fall`/`door_obstruction`/`door_fault`; `fire`/`unattended_item` forward-looking (D2). ÖBB owner/signoff + fleet-config source stay `TBD` (D1, D6).
+- **Open Questions:** none blocking — the two real unknowns (per-row ÖBB owners; fleet-config metadata source) are deferred to ÖBB by the story itself and authored as `TBD` placeholders, not guessed.
+- **Simplicity Check:** created exactly the 4 AC-named deliverables + a 2-line gap-analysis cross-link. Added NO code, test, CI, or new memory (memory already exists — D5).
+- **Surgical-Change Test:** files touched all trace to an AC (see File List); the only edit to a pre-existing planning file is the gap-analysis cross-link (AC4).
+
 ### Debug Log References
+
+- `grep alert_code= fusion/src/` → only `door_obstruction`, `door_fault`, `slip_fall` (confirms D2 producer set; `fire`/`unattended_item` absent).
+- AC5/AC6 self-review grep across `operational-procedures/` → forbidden terms appear only in prohibition/negation contexts (0 affirmative uses).
+- Link-integrity `Test-Path` sweep → all 11 distinct relative links resolve.
 
 ### Completion Notes List
 
+- Documentation-only story. **Code-only quality gates skipped as N/A (no code):** red-green-refactor, pytest, mypy --strict, ruff, Playwright four-E2E-paths, ≥90% coverage, QA-score ≥85, bmad-security-sentinel. Adapted docs DoD applied per user decision (2026-06-14).
+- **SOP grounded in shipped behaviour:** the "door-at-speed" critical framing mirrors the live fusion `_severity_for` logic ([enrichment.py:30-45](../../fusion/src/fusion/enrichment.py)) — `door_obstruction`/`door_fault` are `critical` at `speed_kmh > 0` or unknown (fail-closed), `warning` at standstill. Matrix rows mirror this exactly rather than inventing a threshold.
+- **AC5/AC6 self-review (the docs "test") passed:** zero affirmative use of stale tags / police-station / Conrad-as-human / security-notified. The four shipped action tags used by canonical key.
+- **D5 honoured:** no code renames proposed; `project-actor-model-conrad` memory cited as authority (exists + indexed; create-story draft's "missing memory" claim already corrected in commit d7398eb).
+
 ### File List
+
+- `_bmad-output/operational-procedures/critical-alert-sop.md` (NEW — AC1)
+- `_bmad-output/operational-procedures/alert-routing-matrix.md` (NEW — AC2)
+- `_bmad-output/operational-procedures/drill-cadence.md` (NEW — AC3)
+- `_bmad-output/operational-procedures/pilot-kickoff-checklist.md` (NEW — AC3)
+- `_bmad-output/planning-artifacts/owning-the-gap-ai-pm-analysis.md` (EDIT — AC4, +"Closed by E10-S3" cross-link block)
+- `_bmad-output/implementation-artifacts/10-3-critical-alert-sop-and-drill-cadence.md` (EDIT — story bookkeeping)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (EDIT — status tracking)
+
+### Change Log
+
+- 2026-06-14 — Implemented E10-S3 (documentation-only): authored critical-alert SOP, routing matrix, drill cadence, pilot-kickoff checklist under `_bmad-output/operational-procedures/`; cross-linked from gap analysis Gap 1. Status ready-for-dev → review.

@@ -6,6 +6,13 @@
 
 > **⚠️ Superseded by the actor-model correction (2026-06-13 — memory `project-actor-model-conrad`).** The two-actor "Conrad assess → escalate → Claudia acknowledge" sequence below describes a model the PoC does NOT use. **Conrad is the virtual on-train conductor (the onboard AI platform that raises alerts), not a human in the response loop.** Acknowledgement is **train-type-conditional**: conductorless trains → landside Fleet Manager / remote staff only; Fernverkehr trains → onboard conductor may also acknowledge. The ÖBB police/station security-handoff contract is out of PoC scope. The gap below (no written/rehearsed SOP) is still real, but E10-S3 now addresses it under the corrected model — see the re-scoped E10-S3 in [epics.md](epics.md). The original text is retained as the historical analysis.
 
+> **✅ Closed by E10-S3 (2026-06-14).** This gap is now operationalised by three documents under `_bmad-output/operational-procedures/`:
+> - [critical-alert-sop.md](../operational-procedures/critical-alert-sop.md) — the branched SOP (conductorless / Fernverkehr / landside-unreachable / dead-zone)
+> - [alert-routing-matrix.md](../operational-procedures/alert-routing-matrix.md) — the per-`alert_code` × confidence × speed × location × train-type decision matrix
+> - [drill-cadence.md](../operational-procedures/drill-cadence.md) — monthly tabletop + quarterly live drills, wired to the [pilot-kickoff-checklist.md](../operational-procedures/pilot-kickoff-checklist.md)
+>
+> ÖBB ops signoff on each remains a pilot-kickoff process boundary (checklist placeholders).
+
 **The Question:** When a critical alert fires, what is the exact sequence of actions that should follow — and is that sequence written down, trained, and rehearsed?
 
 **What our docs cover today:**
