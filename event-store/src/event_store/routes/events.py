@@ -20,7 +20,7 @@ all matching WebSocket subscribers via ``request.app.state.broadcaster``.
 from __future__ import annotations
 
 import sqlite3
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -29,12 +29,12 @@ from oebb_shared.events.envelope import EventEnvelope
 from ..auth import require_api_key
 from ..database import get_events_page, insert_event
 from ..deps import get_db
+from ..egress_privacy import anonymise_page
 from ..exceptions import (
     InvalidCursorError,
     JourneyNotFoundError,
     UnsupportedSchemaVersionError,
 )
-from ..models import EventPage
 
 router = APIRouter(prefix="/api/v1/events", dependencies=[Depends(require_api_key)])
 
@@ -76,7 +76,13 @@ async def ingest_event(
     return JSONResponse(body_payload, status_code=201)
 
 
-@router.get("", response_model=EventPage)
+# response_model=None: this is the train→cloud egress. Rows are redacted by
+# anonymise_page (track_id tokenised, bbox/camera_id dropped, ACCESSIBILITY_DETECTED
+# withheld) and returned as plain dicts. We deliberately do NOT rebuild them as
+# EventModel — the strict payload schema would reject the dropped required fields,
+# and the payload was already validated on ingest. cloud-backend re-validates on
+# its own ingest boundary.
+@router.get("", response_model=None)
 def list_events(
     journey_id: Annotated[str | None, Query()] = None,
     after: Annotated[str | None, Query(description="cursor event_id")] = None,
@@ -86,7 +92,7 @@ def list_events(
         Literal["info", "warning", "critical"] | None, Query()
     ] = None,
     conn: sqlite3.Connection = Depends(get_db),
-) -> EventPage:
+) -> dict[str, Any]:
     try:
         rows = get_events_page(
             conn,
@@ -110,14 +116,15 @@ def list_events(
             status_code=404,
             detail={"error": "JOURNEY_NOT_FOUND", "detail": str(exc), "recoverable": False},
         ) from exc
-    # EventModel parses each row; EventPage(alias="data") wraps the list.
-    from oebb_shared.events.envelope import EventModel  # local import keeps top tidy
-
-    items = [EventModel(**r) for r in rows]
-    next_cursor = items[-1].event_id if len(items) == limit else None
-    return EventPage(
-        data=items,
-        count=len(items),
-        journey_id=journey_id,
-        next_cursor=next_cursor,
-    )
+    # next_cursor MUST be derived from the raw DB page, BEFORE redaction. A full
+    # page whose last row is a withheld event (e.g. ACCESSIBILITY_DETECTED) still
+    # advances the cursor — otherwise cloud-sync would re-pull and stall on the
+    # gap forever. The cursor is the raw last event_id; redaction never drops it.
+    next_cursor = rows[-1]["event_id"] if len(rows) == limit else None
+    redacted = anonymise_page(rows)
+    return {
+        "data": redacted,
+        "count": len(redacted),
+        "journey_id": journey_id,
+        "next_cursor": next_cursor,
+    }

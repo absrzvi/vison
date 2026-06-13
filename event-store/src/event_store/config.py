@@ -23,10 +23,18 @@ class Settings(BaseSettings):
     # SecretStr so the value is not accidentally rendered in logs / repr.
     api_key: SecretStr | None = None
 
-    @field_validator("api_key", mode="after")
+    # Edge-anonymisation HMAC key. Salts the track_id → opaque-token map applied
+    # to events leaving the train via GET /api/v1/events (the cloud-sync pull
+    # path). MUST never leave the edge — the emitted tokens are not reversible
+    # without it. None = dev-mode bypass: a fixed dev key is used and a startup
+    # WARN is emitted (so cloud egress is still anonymised, just not secret).
+    anonymise_key: SecretStr | None = None
+
+    @field_validator("api_key", "anonymise_key", mode="after")
     @classmethod
     def _coerce_empty_to_none(cls, v: SecretStr | None) -> SecretStr | None:
-        """Treat an explicitly-empty ``EVENT_STORE_API_KEY=""`` as None.
+        """Treat an explicitly-empty secret env var (e.g. ``EVENT_STORE_API_KEY=""``)
+        as None.
 
         Without this, ``SecretStr("")`` would be non-None → require_api_key
         compares against an empty expected key → every client request 401s.

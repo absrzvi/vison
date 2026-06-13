@@ -186,37 +186,52 @@ class LuggageRackSaturationPayload(_BasePayload):
 
 
 class UnattendedBagPayload(_BasePayload):
-    """UNATTENDED_BAG — dwell_s is elapsed time since owner last detected near bag."""
+    """UNATTENDED_BAG — dwell_s is elapsed time since owner last detected near bag.
+
+    bbox and camera_id are Optional so the edge-egress anonymiser
+    (oebb_shared.events.anonymise) can DROP them on the train→cloud boundary —
+    pixel coordinates + camera locality narrow re-identification and no cloud
+    consumer reads them. On-train producers (inference) ALWAYS populate both;
+    the None case exists only for the redacted cloud copy.
+    """
 
     car_id: _NonEmptyStr
     zone: str | None = None
     track_id: _NonEmptyStr
     dwell_s: _NonNegFloat
-    bbox: BoundingBox
-    camera_id: _NonEmptyStr
+    bbox: BoundingBox | None = None
+    camera_id: _NonEmptyStr | None = None
     confidence: _ConfidenceScore | None = None
     model_versions: dict[str, str]  # E10-S1
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
-        return _drop_none(handler(self), "confidence")
+        data = _drop_none(handler(self), "confidence")
+        data = _drop_none(data, "bbox")
+        return _drop_none(data, "camera_id")
 
 
 class DoorObstructionPayload(_BasePayload):
-    """DOOR_OBSTRUCTION — clearance triggers ALERT_RESOLVED."""
+    """DOOR_OBSTRUCTION — clearance triggers ALERT_RESOLVED.
+
+    camera_id is Optional so the edge-egress anonymiser can drop it on the
+    train→cloud boundary (camera locality, unread by any cloud consumer).
+    On-train producers always populate it.
+    """
 
     car_id: _NonEmptyStr
     door_id: _NonEmptyStr
     obstruction_type: Literal["person", "object", "unknown"]
     track_id: _NonEmptyStr
-    camera_id: _NonEmptyStr
+    camera_id: _NonEmptyStr | None = None
     confidence: _ConfidenceScore | None = None
     door_state: Literal["open", "closing", "closed", "unknown"]
     model_versions: dict[str, str]  # E10-S1
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
-        return _drop_none(handler(self), "confidence")
+        data = _drop_none(handler(self), "confidence")
+        return _drop_none(data, "camera_id")
 
 
 # ---------------------------------------------------------------------------

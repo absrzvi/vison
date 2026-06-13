@@ -52,6 +52,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "auth.api_key_unset",
             message="EVENT_STORE_API_KEY is not configured — auth bypassed (dev mode)",
         )
+    if settings.anonymise_key is None:
+        log.warning(
+            "privacy.anonymise_key_unset",
+            message="EVENT_STORE_ANONYMISE_KEY is not configured — cloud egress "
+            "uses a non-secret dev key (tokens still opaque, but predictable)",
+        )
     try:
         yield
     finally:
