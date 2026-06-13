@@ -12,7 +12,7 @@
 | Dimension | Buckets | Source |
 |---|---|---|
 | `alert_code` | producer-defined string (not an enum) | [payloads.py:102](../../shared/src/oebb_shared/events/payloads.py) |
-| `confidence_score` | `high` (≥0.85) · `medium` (0.60–0.85) · `low` (<0.60) · `n/a` (sensor basis, no score) | [payloads.py:116-120](../../shared/src/oebb_shared/events/payloads.py) |
+| `confidence_score` | `high` (≥0.85) · `medium` (0.60–<0.85) · `low` (<0.60) · `n/a` (sensor basis, no score) — *the ≥0.85 gate and the medium/low split are a proposed PoC taxonomy, pending ÖBB calibration* | field type + sensor-basis `None` rule: [payloads.py:108-118](../../shared/src/oebb_shared/events/payloads.py). NB: shipped thresholds are **per-class** ([confidence_thresholds.py:8-14](../../cloud-backend/src/cloud_backend/config/confidence_thresholds.py): `door_obstruction` 0.85, `slip_fall` 0.75, all `# CALIBRATE`); the SOP's single ≥0.85 gate is the story-locked simplification (10-3 AC1/D3), not the live per-class value |
 | speed | `in-transit` (speed_kmh > 0) · `in-station` (speed_kmh = 0) | fusion `ContextState.speed_kmh` |
 | location | `in-transit` · `in-station` (mirrors speed for the PoC; distinct only if a stationary-in-transit case arises) | — |
 | train type | `conductorless` · `Fernverkehr` | `TBD — ÖBB fleet-config source` (see note) |
@@ -36,13 +36,14 @@
 |---|---|---|---|---|---|
 | high (≥0.85) | any | conductorless | `landside-immediate` | `TBD` | `TBD` |
 | high (≥0.85) | any | Fernverkehr | `fernverkehr-onboard-first` | `TBD` | `TBD` |
-| medium | any | conductorless | `landside-immediate` | `TBD` | `TBD` |
-| medium | any | Fernverkehr | `fernverkehr-onboard-first` | `TBD` | `TBD` |
+| medium (0.60–0.85) | any | any | `advisory-only` | `TBD` | `TBD` |
 | low (<0.60) | any | any | `advisory-only` | `TBD` | `TBD` |
 
-### `door_obstruction` / `door_fault` (door-at-speed — fusion, [enrichment.py:30-45](../../fusion/src/fusion/enrichment.py))
+### `door_obstruction` (live) / `door_fault` (anticipated) — door-at-speed (fusion, [enrichment.py:30-45](../../fusion/src/fusion/enrichment.py))
 
 > Severity is already speed-correlated in code: `critical` when `speed_kmh > 0` **or** speed unknown (fail-closed); `warning` at standstill. The matrix mirrors that.
+>
+> `door_obstruction` is live (producer [door_obstruction.py:74](../../fusion/src/fusion/door_obstruction.py)). `door_fault` has **no shipped producer** — it appears only in the `_severity_for` map at [enrichment.py:38](../../fusion/src/fusion/enrichment.py) and will route identically once a producer emits it (same caveat as `fire` / `unattended_item` below).
 
 | confidence | speed / location | train type | Decision | ÖBB owner | Signoff |
 |---|---|---|---|---|---|

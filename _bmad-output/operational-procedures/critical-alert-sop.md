@@ -33,7 +33,8 @@ An alert is **critical** when **either** condition holds:
 
 | Class | Shipped `alert_code` | Producer | Notes |
 |---|---|---|---|
-| Door-at-speed | `door_obstruction`, `door_fault` | fusion ([door_obstruction.py](../../fusion/src/fusion/door_obstruction.py), [enrichment.py](../../fusion/src/fusion/enrichment.py)) | Critical only while moving; advisory at standstill |
+| Door-at-speed (live) | `door_obstruction` | fusion ([door_obstruction.py:74](../../fusion/src/fusion/door_obstruction.py)) | Critical only while moving; advisory at standstill |
+| Door-at-speed (anticipated) | `door_fault` | *not yet emitted* — severity-mapped only ([enrichment.py:38](../../fusion/src/fusion/enrichment.py)) | No shipped producer; routes identically to `door_obstruction` once live |
 | Fall / slip | `slip_fall` | fusion ([health.py:218](../../fusion/src/fusion/health.py)) | |
 | Fire | *not yet emitted* | — | Forward-looking; no shipped producer. TCMS/sensor-basis when it lands (no `confidence_score`) |
 | Unattended item | *not yet emitted* | — | Forward-looking; no shipped producer |
@@ -123,7 +124,9 @@ not at the original fire time (an alert cannot "expire" during an outage)
         → resume §3.1 / §3.2 from the point of surfacing
 ```
 
-This is the behaviour the event-store sync cursor already provides (queued events are delivered in order on reconnect, no gap-drop). The SOP's contract: **a critical alert raised in a dead zone is never silently dropped.**
+This is the behaviour the event-store sync cursor already provides (queued events are delivered in order on reconnect, no gap-drop) **within the onboard retention window**. The SOP's contract: **a critical alert raised in a dead zone is never silently dropped, provided the outage does not exceed the onboard retention window.**
+
+> **⚠ Retention-window caveat (shipped behaviour).** The onboard event-store keeps only the **most recent 3 journeys** — `truncate_old_journeys(retain=3)` runs on every sync-cursor advance ([cursor.py:22-44](../../event-store/src/event_store/sync/cursor.py)), purging by journey *recency*, not by what cloud-sync has already pulled. Cloud-sync pulls oldest-first ([pull_loop.py](../../cloud-sync/src/cloud_sync/pull_loop.py)) but acks only the contiguous *published* prefix ([ack_loop.py](../../cloud-sync/src/cloud_sync/ack_loop.py)); these two gates diverge on a long backlog. So an outage spanning **more than 3 journeys** before cloud-sync drains the backlog can age out an un-pulled `ALERT_RAISED` — a genuine silent-drop edge. Sizing the retention window against the worst-case dead-zone duration is a **pilot-kickoff dependency** (see [pilot-kickoff-checklist.md](pilot-kickoff-checklist.md)).
 
 ---
 

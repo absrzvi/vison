@@ -19,6 +19,7 @@
 - [ ] **Train-type fleet-config source confirmed** — ÖBB confirms the per-vehicle "conductorless vs Fernverkehr" metadata source so the routing matrix's train-type column can be populated with live fleet data (D6).
 - [ ] **Amber-window value confirmed** — ÖBB confirms or adjusts the 10-minute amber window (PoC default) used in the SOP and drill cadence (D4).
 - [ ] **ÖBB ops on-call escalation path defined** — the final escalation step in SOP §3.3 (`TBD — ÖBB signoff`).
+- [ ] **Onboard retention window sized vs worst-case dead-zone duration** — the event-store keeps only the most recent 3 journeys (`truncate_old_journeys(retain=3)`); an outage spanning >3 journeys can age out an un-pulled critical alert (SOP §3.4 caveat). Confirm `retain` is sized against the worst-case dead-zone duration on the pilot route, or accept the residual risk in writing.
 
 ## Other kickoff gates (stubs — filled by their owning stories)
 

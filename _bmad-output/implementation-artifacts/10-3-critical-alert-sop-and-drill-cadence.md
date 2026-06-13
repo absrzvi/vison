@@ -188,3 +188,22 @@ claude-opus-4-8[1m] (Claude Opus 4.8, 1M context)
 ### Change Log
 
 - 2026-06-14 — Implemented E10-S3 (documentation-only): authored critical-alert SOP, routing matrix, drill cadence, pilot-kickoff checklist under `_bmad-output/operational-procedures/`; cross-linked from gap analysis Gap 1. Status ready-for-dev → review.
+- 2026-06-14 — Code-review (adapted docs review, 3 adversarial layers + per-finding verification): 12 findings → 5 patches applied (1 pre-fixed by working-tree edit), 7 dismissed. See review section below.
+
+## Senior Developer Review (AI) — Round 1
+
+**Reviewer:** Claude (Opus 4.8) · **Date:** 2026-06-14 · **Mode:** adapted docs review (Acceptance Auditor + Accuracy Hunter + Adversarial Doc Reviewer, each with independent per-finding verification). **Outcome:** Changes applied — docs corrected.
+
+**12 raw findings → 5 real (patched), 7 dismissed as verified true-negatives / intended PoC-draft state.**
+
+### Action Items (all resolved)
+
+- [x] **[HIGH][Accuracy] SOP §3.4 "never silently dropped" was overstated.** The onboard event-store's `truncate_old_journeys(retain=3)` purges by journey *recency*, not by the cloud-sync acked prefix; cloud-sync pulls oldest-first but acks only the contiguous *published* prefix — the two gates diverge on a >3-journey backlog, so a long dead-zone outage can age out an un-pulled critical `ALERT_RAISED`. **The two review layers split on this** (Auditor dismissed, Accuracy Hunter patched); I settled it empirically against `cursor.py`/`pull_loop.py`/`ack_loop.py` — the Accuracy Hunter was correct, my own initial verdict and the Auditor's were wrong (we conflated ack-prefix-gating with truncation, which is recency-gated). Fixed: bounded the claim to the retention window + added a caveat blockquote + a pilot-kickoff open-dependency to size `retain` vs worst-case dead-zone duration. [critical-alert-sop.md §3.4]
+- [x] **[MEDIUM][Accuracy] Matrix cited `payloads.py:116-120` for the confidence buckets, which define no buckets.** The 0.85 value lives in `confidence_thresholds.py` (per-class), 0.60 is the unrelated `DEGRADED_BANNER_FLOOR`. Fixed citation + flagged the medium/low split as a proposed PoC taxonomy + surfaced the per-class-vs-single-gate divergence (`slip_fall` is 0.75, not 0.85). [alert-routing-matrix.md legend]
+- [x] **[MEDIUM][Accuracy] `door_fault` was shown as a shipped producer-backed code.** Nothing emits it — it appears only in the `_severity_for` map ([enrichment.py:38]). Fixed: split into "live" (`door_obstruction`) vs "anticipated" (`door_fault`) in both SOP table and matrix header, mirroring the fire/unattended_item treatment. [critical-alert-sop.md §2, alert-routing-matrix.md]
+- [x] **[HIGH][Contradiction] slip_fall matrix medium row routed sub-0.85 as critical** (violating the SOP's 0.85 gate for model-basis codes). **Already fixed in the working tree** (medium row → advisory-only) before patches applied. [alert-routing-matrix.md slip_fall table]
+- [x] **[LOW][Clarity] Confidence buckets overlapped at exactly 0.85** (medium written closed at top). Fixed: medium → `0.60–<0.85` (half-open), matching the code gate `>= threshold`. [alert-routing-matrix.md legend]
+
+### Dismissed (verified true-negatives — no change)
+
+amber-window-anchor consistency (§3.4 "starts on surfacing" is correct); location dimension redundancy (faithful to AC2, self-disclosed); fire/unattended_item forward-looking framing (clear); scope discipline (no police/station/Conrad-as-human reintroduced); link integrity (all resolve); §2 table title (Class column already carries the "Door-at-speed" qualifier).
