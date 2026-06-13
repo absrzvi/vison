@@ -133,7 +133,7 @@ async def patch_preferences(
         },
     )
     await db.commit()
-    row = result.fetchone()
+    row = result.one()
     return PreferencesPatchOut(
         operator_id=row.operator_id,
         threshold_sec=row.threshold_sec,

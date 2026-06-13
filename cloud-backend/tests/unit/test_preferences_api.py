@@ -61,7 +61,7 @@ def test_patch_preferences_body_operator_id_ignored() -> None:
     async def _fake_gen():
         session = AsyncMock()
         result = MagicMock()
-        result.fetchone = MagicMock(return_value=mock_row)
+        result.one = MagicMock(return_value=mock_row)
         session.execute = AsyncMock(return_value=result)
         session.commit = AsyncMock()
         yield session
@@ -150,7 +150,7 @@ def test_patch_preferences_valid_threshold_returns_200() -> None:
     async def _fake_gen():
         session = AsyncMock()
         result = MagicMock()
-        result.fetchone = MagicMock(return_value=mock_row)
+        result.one = MagicMock(return_value=mock_row)
         session.execute = AsyncMock(return_value=result)
         session.commit = AsyncMock()
         yield session
