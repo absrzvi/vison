@@ -122,6 +122,83 @@ async def test_invalidate_forces_reload() -> None:
 
 
 @pytest.mark.asyncio
+async def test_concurrent_cold_load_queries_once() -> None:
+    """R3 clou-3/4: two concurrent is_filtered on a cold cache must issue ONE
+    query — the lock + double-check serialise the check-await-set."""
+    import asyncio
+
+    f = AlertClassFilter(ttl_s=60.0)
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def _slow_execute(stmt: Any, params: Any = None) -> MagicMock:
+        started.set()
+        await release.wait()  # hold the "query" open so the 2nd caller queues
+        result = MagicMock()
+        result.__iter__ = MagicMock(
+            return_value=iter([_disabled_row("UNATTENDED_BAG", _DISABLED_AT)])
+        )
+        return result
+
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=_slow_execute)
+
+    async def _call() -> bool:
+        return await f.is_filtered(
+            db, event_type="ALERT_RAISED", payload={"alert_code": "x"}, t_raised=_NOW
+        )
+
+    t1 = asyncio.create_task(_call())
+    await started.wait()
+    t2 = asyncio.create_task(_call())  # arrives while t1 holds the lock+query
+    await asyncio.sleep(0)
+    release.set()
+    await asyncio.gather(t1, t2)
+    assert db.execute.await_count == 1  # second caller reused the cached load
+
+
+@pytest.mark.asyncio
+async def test_invalidate_during_inflight_load_keeps_cache_stale() -> None:
+    """R3 clou-3/4: an invalidate() landing during the load's query must NOT let
+    that pre-write snapshot cache — else the kill-switch is masked for a TTL."""
+    import asyncio
+
+    f = AlertClassFilter(ttl_s=60.0)
+    in_query = asyncio.Event()
+    release = asyncio.Event()
+
+    async def _slow_execute(stmt: Any, params: Any = None) -> MagicMock:
+        in_query.set()
+        await release.wait()
+        result = MagicMock()
+        result.__iter__ = MagicMock(return_value=iter([]))  # pre-disable snapshot
+        return result
+
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=_slow_execute)
+
+    task = asyncio.create_task(
+        f.is_filtered(
+            db, event_type="ALERT_RAISED", payload={"alert_code": "x"}, t_raised=_NOW
+        )
+    )
+    await in_query.wait()
+    f.invalidate()  # admin disable lands mid-query
+    release.set()
+    await task
+    # The racy snapshot must not have refreshed _loaded_at → next call re-loads.
+    db2 = _db_returning([_disabled_row("UNATTENDED_BAG", _DISABLED_AT)])
+    filtered = await f.is_filtered(
+        db2,
+        event_type="ALERT_RAISED",
+        payload={"alert_code": "UNATTENDED_BAG"},
+        t_raised=_NOW,
+    )
+    assert db2.execute.await_count == 1  # forced reload, not served from stale map
+    assert filtered is True
+
+
+@pytest.mark.asyncio
 async def test_empty_table_means_all_enabled() -> None:
     f = AlertClassFilter(ttl_s=60.0)
     db = _db_returning([])

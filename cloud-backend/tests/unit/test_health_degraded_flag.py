@@ -8,11 +8,15 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
+from cloud_backend.config import get_settings
 from cloud_backend.database import get_db
 from cloud_backend.main import app
 from cloud_backend.routes.health import degraded_cache
 
 pytestmark = pytest.mark.unit
+
+# R3 clou-2: /api/v1/health now requires X-API-Key (matching sibling /api/v1/*).
+_HEADERS = {"X-API-Key": get_settings().api_key}
 
 
 class _MeanSession:
@@ -43,9 +47,19 @@ def _reset() -> Any:
 
 
 def _get_health(client: TestClient) -> dict[str, Any]:
-    r = client.get("/api/v1/health")
+    r = client.get("/api/v1/health", headers=_HEADERS)
     assert r.status_code == 200
     return r.json()
+
+
+def test_api_health_requires_api_key() -> None:
+    """R3 clou-2: missing/wrong X-API-Key → 401, like every other /api/v1/*."""
+    _override_db(_MeanSession(None))
+    with TestClient(app, raise_server_exceptions=False) as client:
+        assert client.get("/api/v1/health").status_code == 401
+        assert client.get(
+            "/api/v1/health", headers={"X-API-Key": "wrong"}
+        ).status_code == 401
 
 
 def test_flag_false_when_no_model_alerts_in_window() -> None:
