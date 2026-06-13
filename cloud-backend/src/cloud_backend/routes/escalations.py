@@ -15,6 +15,7 @@ import json
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Security
 from sqlalchemy import text
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.auth import require_api_key
@@ -28,11 +29,17 @@ router = APIRouter(prefix="/api/v1/escalations", dependencies=[Security(require_
 
 
 def _publish_lifecycle(escalation_id: str, status: str) -> None:
-    """Fan out an ESCALATION_UPDATED frame so other operators' panels converge."""
+    """Fan out an ESCALATION_UPDATED frame so other operators' panels converge.
+
+    `event_id`/`event_type` are required by the SSE frame builder (alerts_sse).
+    `id` is what the Control Centre consumer matches on (FleetContext keys
+    escalations by `payload.id`); without it the UI never converges.
+    """
     publish_alert(
         {
             "event_id": escalation_id,
             "event_type": "ESCALATION_UPDATED",
+            "id": escalation_id,
             "escalation_id": escalation_id,
             "status": status,
         }
@@ -61,7 +68,7 @@ async def acknowledge_escalation(
 
     # Idempotent: only the first acknowledge transitions and records the operator.
     if status == "unacknowledged":
-        await db.execute(
+        result: CursorResult[tuple[()]] = await db.execute(  # type: ignore[assignment]
             text("""
                 UPDATE escalations
                 SET status = 'acknowledged', t_ack = NOW(), ack_operator_id = :op
@@ -70,12 +77,16 @@ async def acknowledge_escalation(
             {"id": escalation_id, "op": body.operator_id},
         )
         await db.commit()
-        _publish_lifecycle(escalation_id, "acknowledged")
-        log.info(
-            "escalation_acknowledged",
-            escalation_id=escalation_id,
-            operator_id=body.operator_id,
-        )
+        # Review R1: only fan out + log when this request actually transitioned the
+        # row. Under a concurrent ack race the loser matches 0 rows — no duplicate
+        # SSE frame, no duplicate log.
+        if result.rowcount == 1:
+            _publish_lifecycle(escalation_id, "acknowledged")
+            log.info(
+                "escalation_acknowledged",
+                escalation_id=escalation_id,
+                operator_id=body.operator_id,
+            )
 
     return {"escalation_id": escalation_id, "status": "acknowledged"}
 
@@ -104,7 +115,7 @@ async def resolve_escalation(
 
     # Idempotent: only transition while still acknowledged.
     if status == "acknowledged":
-        await db.execute(
+        result: CursorResult[tuple[()]] = await db.execute(  # type: ignore[assignment]
             text("""
                 UPDATE escalations
                 SET status = 'resolved', t_resolve = NOW(),
@@ -119,7 +130,13 @@ async def resolve_escalation(
             },
         )
         await db.commit()
-        _publish_lifecycle(escalation_id, "resolved")
-        log.info("escalation_resolved", escalation_id=escalation_id, operator_id=body.operator_id)
+        # Review R1: fan out + log only when this request transitioned the row.
+        if result.rowcount == 1:
+            _publish_lifecycle(escalation_id, "resolved")
+            log.info(
+                "escalation_resolved",
+                escalation_id=escalation_id,
+                operator_id=body.operator_id,
+            )
 
     return {"escalation_id": escalation_id, "status": "resolved"}

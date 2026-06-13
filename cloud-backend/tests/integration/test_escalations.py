@@ -173,6 +173,32 @@ async def test_alert_raised_creates_escalation_row(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_alert_raised_empty_payload_skips_escalation_no_500(
+    app_client: AsyncClient, factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Review R1: an empty-payload ALERT_RAISED bypasses typed validation
+    (EventEnvelope skips it when payload is empty). The escalation upsert must
+    skip rather than 500 on the NOT-NULL alert_id/alert_code columns."""
+    event_id = str(uuid.uuid4())
+    env = {
+        "event_id": event_id,
+        "journey_id": "V001_RJ-0001_20260613",
+        "vehicle_id": "V001",
+        "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+        "event_type": "ALERT_RAISED",
+        "severity": "warning",
+        "source": "fusion",
+        "schema_version": 1,
+        "payload": {},
+    }
+    r = await app_client.post("/api/v1/events", headers=_API_HEADERS, json={"events": [env]})
+    # Ingest still succeeds (the event is stored); no escalation row is created.
+    assert r.status_code == 202, r.text
+    assert await _fetch_escalation(factory, event_id) is None
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_alert_raised_escalation_idempotent(
     app_client: AsyncClient, factory: async_sessionmaker[AsyncSession]
 ) -> None:
@@ -337,6 +363,9 @@ async def test_acknowledge_publishes_sse_frame(
         _subscribers.discard(q)
     assert frame["event_type"] == "ESCALATION_UPDATED"
     assert str(frame["event_id"]) == event_id
+    # Review R1 blocker: the CC consumer (FleetContext) matches on payload.id, so the
+    # frame must carry `id` (= escalation_id), not only escalation_id.
+    assert str(frame["id"]) == event_id
     assert frame["status"] == "acknowledged"
 
 

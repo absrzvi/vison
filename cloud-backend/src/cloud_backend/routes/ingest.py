@@ -109,7 +109,19 @@ async def ingest_events(
             # E10-S6 AC2: create the authoritative escalation row from ALERT_RAISED.
             # escalation_id = the envelope event_id (the id the Control Centre uses in
             # its acknowledge/resolve URLs); alert_id from payload pairs ALERT_RESOLVED.
-            if ev.event_type == "ALERT_RAISED":
+            # Review R1: EventEnvelope skips typed-payload validation when payload is
+            # empty, so a malformed ALERT_RAISED with no alert_id/alert_code can reach
+            # here. Skip the upsert (NOT-NULL columns) rather than 500 — log + move on.
+            alert_id = ev.payload.get("alert_id")
+            alert_code = ev.payload.get("alert_code")
+            if ev.event_type == "ALERT_RAISED" and not (alert_id and alert_code):
+                log.warning(
+                    "escalation_skipped_missing_alert_fields",
+                    event_id=ev.event_id,
+                    has_alert_id=bool(alert_id),
+                    has_alert_code=bool(alert_code),
+                )
+            elif ev.event_type == "ALERT_RAISED":
                 await db.execute(
                     text("""
                         INSERT INTO escalations
@@ -124,9 +136,9 @@ async def ingest_events(
                     """),
                     {
                         "escalation_id": ev.event_id,
-                        "alert_id": ev.payload.get("alert_id"),
+                        "alert_id": alert_id,
                         "alert_event_id": ev.event_id,
-                        "alert_code": ev.payload.get("alert_code"),
+                        "alert_code": alert_code,
                         "journey_id": ev.journey_id,
                         "vehicle_id": ev.vehicle_id,
                         "t_fired": ts_dt,

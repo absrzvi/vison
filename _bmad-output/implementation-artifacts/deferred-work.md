@@ -1,5 +1,11 @@
 ﻿# Deferred Work
 
+## Deferred from: code review of story 10-6 (2026-06-13)
+
+- **Duplicate `publish_alert` on duplicate ALERT_RAISED ingest** [cloud-backend/src/cloud_backend/routes/ingest.py] — pre-existing: the ALERT_RAISED SSE fan-out fires unconditionally even when the event is a duplicate (ON CONFLICT DO NOTHING on the events row). Not introduced by 10-6. Guard the publish on insert rowcount; bundle into Epic 9 (container/infra hardening) or an SSE-dedup story.
+- **SSE replay omits ESCALATION_UPDATED on reconnect** [cloud-backend/src/cloud_backend/routes/alerts_sse.py `_replay_since`] — ESCALATION_UPDATED is published to the in-process subscriber queue but never persisted, so a client that disconnects after an acknowledge and reconnects won't replay it. Inherent to ADR-20 (REST reconciles state on reconnect). Acceptable for PoC; document the boundary. Revisit with durable SSE log (OQ-13) before fleet rollout.
+- **CC still uses WebSocket transport, not SSE** [control-centre/src/ws/RealWebSocketClient.js] — despite ADR-20, the CC client is still `new WebSocket(...)`. The 10-6 ESCALATION_UPDATED fan-out goes over SSE (`publish_alert`); cross-operator convergence (AC5) is end-to-end only once E2-S1 ("Real SSE Client") migrates the client. E2-S1's scope, not 10-6's.
+
 ## RESOLVED 2026-06-13: cloud-backend integration suite — 4 pre-existing failures (task_cdd39efb)
 
 Spun off from 10-1 as `task_cdd39efb` (baseline `9d4a60d`, 2026-06-07 — an architecture-docs commit; untouched by any 10-1 code commit). Reproduced under Docker/testcontainers; the "`:param::jsonb` insert-helper bug" label was an oversimplification — there is no shared insert helper (no `conftest.py` in cloud-backend) and the four had **four distinct root causes**, all pre-existing test-vs-schema drift:

@@ -4,7 +4,7 @@ baseline_commit: 6a2c8846c3eb2c7cf8b6d44c1b8d502cfe688cdd
 
 # Story 10.6: Escalation Lifecycle Persistence (backend)
 
-Status: review
+Status: done
 
 <!-- Created 2026-06-13 via bmad-create-story (Amelia). Prerequisite for 10-2 (operator behavioural telemetry).
      Source: research workflow wf_bb727ef4-f6e (5-agent artifact+codebase audit) + independent verification.
@@ -128,6 +128,26 @@ cloud-backend: `pytest -m unit` (fast) + `pytest -m integration` (Docker/testcon
 - [Source: shared/src/oebb_shared/events/payloads.py:94-135] (AlertRaisedPayload)
 - Research: workflow `wf_bb727ef4-f6e` (schema-payload-audit, alembic-migration-pattern, api-route-and-analytics-pattern agents)
 
+## Senior Developer Review (AI) — Round 1
+
+Reviewed 2026-06-13 (claude-opus-4-8[1m]) via 3 adversarial layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor — workflow `wf_e710dd45-3f5`). 25 raw findings → triaged against live HEAD. **Outcome: Changes Requested → RESOLVED.** 3 patches applied (1 Blocker + 2 Med) + verified; 3 deferred (pre-existing/E2-S1 scope); 1 false-positive dismissed; ~15 LOW noise dismissed. No High survived verification. Post-patch: cloud-backend **143 passed**, CC **243 passed**, ruff+mypy clean on touched files.
+
+### Review Findings
+
+**Patch (RESOLVED 2026-06-13):**
+- [x] [Review][Patch] **[BLOCKER] ESCALATION_UPDATED SSE frame missing `id` field** [routes/escalations.py `_publish_lifecycle`] — FIXED: frame now includes `id` (= escalation_id) so the CC consumer ([FleetContext.jsx:121](../../control-centre/src/context/FleetContext.jsx)) matches. Test extended (`test_acknowledge_publishes_sse_frame` asserts `frame["id"]`). *(Note: end-to-end convergence also needs E2-S1's WS→SSE client migration — deferred below; the backend frame is now correct regardless of transport.)*
+- [x] [Review][Patch] **Transition publishes/logs even on a 0-row UPDATE under concurrency** — FIXED: both acknowledge + resolve capture `result.rowcount` (typed `CursorResult`) and gate `_publish_lifecycle` + log on `== 1`. No redundant SSE frame / duplicate log under a concurrent-transition race.
+- [x] [Review][Patch] **Empty-payload ALERT_RAISED → NOT-NULL 500 on escalation insert** — FIXED: ingest skips the escalation upsert with a structured `escalation_skipped_missing_alert_fields` warning when `alert_id`/`alert_code` are absent; event still stored, request returns 202. New test `test_alert_raised_empty_payload_skips_escalation_no_500`.
+
+**Deferred (pre-existing / out of scope — not caused by this change):**
+- [x] [Review][Defer] **Duplicate `publish_alert` on duplicate ALERT_RAISED ingest** [routes/ingest.py] — pre-existing ALERT_RAISED SSE fan-out behaviour, untouched by this story; tracked for Epic 9.
+- [x] [Review][Defer] **SSE replay omits ESCALATION_UPDATED on reconnect** [routes/alerts_sse.py `_replay_since`] — inherent to ADR-20 (REST reconciles on reconnect; ESCALATION_UPDATED is not DB-persisted). Architectural; document, don't fix here.
+- [x] [Review][Defer] **CC still uses WebSocket transport, not SSE** [control-centre/src/ws/RealWebSocketClient.js] — E2-S1 ("Real SSE Client") owns the WS→SSE migration per ADR-20; cross-operator convergence is end-to-end only once that lands.
+
+**Dismissed (false positive / non-actionable):**
+- [Review][Dismiss] **AC4 "resolved row + invalid tag → 200"** (Acceptance Auditor, claimed High) — FALSE POSITIVE: tag validation ([escalations.py:98-103](../../cloud-backend/src/cloud_backend/routes/escalations.py)) runs BEFORE the `status == 'acknowledged'` idempotent branch, so a resolved row with an invalid tag returns 422 as specified. Confirmed against live code.
+- [Review][Dismiss] ~15 LOW/nit findings affirming correctness (AC1 columns present, D2 round-trip tested, D5 nullable, idempotence covered) or requesting extra tests for already-covered paths.
+
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -167,3 +187,4 @@ Amelia (claude-opus-4-8[1m])
 ### Change Log
 
 - 2026-06-13: Implemented 10-6. **Deviation from AC1:** `escalation_id` + `alert_event_id` typed `UUID(as_uuid=False)` instead of TEXT, to match the `events.event_id` uuid type and keep the FK type-consistent; the CC sends the id as a string in the URL and Postgres coerces. All other columns per AC1.
+- 2026-06-13: Code-review Round 1 (3 adversarial layers). 3 patches applied: (1) ESCALATION_UPDATED SSE frame now carries `id` for CC matching; (2) acknowledge/resolve gate publish+log on `result.rowcount == 1` (concurrent-transition noise); (3) ingest skips escalation upsert + warns on empty-payload ALERT_RAISED (was a NOT-NULL 500). cloud-backend 142→143 (+1 test). 3 deferred to deferred-work.md (duplicate-publish, SSE replay of ESCALATION_UPDATED, CC WS→SSE migration = E2-S1). Status → done.
