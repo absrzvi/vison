@@ -2274,32 +2274,31 @@ All production container images use non-editable installs, include `HEALTHCHECK`
 
 ---
 
-#### Story E10-S3 — Conrad/Claudia Operational SOP & Drill Cadence
+#### Story E10-S3 — Critical-Alert Operational SOP & Drill Cadence
+
+> **Actor model corrected 2026-06-13** (see memory `project-actor-model-conrad`). "Conrad" is the **virtual on-train conductor = the onboard AI platform** that *raises* alerts — not a human in the response loop. Acknowledgement authority is **train-type-conditional**: on **conductorless** trains (regional/Nahverkehr) only the landside Fleet Manager / remote staff can acknowledge; on **Fernverkehr** (long-distance) trains an onboard human conductor can also acknowledge. The original two-actor "Conrad assess → escalate → Claudia" sequence and the ÖBB police/station security-handoff contract are **out of PoC scope** and removed from this story.
 
 **As an** AI PM preparing for ÖBB pilot kickoff,
-**I want** a documented two-actor SOP for critical alerts, a decision matrix binding (alert_code × confidence × speed × location) to routing, a signed ÖBB security handoff contract, and a drill cadence wired to the pilot kickoff checklist,
+**I want** a documented SOP for critical alerts that branches on train type (conductorless vs Fernverkehr) and acknowledgement channel, a decision matrix binding (alert_code × confidence × speed × location) to a routing/priority decision, and a drill cadence wired to the pilot kickoff checklist,
 **so that** when a critical alert fires there is a written and rehearsed sequence — not a UI screen and a hope.
 
 **Acceptance criteria:**
 
-**Given** a critical alert fires (fire, fall, door-at-speed, unattended item with `confidence_score >= 0.85`)  
+**Given** a critical alert fires (fire, fall, door-at-speed, unattended item with `confidence_score >= 0.85`), raised by the on-train platform (Conrad)  
 **When** the operational team responds  
-**Then** they follow the SOP in `_bmad-output/operational-procedures/critical-alert-sop.md` covering: happy path (Conrad assess + escalate → Claudia acknowledge → resolve), Conrad-unreachable branch (auto-route to Claudia after 10 min amber), Claudia-unreachable branch (secondary Control Centre operator paged), dead-zone branch (event queued onboard, escalation surfaces on reconnect)
+**Then** they follow the SOP in `_bmad-output/operational-procedures/critical-alert-sop.md` covering: **conductorless-train branch** (landside Fleet Manager / remote staff acknowledge + resolve — the default and primary PoC case), **Fernverkehr branch** (onboard conductor may acknowledge from the Conductor App, else it falls through to landside after the amber window), **landside-unreachable branch** (secondary Control Centre operator paged), and **dead-zone branch** (event queued onboard, escalation surfaces on reconnect). No onboard-human step is assumed on conductorless trains.
 
 **Given** the critical-alert decision matrix in `_bmad-output/operational-procedures/alert-routing-matrix.md`  
 **When** an alert is emitted  
-**Then** the matrix defines, per `alert_code`, the routing decision as a function of `confidence_score` bucket, train speed bucket, and location (in-station vs in-transit); each row has a signoff date and ÖBB ops owner
+**Then** the matrix defines, per `alert_code`, the priority/handling decision as a function of `confidence_score` bucket, train speed bucket, location (in-station vs in-transit), **and train type (conductorless vs Fernverkehr)**; each row has a signoff date and ÖBB ops owner
 
-**Given** the ÖBB security handoff contract  
-**When** Claudia tags an escalation with the "ÖBB security notified" outcome tag  
-**Then** the contract defines who receives the notification (named role + channel), within what SLA (e.g. 5 min acknowledge), and the escalation path if SLA is breached; the contract is signed by ÖBB Sicherheit and Nomad before pilot kickoff
+**And** a drill cadence is added to the pilot kickoff checklist: monthly tabletop drills (the landside team — and, for Fernverkehr, an onboard conductor — walk the SOP for a randomly selected critical alert class), quarterly live drills (a planted test event on a non-revenue service)  
+**And** both documents are linked from `_bmad-output/planning-artifacts/owning-the-gap-ai-pm-analysis.md` Gap 1
 
-**And** a drill cadence is added to the pilot kickoff checklist: monthly tabletop drills (Conrad + Claudia walk the SOP for a randomly selected critical alert class), quarterly live drills (a planted test event on a non-revenue service)  
-**And** all four documents are linked from `_bmad-output/planning-artifacts/owning-the-gap-ai-pm-analysis.md` Gap 1  
-**And** Open Question 1 from [scenario-02d](../design-artifacts/C-UX-Scenarios/02d-conrad-unattended-bag.md) is closed by the security handoff contract
+**Out of PoC scope (explicit):** ÖBB police/station security-handoff contract and the "ÖBB security notified" outcome tag (single-landside-actor model has no police/station hop); any SOP branch that treats Conrad as a human who "assesses" or can be "unreachable" (Conrad is the platform — platform liveness is the 10-1 heartbeat/AI-pipeline-health concern, not an SOP routing branch).
 
-**Dependencies:** E10-S1 (confidence_score must exist to define the decision matrix)  
-**Deliverables:** `_bmad-output/operational-procedures/critical-alert-sop.md`, `_bmad-output/operational-procedures/alert-routing-matrix.md`, `_bmad-output/operational-procedures/oebb-security-handoff-contract.md`, `_bmad-output/operational-procedures/drill-cadence.md`, updates to pilot kickoff checklist
+**Dependencies:** E10-S1 (confidence_score must exist to define the decision matrix); train-type metadata available per vehicle (conductorless vs Fernverkehr) — confirm source with ÖBB (fleet config) before the matrix's train-type column can be populated  
+**Deliverables:** `_bmad-output/operational-procedures/critical-alert-sop.md`, `_bmad-output/operational-procedures/alert-routing-matrix.md`, `_bmad-output/operational-procedures/drill-cadence.md`, updates to pilot kickoff checklist
 
 **Permission tier:** Tier 2 (documentation only — but each artefact requires named ÖBB signoff before pilot, which is a Tier 3 process boundary)
 

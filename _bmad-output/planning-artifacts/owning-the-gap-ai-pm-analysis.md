@@ -4,7 +4,9 @@
 
 ## 1. The escalation sequence is designed, not operationalised
 
-**The Question:** When a critical alert fires, what is the exact sequence of human actions that should follow — and is that sequence written down, trained, and rehearsed?
+> **⚠️ Superseded by the actor-model correction (2026-06-13 — memory `project-actor-model-conrad`).** The two-actor "Conrad assess → escalate → Claudia acknowledge" sequence below describes a model the PoC does NOT use. **Conrad is the virtual on-train conductor (the onboard AI platform that raises alerts), not a human in the response loop.** Acknowledgement is **train-type-conditional**: conductorless trains → landside Fleet Manager / remote staff only; Fernverkehr trains → onboard conductor may also acknowledge. The ÖBB police/station security-handoff contract is out of PoC scope. The gap below (no written/rehearsed SOP) is still real, but E10-S3 now addresses it under the corrected model — see the re-scoped E10-S3 in [epics.md](epics.md). The original text is retained as the historical analysis.
+
+**The Question:** When a critical alert fires, what is the exact sequence of actions that should follow — and is that sequence written down, trained, and rehearsed?
 
 **What our docs cover today:**
 - Two-actor sequence (Conrad assess → escalate still-frame → Claudia Acknowledge → Resolve with tags + outcome text) in [scenario-02d](_bmad-output/design-artifacts/C-UX-Scenarios/02d-conrad-unattended-bag.md) and [scenario-12](_bmad-output/design-artifacts/C-UX-Scenarios/12-claudia-live-fleet-monitoring.md).
