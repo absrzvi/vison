@@ -138,6 +138,11 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
   useEffect(() => {
     if (!escalation?.id) return undefined;
 
+    // Capture THIS escalation's id in the effect's own closure (it is the dep, so
+    // it is stable for the effect's lifetime). Reading escIdRef.current at emit
+    // time instead would race: a separate effect advances escIdRef to the next
+    // escalation, and this cleanup could emit the old dwell against the new id.
+    const escalationId = escalation.id;
     const tViewed = new Date().toISOString();
     const mountedAt = Date.now();
     let dwellFocusMs = 0;
@@ -157,23 +162,34 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
     };
 
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        if (focusStart === null) focusStart = Date.now();
-      } else {
+      if (document.visibilityState === 'hidden') {
         flushFocus();
+        // pagehide/freeze paths (mobile Safari, bfcache) don't fire beforeunload;
+        // a hidden transition is the last reliable signal to emit before unload.
+        emitIfUnacknowledged();
+      } else if (focusStart === null) {
+        focusStart = Date.now();
       }
     };
 
     const emitIfUnacknowledged = () => {
-      // Guard against a double emit if both beforeunload and unmount-cleanup fire.
+      // Guard against a double emit across beforeunload / pagehide / visibility /
+      // unmount-cleanup all firing.
       if (emitted) return;
       // Suppress the StrictMode throwaway-unmount beacon (see MIN_VIEW_MS).
       if (Date.now() - mountedAt < MIN_VIEW_MS) return;
-      if (statusRef.current !== 'unacknowledged') return;
+      // Status of THIS escalation. statusRef tracks the currently-displayed
+      // escalation; trust it only while we are still on this id (ack-while-open
+      // keeps the same id, so the effect did not re-run and statusRef is valid).
+      // If we have already switched to another escalation, statusRef belongs to
+      // that one — but switching never acknowledges this one, so it was left
+      // unacknowledged and a dismissal is owed.
+      const stillThisEscalation = escIdRef.current === escalationId;
+      if (stillThisEscalation && statusRef.current !== 'unacknowledged') return;
       emitted = true;
       flushFocus();
       emitSilentlyDismissed({
-        escalationId: escIdRef.current,
+        escalationId,
         operatorId: OPERATOR_ID,
         tViewed,
         tDismissed: new Date().toISOString(),
@@ -182,12 +198,15 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
     };
 
     document.addEventListener('visibilitychange', onVisibility);
-    // beforeunload covers tab close / browser quit (unmount does not fire then).
+    // beforeunload + pagehide cover tab close / browser quit / bfcache freeze
+    // (unmount does not fire on those). pagehide is the reliable mobile-Safari path.
     window.addEventListener('beforeunload', emitIfUnacknowledged);
+    window.addEventListener('pagehide', emitIfUnacknowledged);
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('beforeunload', emitIfUnacknowledged);
+      window.removeEventListener('pagehide', emitIfUnacknowledged);
       // Route change / parent clearing the selection → component unmounts here.
       emitIfUnacknowledged();
     };

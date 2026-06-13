@@ -64,10 +64,12 @@ async def get_escalation_funnels(
     if dt_from is not None and dt_to is not None and dt_from > dt_to:
         return _invalid_range_response()
 
-    # WHERE: window is [COALESCE(:from, NOW()-7d), COALESCE(:to, NOW())].
+    # WHERE: window is half-open [COALESCE(:from, NOW()-7d), COALESCE(:to, NOW())).
+    # Half-open upper bound matches the weekly report's `t_event < :to` so a row
+    # stamped exactly on an ISO-week boundary is counted by exactly one window.
     window_clause = (
         "t_event >= COALESCE(:from, NOW() - INTERVAL '7 days') "
-        "AND t_event <= COALESCE(:to, NOW())"
+        "AND t_event < COALESCE(:to, NOW())"
     )
     params: dict[str, object | None] = {"from": dt_from, "to": dt_to}
     code_clause = ""
@@ -78,6 +80,9 @@ async def get_escalation_funnels(
     # Per-alert_code transition counts + ack-latency percentiles. PERCENTILE_CONT is
     # an ordered-set aggregate; FILTER restricts it to the acknowledged rows whose
     # latency = t_event - t_fired. Returns NULL when no acknowledged row is in window.
+    # GREATEST(…, 0): t_fired is the onboard, ingest-parsed timestamp (untrusted
+    # external boundary — cloud-backend/CLAUDE.md); a fast train clock can make it
+    # later than the landside t_ack, which would yield a negative latency. Clamp.
     funnel_rows = await db.execute(
         text(f"""
             SELECT
@@ -87,10 +92,10 @@ async def get_escalation_funnels(
                 COUNT(*) FILTER (WHERE transition = 'resolved')           AS count_resolved,
                 COUNT(*) FILTER (WHERE transition = 'silently_dismissed') AS count_dismissed,
                 PERCENTILE_CONT(0.5) WITHIN GROUP (
-                    ORDER BY EXTRACT(EPOCH FROM (t_event - t_fired))
+                    ORDER BY GREATEST(EXTRACT(EPOCH FROM (t_event - t_fired)), 0)
                 ) FILTER (WHERE transition = 'acknowledged')             AS median_t_ack,
                 PERCENTILE_CONT(0.95) WITHIN GROUP (
-                    ORDER BY EXTRACT(EPOCH FROM (t_event - t_fired))
+                    ORDER BY GREATEST(EXTRACT(EPOCH FROM (t_event - t_fired)), 0)
                 ) FILTER (WHERE transition = 'acknowledged')             AS p95_t_ack
             FROM escalation_audit
             WHERE {window_clause}
@@ -111,6 +116,7 @@ async def get_escalation_funnels(
                  LATERAL jsonb_array_elements_text(action_tags) AS tag
             WHERE transition = 'resolved'
               AND action_tags IS NOT NULL
+              AND jsonb_typeof(action_tags) = 'array'
               AND {window_clause}
               {code_clause}
             GROUP BY alert_code, tag

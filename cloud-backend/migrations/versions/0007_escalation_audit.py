@@ -46,7 +46,9 @@ def upgrade() -> None:
         sa.Column("t_event", sa.TIMESTAMP(timezone=True), nullable=False),
         sa.Column("t_fired", sa.TIMESTAMP(timezone=True), nullable=False),
         sa.Column("action_tags", JSONB, nullable=True),
-        sa.Column("dwell_focus_ms", sa.Integer, nullable=True),
+        # BigInteger: dwell is client-supplied; a panel left focused for weeks (or a
+        # buggy/crafted value) would overflow a 32-bit INTEGER and 500 the insert.
+        sa.Column("dwell_focus_ms", sa.BigInteger, nullable=True),
         sa.Column("confidence_score", sa.Float, nullable=True),
         sa.Column("confidence_basis", sa.Text, nullable=True),
         sa.Column("model_versions", JSONB, nullable=True),

@@ -160,10 +160,18 @@ def _render(
         f"Window: {dt_from.date().isoformat()} → {dt_to.date().isoformat()} (UTC, ISO week)"
     )
     lines.append("")
+    # Cross-week lifecycle (raised week N, dismissed N+1) can give total_raised == 0
+    # with total_dismissed > 0; never render a literal "/0" fraction.
+    if total_raised > 0:
+        dismissal_detail = f"({total_dismissed}/{total_raised})"
+    elif total_dismissed > 0:
+        dismissal_detail = f"({total_dismissed} dismissed, none raised this window)"
+    else:
+        dismissal_detail = "(no escalations this window)"
     lines.append(
         f"Total escalations raised: **{total_raised}** · "
         f"silent-dismissal rate: **{_fmt_pct(dismissal_rate)}** "
-        f"({total_dismissed}/{total_raised})"
+        f"{dismissal_detail}"
     )
     lines.append("")
 
@@ -247,9 +255,14 @@ async def _main() -> None:
     if len(sys.argv) >= 3:
         iso_year, iso_week = int(sys.argv[1]), int(sys.argv[2])
     else:
-        # Most recently completed ISO week = the week containing 7 days ago.
-        y, w, _ = (datetime.now(UTC) - timedelta(days=7)).isocalendar()
-        iso_year, iso_week = y, w
+        # Most recently COMPLETED ISO week, robust to which weekday the job runs
+        # (a missed-Monday retry on Tue/Wed must still target the same week).
+        # Anchor on the Monday of the current ISO week, step back one day into the
+        # previous week, and take that week. `now() - 7d` was fragile near drift.
+        now = datetime.now(UTC)
+        this_week_monday = datetime.fromisocalendar(*now.isocalendar()[:2], 1).replace(tzinfo=UTC)
+        prev_week_day = this_week_monday - timedelta(days=1)
+        iso_year, iso_week, _ = prev_week_day.isocalendar()
 
     factory = get_session_factory()
     async with factory() as session:

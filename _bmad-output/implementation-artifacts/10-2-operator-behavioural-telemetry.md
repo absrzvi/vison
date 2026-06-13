@@ -4,7 +4,7 @@ baseline_commit: 7afda88e48cb3fa36488fc330bead8ade01bb35c
 
 # Story 10.2: Operator Behavioural Telemetry
 
-Status: review
+Status: done
 
 <!-- Created 2026-06-13 via bmad-create-story (Amelia).
      DEPENDS ON 10-6 (escalation-lifecycle-persistence) — must land first. 10-6 builds the `escalations`
@@ -74,6 +74,34 @@ Given migration `0007_escalation_audit.py` (`down_revision="0006"`), then it cre
   - [x] Thin CLI (`python -m cloud_backend.services.alert_effectiveness_report`) + `.gitlab-ci.yml` `report` stage scheduled job (Mon 06:00 UTC, `rules: schedule`). `reports/` gitignored (CI artifact). **GitLab CI/CD → Schedules must be configured in the GitLab UI (manual infra step).**
 - [x] **T7 — gates + GDPR** (AC6): cloud-backend `pytest` **168 passed, 82.74% cov** (≥80); `ruff` + `mypy --strict` clean package-wide; CC `vitest` **247 passed**, eslint clean on new files; audit-write paths grepped — **no PII beyond `operator_id`**.
 - [x] **T8 — ADR**: added **ADR-22 "Behavioural Telemetry & Alert Effectiveness"** to [architecture.md](../planning-artifacts/architecture.md) — append-only audit semantics, silent-dismissal detection, keepalive-vs-sendBeacon, DB-clock funnel window, external report schedule, GDPR.
+
+### Review Findings
+
+Code review 2026-06-13 (Amelia/opus-4.8, 3 adversarial layers: Blind Hunter + Edge Case Hunter + Acceptance Auditor). Acceptance Auditor: **all 6 ACs + 5 decisions met in substance — no Blocker/High AC gaps.** 15 raw findings → 3 decision-needed, 7 patch, 3 defer, 2 dismissed.
+
+**Decision-needed — RESOLVED 2026-06-13:**
+- [x] [Review][Decision] Funnel window-edge count semantics — **RESOLVED: accept + document** (option a). PoC behaviour: window-edge distortion is bounded and the aggregate stays monotonic. Recorded as a Known limitation; no code change. (Folded into Deferred below as E10S2-W4.) [escalations_audit.py:68-96]
+- [x] [Review][Decision] Silent-dismissal TOCTOU — **RESOLVED: make insert atomic** (option b → becomes patch P-8). `record_silently_dismissed` gains `WHERE status='unacknowledged'` on the INSERT…SELECT so a racing ack makes it a 0-row no-op. [escalations.py:184-204]
+- [x] [Review][Decision] Unload beacon `beforeunload`-only — **RESOLVED: add pagehide + visibilitychange→hidden** (option b → becomes patch P-9). [EscalationDetail.jsx:186]
+
+**Patch (unambiguous fixes) — ALL APPLIED + verified 2026-06-13:**
+- [x] [Review][Patch] Dismissal beacon misattribution on rapid escalation switching — **FIXED:** capture `escalationId` in the effect's own closure (it is the `[escalation?.id]` dep, stable for the effect's life); status read guarded by `escIdRef.current === escalationId`. **Browser-verified:** switching A→B emits A's id (`esc-001`) with A's dwell, not B's. [EscalationDetail.jsx]
+- [x] [Review][Patch] `dwell_focus_ms` 32-bit INTEGER overflow — **FIXED:** column changed `Integer`→`BigInteger` in 0007 (unshipped migration, edited in place); migration test updated to assert `bigint`. [0007_escalation_audit.py]
+- [x] [Review][Patch] `action_tags` non-array JSONB 500s the whole funnel — **FIXED:** added `AND jsonb_typeof(action_tags) = 'array'` to the tag-distribution query. [escalations_audit.py]
+- [x] [Review][Patch] Funnel `<=` vs report `<` boundary mismatch — **FIXED:** funnel upper bound now half-open `t_event < COALESCE(:to, NOW())`, matching the report. [escalations_audit.py]
+- [x] [Review][Patch] Negative ack-latency from untrusted onboard `t_fired` — **FIXED:** `GREATEST(EXTRACT(EPOCH FROM (t_event - t_fired)), 0)` clamp on both percentiles. [escalations_audit.py]
+- [x] [Review][Patch] Report literal `(N/0)` on cross-week dismissal — **FIXED:** conditional parenthetical — `(N dismissed, none raised this window)` when `total_raised==0`. [alert_effectiveness_report.py]
+- [x] [Review][Patch] CLI "most-recent ISO week" fragility — **FIXED:** anchored on this-ISO-week-Monday minus 1 day (robust to which weekday the job runs). [alert_effectiveness_report.py:_main]
+- [x] [Review][Patch] (P-8, from D-2) Atomic silent-dismissal insert — **FIXED:** `record_silently_dismissed` INSERT…SELECT now gated `AND status = 'unacknowledged'`; a racing ack makes it a 0-row no-op. Covered by `test_silently_dismissed_skips_when_already_acknowledged`. [services/escalation_audit.py]
+- [x] [Review][Patch] (P-9, from D-3) Emit on `pagehide` + `visibilitychange→hidden` (kept `beforeunload`) — **FIXED + browser-verified:** hidden→1 beacon; `emitted` guard confirmed to dedupe across visibility/beforeunload/unmount. [EscalationDetail.jsx]
+
+**Deferred (pre-existing / accepted design):**
+- [x] [Review][Defer] (E10S2-W4, from D-1) Funnel window-edge count consistency — accepted as PoC behaviour: counts filter each transition row by its own `t_event`, so a lifecycle straddling the boundary can yield `count_acknowledged > count_raised`. Bounded, monotonic aggregate. — deferred, accepted (document as Known limitation).
+- [x] [Review][Defer] `alert_class_state` keeps only the latest disable/enable per code — the report's kill-switch section silently drops intermediate toggles within a week and can render `enabled_at` before `disabled_at`. Root cause is 10-1's 0004 schema (one mutable row per `alert_code`, PK), not this story. — deferred, pre-existing (needs an append-only kill-switch audit log to fully fix).
+- [x] [Review][Defer] Offline silent-dismissal beacon is dropped with no queue/retry — `fetch(...,{keepalive:true}).catch(()=>{})` loses the event when `navigator.onLine` is false at unload; the dismissal-rate KPI undercounts in degraded connectivity. — deferred, accepted fire-and-forget design for PoC.
+- [x] [Review][Defer] `t_viewed` is accepted by the endpoint but discarded server-side (no column per AC1) — dead field; docstring says "retained for context" but it is not persisted. — deferred, cosmetic (drop the field or add a column in a later story).
+
+**Dismissed (noise / by-design):** StrictMode `MIN_VIEW_MS=100` also drops genuine <100ms dismissals (accepted dev-mode tradeoff); `raised`-row app-clock timestamp (AC1 defines `t_event`=raise time for `raised` by design).
 
 ## Dev Notes
 

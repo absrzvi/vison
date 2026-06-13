@@ -283,7 +283,7 @@ def test_escalation_audit_table_columns(pg_url: str) -> None:
         assert cols["t_fired"][1] == "NO"
         assert cols["action_tags"][0] == "jsonb"
         assert cols["action_tags"][1] == "YES"  # only on resolved
-        assert cols["dwell_focus_ms"][0] == "integer"
+        assert cols["dwell_focus_ms"][0] == "bigint"
         assert cols["dwell_focus_ms"][1] == "YES"  # only on silently_dismissed
         assert cols["confidence_score"][0] == "double precision"
         assert cols["confidence_score"][1] == "YES"

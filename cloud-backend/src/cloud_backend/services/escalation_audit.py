@@ -113,6 +113,12 @@ async def record_silently_dismissed(
     without acknowledging. Denormalises alert_code / t_fired / confidence_* /
     model_versions from the escalations row; carries the client-measured
     focus-time dwell. action_tags stays NULL.
+
+    The `status = 'unacknowledged'` predicate makes the write atomic: if a
+    concurrent acknowledge commits between the route's status read and this
+    insert, the SELECT matches 0 rows and no dismissal row is appended — so an
+    escalation can never carry both an `acknowledged` and a later
+    `silently_dismissed` audit row (review D-2 / TOCTOU).
     """
     await db.execute(
         text("""
@@ -126,6 +132,7 @@ async def record_silently_dismissed(
                 confidence_score, confidence_basis, model_versions
             FROM escalations
             WHERE escalation_id = :escalation_id
+              AND status = 'unacknowledged'
         """),
         {
             "audit_id": str(uuid.uuid4()),
