@@ -249,6 +249,22 @@ def test_seconds_to_departure_unparseable_feed_returns_none(bad: str) -> None:
 
 
 @pytest.mark.unit
+def test_seconds_to_departure_standstill_past_departure_returns_none() -> None:
+    """E10-S4 review (low): the speed-branch (stopped, NOT station_approach) requires a
+    FUTURE departure per D1/AC2. A train overdue at a platform is not pre-departure →
+    None, not a misleading 0. (The station_approach branch still clamps past → 0, AC6b.)"""
+    assert (
+        _seconds_to_departure(
+            scheduled_departure="2026-05-20T07:59:00Z",  # 60s before _NOW
+            station_approach=False,
+            speed_kmh=0.0,
+            now=_NOW,
+        )
+        is None
+    )
+
+
+@pytest.mark.unit
 def test_seconds_to_departure_in_transit_returns_none() -> None:
     """In-transit (moving, not at a station) → None even with a valid future sched."""
     assert (
@@ -267,22 +283,38 @@ def test_seconds_to_departure_in_transit_returns_none() -> None:
 
 @pytest.mark.unit
 def test_context_push_carries_scheduled_departure() -> None:
-    """A /context push with scheduled_departure lands on ContextState."""
+    """The real targeted-push WIRE BODY (raw dict, as vlan-pollers POSTs) validates
+    through ContextPushModel and lands on ContextState — not synthetic kwargs."""
     from fusion.models import ContextPushModel
 
     ctx = ContextState()
-    ctx.update_from_push(ContextPushModel(scheduled_departure="2026-05-20T08:01:30Z"))
+    wire_body = {"scheduled_departure": "2026-05-20T08:01:30Z", "journey_id": "J1"}
+    ctx.update_from_push(ContextPushModel.model_validate(wire_body))
     assert ctx.scheduled_departure == "2026-05-20T08:01:30Z"
 
 
 @pytest.mark.unit
 def test_context_push_absent_scheduled_departure_keeps_prior() -> None:
-    """Absent field keeps prior state (present-replaces / absent-keeps)."""
+    """Absent field keeps prior state (present-replaces / absent-keeps) WITHIN a journey."""
     from fusion.models import ContextPushModel
 
-    ctx = ContextState(scheduled_departure="2026-05-20T08:01:30Z")
-    ctx.update_from_push(ContextPushModel(speed_kmh=12.0))  # no scheduled_departure key
+    ctx = ContextState(journey_id="J1", scheduled_departure="2026-05-20T08:01:30Z")
+    # same journey, no scheduled_departure key → keep prior
+    ctx.update_from_push(ContextPushModel(journey_id="J1", speed_kmh=12.0))
     assert ctx.scheduled_departure == "2026-05-20T08:01:30Z"
+
+
+@pytest.mark.unit
+def test_scheduled_departure_cleared_on_journey_change() -> None:
+    """E10-S4 review (medium): a new journey must NOT inherit the prior journey's
+    departure — else a journey-B alert before journey-B's first PIS push derives
+    seconds_to_departure from journey A's stale departure, on an invalid basis."""
+    from fusion.models import ContextPushModel
+
+    ctx = ContextState(journey_id="J1", scheduled_departure="2026-05-20T08:01:30Z")
+    # journey changes; the push carries no scheduled_departure for the new journey yet
+    ctx.update_from_push(ContextPushModel(journey_id="J2"))
+    assert ctx.scheduled_departure is None
 
 
 # --- AC2: emit_alert stamps the derived value end-to-end ---
@@ -309,6 +341,55 @@ async def test_emit_alert_stamps_seconds_to_departure_when_pre_departure() -> No
     body = route.calls.last.request.content.decode()
     env = EventEnvelope.model_validate_json(body)
     assert env.payload["seconds_to_departure"] == 0
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_emit_alert_logs_degraded_when_pre_departure_but_unparseable() -> None:
+    """AC2: a pre-departure alert whose PIS departure is unparseable must emit a
+    structured 'seconds_to_departure_unavailable' log (the None path is observable)."""
+    import structlog.testing
+
+    settings = _make_settings()
+    ctx = _make_ctx(station_approach=True, speed_kmh=0.0, scheduled_departure="garbage")
+    respx.post("http://event-store-test/api/v1/events").mock(
+        return_value=httpx.Response(201, json={"data": {"stored": True}})
+    )
+    async with httpx.AsyncClient() as client:
+        enricher = Enrichment(client, settings, ctx)
+        with structlog.testing.capture_logs() as logs:
+            await enricher.emit_alert(
+                alert_code="door_obstruction",
+                car_id="car-6",
+                description="door obstruction",
+                confidence_basis="sensor",
+            )
+    events = [log["event"] for log in logs]
+    assert "enrichment.seconds_to_departure_unavailable" in events
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_emit_alert_no_degraded_log_when_in_transit() -> None:
+    """In-transit (moving) → seconds None is EXPECTED, not degraded — no warning."""
+    import structlog.testing
+
+    settings = _make_settings()
+    ctx = _make_ctx(station_approach=False, speed_kmh=80.0, scheduled_departure="garbage")
+    respx.post("http://event-store-test/api/v1/events").mock(
+        return_value=httpx.Response(201, json={"data": {"stored": True}})
+    )
+    async with httpx.AsyncClient() as client:
+        enricher = Enrichment(client, settings, ctx)
+        with structlog.testing.capture_logs() as logs:
+            await enricher.emit_alert(
+                alert_code="slip_fall",
+                car_id="car-1",
+                description="fall",
+                confidence_basis="sensor",
+            )
+    events = [log["event"] for log in logs]
+    assert "enrichment.seconds_to_departure_unavailable" not in events
 
 
 @pytest.mark.unit

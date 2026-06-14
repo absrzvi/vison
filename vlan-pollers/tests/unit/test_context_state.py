@@ -152,7 +152,45 @@ async def test_speed_update_pushes_context() -> None:
 
 
 @pytest.mark.unit
+@respx.mock
+async def test_update_pis_sends_targeted_scheduled_departure_to_fusion() -> None:
+    """E10-S4: update_pis must push a TARGETED {scheduled_departure, journey_id} body
+    to fusion (mirroring set_station_approach) so fusion's flat scheduled_departure
+    field — which is the only thing fusion's ContextPushModel reads — is populated.
+    The full-delta push nests scheduled_departure under `pis`, which fusion never reads
+    (and which extra='forbid' rejects), so the targeted push is the real delivery path."""
+    import json
+
+    fusion_route = respx.post(f"{FUSION}/context").mock(return_value=httpx.Response(200))
+    respx.post(f"{INFERENCE}/context").mock(return_value=httpx.Response(200))
+
+    ctx = _make_ctx()
+    await ctx.update_journey("OBB-1_T1_20260517", "T1", "OBB-1")
+    await ctx.update_pis(
+        PisState(
+            next_station="Wien",
+            next_station_arrival_utc="",
+            scheduled_departure="2026-05-19T12:05:00Z",
+            actual_departure="",
+            platform="2",
+            delay_min=0,
+        )
+    )
+
+    # At least one fusion push must carry a FLAT scheduled_departure key (not nested in pis).
+    bodies = [json.loads(call.request.content) for call in fusion_route.calls]
+    targeted = [b for b in bodies if b.get("scheduled_departure") == "2026-05-19T12:05:00Z"]
+    assert targeted, f"no targeted scheduled_departure push to fusion; bodies={bodies}"
+    assert targeted[0].get("journey_id") == "OBB-1_T1_20260517"
+
+
+@pytest.mark.unit
+@respx.mock
 async def test_pis_update_suppresses_on_no_change() -> None:
+    # E10-S4: update_pis now also fires a targeted scheduled_departure push to fusion
+    # (before _push_context_delta) — mock it so suppression is exercised, not the network.
+    respx.post(f"{FUSION}/context").mock(return_value=httpx.Response(200))
+
     call_count = 0
 
     async def fake_push() -> None:
@@ -166,7 +204,7 @@ async def test_pis_update_suppresses_on_no_change() -> None:
     await ctx.update_pis(pis)
     assert call_count == 1
 
-    await ctx.update_pis(pis)  # same values — suppress
+    await ctx.update_pis(pis)  # same values — suppress (no targeted push, no delta push)
     assert call_count == 1
 
 

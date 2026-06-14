@@ -12,13 +12,18 @@ export function useDelayMinutesAvoided() {
   const [minutes, setMinutes] = useState(null);
 
   useEffect(() => {
-    const controller = new AbortController();
     let active = true;
+    let inFlight = null; // the current request's controller; aborted before each refresh
 
     async function load() {
+      // Abort any still-in-flight refresh so a slow earlier request can't resolve
+      // after (and overwrite) a newer one with a stale value.
+      inFlight?.abort();
+      const controller = new AbortController();
+      inFlight = controller;
       try {
         const data = await getDelayMinutesAvoided(controller.signal);
-        if (active) setMinutes(data.delay_minutes_avoided);
+        if (active && !controller.signal.aborted) setMinutes(data.delay_minutes_avoided);
       } catch (err) {
         if (err.name !== 'AbortError' && active) setMinutes(null);
       }
@@ -28,7 +33,7 @@ export function useDelayMinutesAvoided() {
     const id = setInterval(load, REFRESH_MS);
     return () => {
       active = false;
-      controller.abort();
+      inFlight?.abort();
       clearInterval(id);
     };
   }, []);

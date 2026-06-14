@@ -80,6 +80,7 @@ class ContextState:
             self.gps_valid,
             self.station_approach,
         )
+        prev_journey_id = self.journey_id
         if model.journey_id is not None:
             self.journey_id = model.journey_id
         if model.vehicle_id is not None:
@@ -106,6 +107,10 @@ class ContextState:
             self.door_firmware_version = model.door_firmware_version
         if model.scheduled_departure is not None:
             self.scheduled_departure = model.scheduled_departure
+        elif self.journey_id != prev_journey_id:
+            # E10-S4 (review): a new journey must not inherit the prior journey's
+            # departure. Clear on journey change unless this push set a new one.
+            self.scheduled_departure = None
         after = (
             self.maintenance_mode,
             self.depot_mode,

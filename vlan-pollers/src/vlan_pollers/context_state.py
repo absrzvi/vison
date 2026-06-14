@@ -88,6 +88,18 @@ class ContextStateManager:
         if dataclasses.asdict(self._state.pis) == dataclasses.asdict(pis):
             return
         self._state.pis = pis
+        # E10-S4: targeted fusion push so fusion's flat `scheduled_departure` field is
+        # populated (fusion's ContextPushModel has extra='forbid' and reads a top-level
+        # scheduled_departure — it does NOT read the nested `pis` dict the full-delta
+        # push carries). Mirrors set_station_approach. The full-delta push below still
+        # carries pis/occupancy to inference.
+        await _post_with_retry(
+            f"{self._fusion_url}/context",
+            {
+                "scheduled_departure": pis.scheduled_departure,
+                "journey_id": self._state.journey_id,
+            },
+        )
         await self._push_context_delta()
 
 

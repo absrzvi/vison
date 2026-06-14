@@ -149,6 +149,39 @@ def test_context_push_extra_field_returns_422(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
+@pytest.mark.contract
+def test_real_targeted_pis_push_populates_scheduled_departure() -> None:
+    """E10-S4 — real-producer contract: the EXACT targeted-push body vlan-pollers
+    sends on a PIS update (vlan_pollers/context_state.py update_pis) must validate
+    through fusion's ContextPushModel and land on ContextState.scheduled_departure.
+
+    This bridges the producer→consumer wire that the unit tests previously bypassed:
+    vlan-pollers POSTs a FLAT {scheduled_departure, journey_id} dict (NOT the nested
+    `pis` object), which is the only shape fusion's extra='forbid' model accepts.
+    Self-contained app so we hold the ctx reference to assert against.
+    """
+    settings = _settings()
+    ctx = ContextState(journey_id="OBB-TEST_t1_20260520", vehicle_id="OBB-TEST")
+    http_client = httpx.AsyncClient()
+    enricher = Enrichment(http_client, settings, ctx)
+    gate = SuppressionGate(ctx, enricher)
+    ledger = CoachLedger(settings)
+    comfort = ComfortIndexState(settings)
+    app = build_app(
+        settings=settings, ctx=ctx, gate=gate, enricher=enricher, client=http_client,
+        ledger=ledger, comfort=comfort,
+    )
+    wire_body = {
+        "scheduled_departure": "2026-05-19T12:05:00Z",
+        "journey_id": "OBB-TEST_t1_20260520",
+    }
+    with TestClient(app) as tc:
+        resp = tc.post("/context", json=wire_body)
+    assert resp.status_code == 200, resp.text
+    assert ctx.scheduled_departure == "2026-05-19T12:05:00Z"
+    del http_client
+
+
 # ---------------------------------------------------------------------------
 # Producer → shared-schema boundary (story 10-1 model_versions audit).
 #
