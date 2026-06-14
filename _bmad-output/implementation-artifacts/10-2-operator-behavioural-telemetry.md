@@ -103,6 +103,10 @@ Code review 2026-06-13 (Amelia/opus-4.8, 3 adversarial layers: Blind Hunter + Ed
 
 **Dismissed (noise / by-design):** StrictMode `MIN_VIEW_MS=100` also drops genuine <100ms dismissals (accepted dev-mode tradeoff); `raised`-row app-clock timestamp (AC1 defines `t_event`=raise time for `raised` by design).
 
+**Post-DONE hardening — 2026-06-14 (Claude/opus-4.8):**
+- [x] [Review][Patch] Negative ack-latency clamp was missing on the **report** side — the 2026-06-13 patch (above) clamped only the funnel route's `escalations_audit.py`; the twin median query in `services/alert_effectiveness_report.py:_funnel_rows` was still unclamped and could render a negative `"-Ns"` median ack. **FIXED:** `GREATEST(EXTRACT(EPOCH FROM (t_event - t_fired)), 0)` added to the report's `PERCENTILE_CONT` ORDER BY, mirroring the route. Pinned by new regression `test_report_clamps_negative_ack_latency` (fails pre-clamp → renders `-60s`; passes post-clamp → `0s`). [alert_effectiveness_report.py:64-77] (commit b678add)
+- [x] [Security][Sentinel] bmad-security-sentinel review 2026-06-14 — **APPROVED**, no Critical/Major. Report service confirmed callable+CLI-only (not HTTP-exposed); audit-write path parameterised; report filename built from `int`-coerced `iso_year`/`iso_week` (no path traversal); zero secret-pattern hits in the diff.
+
 ## Dev Notes
 
 ### Dependency on 10-6 (hard gate)
