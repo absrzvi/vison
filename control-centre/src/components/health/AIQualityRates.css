@@ -1,0 +1,60 @@
+.ai-quality {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--obb-surface-1);
+  border: 1px solid var(--obb-border-dark);
+  border-radius: 6px;
+  color: var(--obb-text-on-dark-1);
+  font-size: var(--font-size-sm);
+  margin-bottom: 8px;
+}
+
+.ai-quality__header {
+  margin-bottom: 8px;
+}
+
+.ai-quality__label {
+  color: var(--obb-text-on-dark-3);
+}
+
+.ai-quality__value {
+  margin-left: 12px;
+  color: var(--obb-text-on-dark-2);
+}
+
+.ai-quality__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.ai-quality__table th {
+  text-align: left;
+  color: var(--obb-text-on-dark-3);
+  font-weight: 500;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--obb-border-dark);
+}
+
+.ai-quality__table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--obb-border-dark);
+}
+
+.ai-quality__code {
+  font-family: var(--font-mono);
+  color: var(--obb-text-on-dark-1);
+}
+
+.ai-quality__rate {
+  color: var(--obb-text-on-dark-1);
+}
+
+.ai-quality__denom {
+  color: var(--obb-text-on-dark-3);
+}
+
+/* AC4/NFR3: explicit_fp_rate ≥ 5% per class breaches the redefined NFR3. */
+.ai-quality__breach .ai-quality__rate {
+  color: var(--obb-sev-medium);
+}

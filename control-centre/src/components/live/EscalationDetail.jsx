@@ -386,6 +386,11 @@ export function EscalationDetail({ escalation, onClose, onAcknowledge, onResolve
               <div className="resolve-form__char-count">{outcome.length} / 200</div>
 
               <label className="resolve-form__label">Action taken <span className="resolve-form__required">select at least one</span></label>
+              {/* 10-5 AC5 — clarify the false-positive tag vs an action tag */}
+              <p className="resolve-form__hint">
+                Mark <em>False alarm</em> if the model was wrong (no bag, no obstruction, no fall).
+                Mark an action tag if the model was right and you took action.
+              </p>
               <div className="resolve-form__tags">
                 {ACTION_TAGS.map(tag => (
                   <button

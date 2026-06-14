@@ -1,8 +1,9 @@
 ---
 status: APPROVED
 date: '2026-05-30'
-version: '1.3'
+version: '1.4'
 changelog:
+  - '1.4 (2026-06-14): Redefine NFR3 (E10-S5). Replace the unfalsifiable single "<5% FP rate" with a measurable gate — explicit_fp_rate < 5% per alert class over a rolling 7-day window (keyed on the shipped false_alarm resolve tag), with no_action_rate reported as a target. Remove the ⚠-pending marker; update FR42. The auto-resolved-before-ack rate from the E10-S5 source is omitted (no auto-resolve path exists in the shipped lifecycle).'
   - '1.3 (2026-06-05): Anchor Epic 10 (Operator Adoption & Trust) in the PRD — add §5.4 FR38–FR42 and UX-DR16–18 for the E10-S1c surfaces; flag NFR3 redefinition pending E10-S5. Deferred-scope table renumbered §5.4 → §5.5. Closes the Epic-10 traceability gap from the 2026-06-05 readiness drift check.'
   - '1.2 (2026-05-30): Ratify SSE as landside push transport per ADR-20 (supersedes ADR-9 for landside). Onboard event-store WS retained for intra-CCU fan-out. §9 split into Landside push and Onboard fan-out rows. OQ-13 added (multi-worker SSE fan-out at fleet scale).'
   - '1.1 (2026-05-30): Descope FR23, FR25, FR32, FR34, FR35 to Phase 2 per readiness review 2026-05-30. NFR2 reworded to reflect ADR-15 (APC is post-hoc calibration, not real-time blending).'
@@ -127,7 +128,7 @@ All inference runs onboard. Raw video never leaves the train. Only structured, a
 | FR39 | Each inference container emits a 60-second heartbeat (`INFERENCE_HEARTBEAT`) independent of detections, so the platform distinguishes "healthy and quiet" from "inference crashed" |
 | FR40 | Nomad on-call can disable a misbehaving alert class fleet-wide via an admin kill-switch that suppresses new alerts of that class at the API/SSE fan-out layer; in-flight escalations remain visible |
 | FR41 | Every escalation lifecycle transition (raised → acknowledged → resolved → silently-dismissed) is logged with operator-attributable telemetry and is queryable, so the operator-behaviour-change effect of alerts is measurable |
-| FR42 | Alert quality is reported via observable rates (not a single unfalsifiable FP figure), including an explicit operator-tagged false-positive signal — see NFR3 (redefinition pending via E10-S5) |
+| FR42 | Alert quality is reported via observable rates (not a single unfalsifiable FP figure), including an explicit operator-tagged false-positive signal (the shipped `false_alarm` resolve tag) — see NFR3 (redefined by E10-S5, 2026-06-14) |
 
 ### 5.5 Deferred / Out of PoC Scope
 
@@ -156,7 +157,7 @@ All inference runs onboard. Raw video never leaves the train. Only structured, a
 |----|-------------|--------|
 | NFR1 | System uptime | ≥99.5% — Docker restart policies; graceful degradation on SYS1 loss |
 | NFR2 | Occupancy accuracy | ≥95% measured post-hoc against APC ground truth — camera count is the authoritative real-time figure (ADR-15); APC is the calibration/accuracy-reporting reference, not a real-time blending input |
-| NFR3 | Alert quality | <5% false-positive rate (formal suppression state machine). **⚠ Redefinition pending (E10-S5, 2026-06-05):** the single "<5% FP rate" target is unfalsifiable as defined; E10-S5 replaces it with three observable rates + an operator-tagged false-positive signal. This row will be rewritten when E10-S5 lands — see FR42 and `owning-the-gap-ai-pm-analysis.md` |
+| NFR3 | Alert quality | **`explicit_fp_rate` < 5% per alert class over a rolling 7-day window** (gate), where `explicit_fp_rate` = resolves tagged `false_alarm` ÷ total resolves for that class. `no_action_rate` (resolves with no action tag ÷ total resolves) is reported alongside as a *target*, not a gate. Both are observed in the System Health → Alert-quality surface and flagged in the weekly effectiveness report. Redefined by E10-S5 (2026-06-14), replacing the prior unfalsifiable single "<5% FP rate" figure. See FR42, `owning-the-gap-ai-pm-analysis.md` §3. (The third rate proposed in E10-S5's source — auto-resolved-before-ack — is omitted: the shipped escalation lifecycle has no auto-resolve path, so it is structurally undefined.) |
 | NFR4 | Alert latency | Within station dwell window (~30–90s) — local inference, no cloud round-trip for alerts |
 | NFR5 | Privacy — video | Raw video must never leave the train — edge-only inference; anonymised events to cloud only |
 | NFR6 | GDPR compliance | Anonymised aggregate only to cloud; events tagged for deletion scope |

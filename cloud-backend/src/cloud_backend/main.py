@@ -7,6 +7,7 @@ from .api.error_handlers import unhandled_exception_handler
 from .config import get_settings
 from .routes.admin_alert_classes import router as admin_alert_classes_router
 from .routes.ai_pipeline import router as ai_pipeline_router
+from .routes.ai_quality import router as ai_quality_router
 from .routes.alerts_sse import router as alerts_router
 from .routes.analytics import router as analytics_router
 from .routes.capacity_review import capacity_review_router
@@ -43,6 +44,7 @@ app.include_router(alerts_router)
 app.include_router(admin_alert_classes_router)
 app.include_router(config_router)
 app.include_router(ai_pipeline_router)
+app.include_router(ai_quality_router)
 app.include_router(maintenance_router)
 app.include_router(preferences_router)
 app.include_router(escalations_router)

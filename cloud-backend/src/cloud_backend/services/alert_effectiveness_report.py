@@ -33,7 +33,9 @@ class _Funnel(TypedDict):
     acknowledged: int
     resolved: int
     dismissed: int
+    false_alarm: int
     ack_rate: float | None
+    explicit_fp_rate: float | None
     median_ack_s: float | None
     p95_ack_s: float | None
 
@@ -51,6 +53,26 @@ class _ClassStateEvent(TypedDict):
 _REPORTS_DIR = Path(__file__).resolve().parents[3] / "reports"
 
 _RETUNE_TOP_N = 5
+
+# 10-5 AC6 / NFR3 (redefined): explicit_fp_rate < 5% per alert class over the
+# window. explicit_fp_rate = resolved-with-tag('false_alarm') / resolved. A class
+# at or above this flags as an NFR3 breach. Keyed on the shipped false_alarm tag
+# (story 10-5 D1) — there is no separate false_positive tag.
+_NFR3_FP_THRESHOLD = 0.05
+_FALSE_ALARM_KEY = "false_alarm"
+
+
+def _nfr3_breaches(funnels: list[_Funnel]) -> list[_Funnel]:
+    """Return funnels whose explicit_fp_rate breaches NFR3 (>= 5%).
+
+    A class with no resolves (explicit_fp_rate is None) is never a breach — the
+    same None-guard the ack_rate retune ranking uses (no divide-by-zero)."""
+    return [
+        f
+        for f in funnels
+        if f["explicit_fp_rate"] is not None
+        and f["explicit_fp_rate"] >= _NFR3_FP_THRESHOLD
+    ]
 
 
 def _iso_week_bounds(iso_year: int, iso_week: int) -> tuple[datetime, datetime]:
@@ -74,6 +96,12 @@ async def _funnel_rows(
                 COUNT(*) FILTER (WHERE transition = 'acknowledged')       AS acknowledged,
                 COUNT(*) FILTER (WHERE transition = 'resolved')           AS resolved,
                 COUNT(*) FILTER (WHERE transition = 'silently_dismissed') AS dismissed,
+                COUNT(*) FILTER (
+                    WHERE transition = 'resolved'
+                      AND action_tags IS NOT NULL
+                      AND jsonb_typeof(action_tags) = 'array'
+                      AND action_tags ? :false_alarm
+                )                                                        AS false_alarm,
                 PERCENTILE_CONT(0.5) WITHIN GROUP (
                     ORDER BY GREATEST(EXTRACT(EPOCH FROM (t_event - t_fired)), 0)
                 ) FILTER (WHERE transition = 'acknowledged')             AS median_ack,
@@ -84,21 +112,27 @@ async def _funnel_rows(
             WHERE t_event >= :from AND t_event < :to
             GROUP BY alert_code
         """),
-        {"from": dt_from, "to": dt_to},
+        {"from": dt_from, "to": dt_to, "false_alarm": _FALSE_ALARM_KEY},
     )
     out: list[_Funnel] = []
     for r in rows:
         raised = int(r.raised)
         ack = int(r.acknowledged)
+        resolved = int(r.resolved)
+        false_alarm = int(r.false_alarm)
         out.append(_Funnel(
             alert_code=r.alert_code,
             raised=raised,
             acknowledged=ack,
-            resolved=int(r.resolved),
+            resolved=resolved,
             dismissed=int(r.dismissed),
+            false_alarm=false_alarm,
             # ack_rate is None when nothing was raised (avoid divide-by-zero — the
             # NULL/zero-denominator trap from deferred-work.md).
             ack_rate=(ack / raised) if raised > 0 else None,
+            # explicit_fp_rate is None when nothing was resolved (10-5 AC6) — a class
+            # with zero resolves cannot breach NFR3 and must not divide by zero.
+            explicit_fp_rate=(false_alarm / resolved) if resolved > 0 else None,
             median_ack_s=float(r.median_ack) if r.median_ack is not None else None,
             p95_ack_s=float(r.p95_ack) if r.p95_ack is not None else None,
         ))
@@ -196,6 +230,24 @@ def _render(
             )
     else:
         lines.append("_No escalations raised in this window._")
+    lines.append("")
+
+    # 10-5 AC6: flag any alert class breaching the redefined NFR3
+    # (explicit_fp_rate >= 5% over the window). Classes with no resolves are
+    # excluded by _nfr3_breaches (explicit_fp_rate is None).
+    breaches = _nfr3_breaches(funnels)
+    lines.append("## NFR3 breaches (explicit false-positive rate ≥ 5%)")
+    lines.append("")
+    if breaches:
+        lines.append("| Alert code | Explicit FP rate | False alarms | Resolved |")
+        lines.append("|---|---:|---:|---:|")
+        for f in sorted(breaches, key=lambda f: -(f["explicit_fp_rate"] or 0.0)):
+            lines.append(
+                f"| {f['alert_code']} | {_fmt_pct(f['explicit_fp_rate'])} | "
+                f"{f['false_alarm']} | {f['resolved']} |"
+            )
+    else:
+        lines.append("_No alert class breached NFR3 this window._")
     lines.append("")
 
     lines.append("## Median ack latency by alert class")

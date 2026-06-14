@@ -1,6 +1,10 @@
+---
+baseline_commit: e42a912
+---
+
 # Story 10.5: Alert Quality Measurement (Resolution-Quality Rates)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Created 2026-06-14 via bmad-create-story (Amelia / Opus 4.8). P3 — final feature story in Epic 10 (Operator Adoption & Trust).
      Source of truth: E10-S5 in epics.md:2342-2377 (committed). Sprint-status names this 10-5-alert-quality-measurement, backlog.
@@ -98,22 +102,22 @@ then:
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — cloud-backend endpoint + service (AC1)** — Tier 2
-  - [ ] `api/ai_quality.py`: `ResolutionRate` / `AlertQualityRates` Pydantic response models (`rate: float | None`, integer counts).
-  - [ ] `services/ai_quality_rates.py`: SQL over `escalation_audit` (transition='resolved', 7-day COALESCE window, `jsonb_array_elements_text` for `false_alarm` count + zero-tag count + `resolved_total`); compute both rates with `None` on zero denominator. Docstring records why the epic's 3rd rate (auto-resolved-before-ack) is absent (D2).
-  - [ ] `routes/ai_quality.py`: `APIRouter(prefix="/api/v1/ai-quality", dependencies=[Security(require_api_key)])`, `GET /resolution-rates`; register in `main.py` via `include_router`.
-  - [ ] mypy `--strict` + ruff clean on touched files.
-- [ ] **T2 — System Health component (AC2, AC3)** — Tier 2
-  - [ ] `components/health/AIQualityRates.jsx` + `.css`: fetch endpoint, per-class table, two columns, `% (n of d)` format, three-state handling, `--obb-*` tokens only.
-  - [ ] Mount as sibling of `AIPipelineRow` in `SystemHealth.jsx` (D3) — render even when the train-grid fetch fails, matching the `AIPipelineRow` precedent at [SystemHealth.jsx:228-230](../../control-centre/src/components/health/SystemHealth.jsx).
-- [ ] **T3 — Resolve-flow hint (AC5)** — Tier 2
-  - [ ] Copy-only `<p>` helper above the `ACTION_TAGS` picker in `EscalationDetail.jsx`. Do NOT touch `ACTION_TAGS` or backend taxonomy.
-- [ ] **T4 — Weekly-report NFR3 breach flag (AC6)** — Tier 2
-  - [ ] Extend `_funnel_rows` (or add a sibling query) to carry per-class `false_alarm` + `resolved` counts; add a "NFR3 breaches (explicit_fp_rate ≥ 5%)" render section; zero-resolve guard.
-- [ ] **T5 — PRD NFR3 redefinition (AC4)** — Tier 2 (docs)
-  - [ ] Rewrite NFR3 row, drop `⚠ pending`, update FR42 parenthetical, add changelog `1.4` entry.
-- [ ] **T6 — Tests + browser verify (AC7)** — Tier 2/3 (testcontainers needs Docker)
-  - [ ] cloud-backend unit/integration (mix, null, boundary, auth); report tests (flag/no-flag/zero-resolve); CC vitest (4 states + format + no-aggregate); browser verify golden + edge.
+- [x] **T1 — cloud-backend endpoint + service (AC1)** — Tier 2
+  - [x] `api/ai_quality.py`: `AlertQualityRates` Pydantic response model (`rate: float | None`, integer counts).
+  - [x] `services/ai_quality_rates.py`: SQL over `escalation_audit` (transition='resolved', 7-day COALESCE window, `?`-operator for `false_alarm` count + `jsonb_array_length=0` zero-tag count + `resolved_total`); compute both rates with `None` on zero denominator. Docstring records why the epic's 3rd rate (auto-resolved-before-ack) is absent (D2).
+  - [x] `routes/ai_quality.py`: `APIRouter(prefix="/api/v1/ai-quality", dependencies=[Security(require_api_key)])`, `GET /resolution-rates`; registered in `main.py` via `include_router`.
+  - [x] mypy `--strict` + ruff clean on touched files.
+- [x] **T2 — System Health component (AC2, AC3)** — Tier 2
+  - [x] `components/health/AIQualityRates.jsx` + `.css`: fetch endpoint, per-class table, two columns, `% (n of d)` format, three-state handling, `--obb-*` tokens only.
+  - [x] Mount as sibling of `AIPipelineRow` in `SystemHealth.jsx` (D3) — render even when the train-grid fetch fails, matching the `AIPipelineRow` precedent.
+- [x] **T3 — Resolve-flow hint (AC5)** — Tier 2
+  - [x] Copy-only `<p>` helper above the `ACTION_TAGS` picker in `EscalationDetail.jsx`. `ACTION_TAGS` and backend taxonomy untouched. New `resolve-form__hint` CSS class (`--obb-*` tokens).
+- [x] **T4 — Weekly-report NFR3 breach flag (AC6)** — Tier 2
+  - [x] Extended `_funnel_rows` to carry per-class `false_alarm` count + `explicit_fp_rate`; added `_nfr3_breaches` pure helper + "NFR3 breaches (≥5%)" render section; zero-resolve guard (None → not flagged).
+- [x] **T5 — PRD NFR3 redefinition (AC4)** — Tier 2 (docs)
+  - [x] Rewrote NFR3 row (explicit_fp_rate <5% per class, 7-day window), dropped `⚠ pending`, updated FR42, added changelog `1.4` + version bump.
+- [x] **T6 — Tests + browser verify (AC7)** — Tier 2/3 (testcontainers needs Docker)
+  - [x] cloud-backend: integration suite written (mix, null, raised-excluded, half-open boundary, auth) — runs on CI (no local Docker); unit auth (2) + report NFR3 (4) pass locally. CC vitest (7: loading/populated/breach/null-dash/empty/error + format + no-aggregate) pass. Browser verify blocked by pre-existing mock-config SPA-mount failure (FleetContext needs real backend) — documented in Completion Notes; Vite compiled all new files with zero build errors.
 
 ## Dev Notes
 
@@ -188,8 +192,52 @@ No ADR is contradicted. The shipped taxonomy is unchanged (D1), no new EventType
 
 ### Agent Model Used
 
+Amelia (claude-opus-4-8[1m])
+
 ### Debug Log References
+
+- cloud-backend: `pytest -m unit` → 98 passed / 92 deselected (integration needs Docker); `mypy src/` --strict → 0 issues (37 files); `ruff check src/ + new tests` → clean.
+- control-centre: `vitest run` → 257 passed (21 files), incl. 7 new `AIQualityRates` tests; new files lint-clean (pre-existing SystemHealth/EscalationDetail purity errors untouched).
 
 ### Completion Notes List
 
+- **D1 implemented (reuse `false_alarm`):** `explicit_fp_rate` keys on the shipped `false_alarm` canonical tag — no new `false_positive` tag, no enum/contract change, no migration. `ACTION_TAG_KEYS` and the CC `ACTION_TAGS` picker are untouched.
+- **D2 implemented (two rates):** endpoint + report ship `no_action_rate` + `explicit_fp_rate` only. The epic's `auto_resolved_before_ack_rate` is documented-as-absent (no auto-resolve path in the shipped lifecycle) in the service docstring and the PRD NFR3 note.
+- **AC1 endpoint:** `GET /api/v1/ai-quality/resolution-rates` — new `routes/ai_quality.py` + `services/ai_quality_rates.py` + `api/ai_quality.py`, registered in `main.py`. 7-day skew-proof window + `jsonb` `?`-operator for `false_alarm`, `jsonb_array_length=0`/NULL for no-action; rates `None` on zero denominator. Auth via `Security(require_api_key)`.
+- **AC2/AC3 component:** `AIQualityRates.jsx` (+ `.css`, `--obb-*` only) renders two side-by-side per-class columns as `% (n of d)`; three-state handling; breach tint `--obb-sev-medium` at ≥5%. Mounted as sibling of `AIPipelineRow` in both the main and error branches of `SystemHealth.jsx`.
+- **AC5 hint:** static copy `<p>` above the resolve tag picker; no logic/taxonomy change.
+- **AC6 report:** `_funnel_rows` extended with `false_alarm` + `explicit_fp_rate`; `_nfr3_breaches` pure helper + new "NFR3 breaches (≥5%)" section; zero-resolve classes excluded (no divide-by-zero).
+- **AC4 PRD:** NFR3 redefined (explicit_fp_rate <5% per class, rolling 7-day; no_action_rate a target); `⚠ pending` removed; FR42 updated; changelog `1.4` + version → 1.4.
+- **Integration tests (AC7):** written against testcontainers Postgres; not run locally (no Docker — same constraint as 10-1/10-4), will run on first CI. Logic verified by structure against the proven 10-2 funnel idiom and 10-4 KPI test.
+- **Browser verification (AC7):** blocked — the `control-centre-mock` launch config does not fully wire `VITE_MOCK_API`, so `FleetContext` fails its alerts fetch and the SPA shell does not mount at any route (root `#root` empty; reproduced on baseline, not caused by this story). Vite compiled all new files with **zero build errors**. The component's five render states (loading/populated/breach/null-dash/empty/error) are fully covered by the 7 passing RTL tests against real React+jsdom. Recommend the reviewer confirm in-browser once a backend-connected dev environment is available (pre-pilot).
+- **Surgical-change note:** pre-existing eslint React-purity errors in `SystemHealth.jsx` (6) and `EscalationDetail.jsx` (2) exist on baseline `e42a912` and were left untouched per the surgical-change rule. Candidate for Epic 8.
+
 ### File List
+
+**New (cloud-backend):**
+- `cloud-backend/src/cloud_backend/api/ai_quality.py`
+- `cloud-backend/src/cloud_backend/services/ai_quality_rates.py`
+- `cloud-backend/src/cloud_backend/routes/ai_quality.py`
+- `cloud-backend/tests/integration/test_ai_quality_rates.py`
+- `cloud-backend/tests/unit/test_ai_quality_rates_security.py`
+- `cloud-backend/tests/unit/test_alert_effectiveness_nfr3.py`
+
+**New (control-centre):**
+- `control-centre/src/api/aiQuality.js`
+- `control-centre/src/components/health/AIQualityRates.jsx`
+- `control-centre/src/components/health/AIQualityRates.css`
+- `control-centre/src/components/health/__tests__/AIQualityRates.test.jsx`
+
+**Modified:**
+- `cloud-backend/src/cloud_backend/main.py` (include_router)
+- `cloud-backend/src/cloud_backend/services/alert_effectiveness_report.py` (NFR3 breach flag)
+- `control-centre/src/components/health/SystemHealth.jsx` (mount AIQualityRates)
+- `control-centre/src/components/live/EscalationDetail.jsx` (AC5 hint)
+- `control-centre/src/components/live/EscalationDetail.css` (resolve-form__hint)
+- `_bmad-output/planning-artifacts/prd.md` (NFR3 redefinition, FR42, changelog 1.4)
+
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-06-14 | Implemented 10-5 (T1–T6): AI-quality resolution-rates endpoint + CC component + report NFR3 breach flag + PRD NFR3 redefinition + resolve hint. Reused shipped `false_alarm` (D1); shipped two rates (D2). Status → review. |

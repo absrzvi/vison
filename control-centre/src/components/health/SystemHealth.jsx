@@ -3,6 +3,7 @@ import { useFleetData } from '../../context/FleetContext';
 import { getSystemHealth } from '../../api/health';
 import { raiseMaintenanceTicket } from '../../api/maintenance';
 import { AIPipelineRow } from './AIPipelineRow';
+import { AIQualityRates } from './AIQualityRates';
 import './SystemHealth.css';
 
 // eslint-disable-next-line no-unused-vars
@@ -228,6 +229,8 @@ export function SystemHealth() {
         {/* E10-S1 AC22: AI pipeline row has its own data source — render it
             even when the train-grid fetch failed. */}
         <AIPipelineRow />
+        {/* E10-S5 AC2: alert-quality rates also have their own data source. */}
+        <AIQualityRates />
         <div className="sh-error-state">
           <p>System health data unavailable</p>
           <button className="btn btn--secondary" onClick={fetchHealth}>Retry</button>
@@ -367,6 +370,9 @@ export function SystemHealth() {
 
       {/* E10-S1 AC22: AI pipeline fleet row */}
       <AIPipelineRow />
+
+      {/* E10-S5 AC2: per-alert-class resolution-quality rates */}
+      <AIQualityRates />
 
       {/* Body: grid + inline side-panel */}
       <div className="sh-body">
