@@ -16,4 +16,12 @@ persistent_facts = [
   # Reviewer time was wasted chasing test failures instead of reading code. The "100% pass before
   # review" discipline in Amelia's role description was violated. Make the gate explicit.
   "NEVER FLIP STATUS TO REVIEW WITH RED TESTS: Before changing story status from in-progress to review, re-run the full quality gate (pytest, mypy --strict, ruff) and confirm: (a) all tests pass — 0 failures, 0 errors; (b) mypy --strict reports 0 errors; (c) ruff reports 0 violations; (d) coverage gate is met (≥90% per story AC, or whatever the story specifies). If any of these fail, the story stays in-progress. Reviewer time is for reading code, not for chasing test failures. This is non-negotiable.",
+
+  # E10 retrospective finding A1: 5 of 6 Epic-10 stories carried a BLOCKER into code
+  # review, ALL the same species — green tests that did not exercise the real production
+  # path (test/prod divergence). 10-4's plumbing was dead in prod while synthetic-kwargs
+  # unit tests passed; 10-5's integration tests would ForeignKeyViolation on first run, so
+  # the novel SQL had zero passing coverage. Both hid under "integration deferred to CI."
+  # Docker now runs locally — close the gap by making integration EXECUTION a pre-review gate.
+  "INTEGRATION TESTS MUST ACTUALLY RUN BEFORE REVIEW (HARD GATE): If a story has any integration tests (e.g. testcontainers, real-DB, real-broker, cross-container, or any test marked `integration`), they MUST be executed and pass — not merely written — before the story flips from in-progress to review. 'Deferred to CI' is NOT acceptable when the test runner is available locally (Docker is now available — `docker info` to confirm; start it if down). If integration tests genuinely cannot run (runner truly unavailable after a real attempt), the story STAYS in-progress and you HALT and tell the user rather than flipping to review on unit/RTL coverage alone. This gate exists because un-run integration tests were the cover under which 3 of Epic-10's 5 blockers reached (and passed) review. Run them; watch them pass on the real path; only then flip to review.",
 ]

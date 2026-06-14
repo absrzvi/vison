@@ -12,6 +12,15 @@ persistent_facts = [
   # rounds. Codify it.
   "ROUND-2 REVIEWS LIVE IN THE ORIGINAL STORY FILE: When applying review feedback, append a new section to the original story file titled 'Senior Developer Review (AI) — Round N' (where N is the round number). NEVER create a separate <story>-followup.md or <story>-code-review-<date>.md sibling file. Each story has exactly one file across all review rounds. Pattern reference: see 4-8-gangway-tripwire-ingest.md which has 'Round 1' and 'Round 2' sections in the same file.",
 
+  # E10 retrospective finding A2: review rigor this epic was inconsistent and operator-
+  # dependent — 10-5 (additive read-only) got a 14-agent fan-out while 10-6 got a single
+  # round; depth tracked how dangerous a story FELT, not a rule. The big-budget review was
+  # spent on low-risk stories (docs, additive) where blockers don't live, and the round-2
+  # re-reviews (10-1 went 3 rounds, 10-4/10-5 went 2) were the epic's biggest time sink.
+  # Tier the review by risk so the heavyweight adversarial fan-out fires only where the
+  # test/prod-divergence blockers actually live.
+  "RISK-TIER THE REVIEW (not a per-story gut call): Classify the diff before choosing review depth. LIGHT review (single pass, adversarial layers run inline by the reviewer — NO multi-agent workflow fan-out) when the change is: docs-only, OR purely additive + read-only (new endpoint/component that reads existing data, no migration, no contract change), OR confined to a single file. FULL adversarial wire-replay review (multi-agent: Blind + Edge + Acceptance + per-finding refutation + completeness critic, replaying the REAL producer wire per the adversarial-review memory) when the change touches ANY of: a cross-container contract or producer→consumer path, a DB migration or schema change, a novel SQL operator/idiom, AUTH (JWT/role/token/session), the event payload/enum contract in shared/, or fusion ingest. When in doubt, escalate to FULL — the Epic-10 blockers were exactly the ones that did NOT smell on first read (10-4 had green tests). State which tier you chose and why at the start of the review.",
+
   # Load project-context.md so reviews have the same patterns and gotchas the dev agent had.
   "file:{project-root}/project-context.md",
 ]

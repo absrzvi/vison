@@ -33,6 +33,14 @@ persistent_facts = [
   # but ADR-17 was not updated until the phase-2 retro.
   "STORY CONTEXT RULE — ADR FRESHNESS: Before writing tasks, search architecture.md for any ADR that describes the event types, payload shapes, or architectural patterns this story changes. If any ADR is contradicted by the story's changes, add an explicit checkbox to the story's task list: '[ ] Update ADR-X in _bmad-output/planning-artifacts/architecture.md to reflect [specific change]'. This must be done in the same commit that ships the story. Cross-reference: stories touching EventType enum, payload classes in shared/, or fusion ingest endpoints will almost always need an ADR update.",
 
+  # E10 retrospective finding A3: 5 of 6 Epic-10 stories carried a BLOCKER into review,
+  # all the same species — tests that seeded/exercised data in a way the real producer never
+  # would, so they passed while the production path was broken. 10-4's unit tests used
+  # synthetic kwargs (real nested-pis push was dead); 10-5's integration tests raw-inserted
+  # escalation_audit rows with orphan FKs (the real ingest creates the parent first). The
+  # cheapest place to prevent this is at story-authoring time: require the realistic seed path.
+  "STORY CONTEXT RULE — REAL-PRODUCER TEST SEEDING: For any story that emits or consumes an event, adds or reads from a DB table, or crosses a producer→consumer boundary, the story's test tasks MUST require at least one test that seeds via the REAL producer path (the actual ingest endpoint / the actual upsert / the actual poller→/context push), NOT raw INSERTs or synthetic kwargs that bypass the production code. Write the acceptance criterion so a green test cannot pass while the production wire is broken. Name the proven sibling to mirror (e.g. test_delay_minutes_avoided.py seeds escalations via real ingest; 10-5's _seed_parent satisfies the FK the real path would). This is the create-story half of the dev-story 'integration must run before review' gate (E10 A1) — the gate runs the test; this rule makes the test exercise the real path.",
+
   # Load project-context.md which now contains: async stale-closure patterns (A3),
   # full CSS token reference (A2 backing), ADR-2 + ADR-18 full text, E4 dependency status.
   "file:{project-root}/project-context.md",
