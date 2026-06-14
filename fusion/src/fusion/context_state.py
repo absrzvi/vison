@@ -38,9 +38,9 @@ class ContextState:
     vehicle_id: str | None = None
     speed_kmh: float | None = None
     station_approach: bool = False
-    # E10-S4: scheduled departure (ISO-UTC string) from vlan-pollers PIS feed.
-    # Already on the /context wire (vlan-pollers _state_to_dict["pis"]) — fusion
-    # now keeps it so enrichment can derive seconds_to_departure. "" / None = unknown.
+    # E10-S4: scheduled departure (ISO-UTC string) from vlan-pollers PIS feed,
+    # delivered via a targeted FLAT /context push in update_pis (not the nested
+    # `pis` dict). enrichment derives seconds_to_departure from it. "" / None = unknown.
     scheduled_departure: str | None = None
     maintenance_mode: bool = False
     depot_mode: bool = False

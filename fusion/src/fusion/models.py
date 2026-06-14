@@ -60,7 +60,9 @@ class ContextPushModel(BaseModel):
     door_firmware_version: str | None = None
 
     # E10-S4: scheduled departure (ISO-UTC) for seconds_to_departure derivation.
-    # vlan-pollers already POSTs this inside its push body; fusion stops dropping it.
+    # vlan-pollers POSTs this as a FLAT top-level key via a targeted /context push in
+    # update_pis (mirroring set_station_approach) — NOT the nested `pis` dict in the
+    # full-delta push, which this extra='forbid' model rejects.
     # Absent keeps prior; an explicit value (incl. "") replaces.
     scheduled_departure: str | None = None
 

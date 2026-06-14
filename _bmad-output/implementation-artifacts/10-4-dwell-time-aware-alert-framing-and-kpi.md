@@ -4,7 +4,7 @@ baseline_commit: 4b4a840
 
 # Story 10.4: Dwell-Time-Aware Alert Framing & Delay-Minutes-Avoided KPI
 
-Status: review
+Status: done
 
 <!-- Created 2026-06-14 via bmad-create-story (Amelia / Opus 4.8). P2 — fifth story in Epic 10 (Operator Adoption & Trust).
      Source of truth: E10-S4 in epics.md:2307-2338 (committed). Sprint-status names this as "Next P2: 10-4 dwell-time KPI".
@@ -341,3 +341,21 @@ The blocker + both highs are **one connected failure**: the KPI's data supply is
 - The vlan-pollers↔fusion **full-delta** `/context` push 422s entirely (fusion `extra='forbid'` rejects `pis`/`trip_number`/`alarms`/`occupancy`). Every `_push_context_delta`-driven update (speed/occupancy/reservations/journey/alarm) therefore fails to deliver to fusion in production today — a pre-existing integration hole affecting comfort-index/occupancy delivery, independent of 10-4. Worth a dedicated contract-reconciliation story.
 
 **Post-fix gates (all green):** vlan-pollers 89 · shared 176 (unit+contract) · fusion **175** (cov 93.68%, mypy --strict) · cloud-backend KPI integration 8/8 (+ full 176 from dev round) · CC vitest 250. Browser re-verified. Status → review.
+
+## Senior Developer Review (AI) — Round 2 (re-review of Round-1 fixes)
+
+**Reviewer:** Multi-agent adversarial re-review workflow (wf_4b4c0912 — blocker-closure verifier + regression-hunter + fix-completeness auditor, each alleged problem independently refuted; 6 agents). **Date:** 2026-06-14. **Outcome: APPROVED.**
+
+**The blocker is genuinely CLOSED — verified end-to-end on the REAL wire** (reviewers drove the actual `update_pis` → captured its real HTTP body `{scheduled_departure, journey_id}` flat → POSTed it to the real `/context` → 200 + `ctx.scheduled_departure` populated → emitted through the real `/candidates/alert_raised` → payload carried `seconds_to_departure=599`, single-`now` `t_fired` → ingest persists the column → KPI sums it). **17 fix-confirmations, all 10 Round-1 findings independently corroborated, zero regressions, zero new high/blocker.**
+
+**Surviving findings (2, both LOW, both fixed in this commit):**
+- [x] **[LOW] Stale comment `models.py:62-64`** described the pre-fix nested mechanism ("vlan-pollers already POSTs this inside its push body; fusion stops dropping it") — the exact text the blocker disproved. Rewritten to state the field arrives via the flat targeted push.
+- [x] **[LOW] Sibling stale comment `context_state.py:41-43`** ("Already on the /context wire … `_state_to_dict["pis"]`") — same stale framing. Rewritten.
+
+Both comment-only; no logic change; fusion mypy --strict + ruff clean after the edit.
+
+**Non-blocking note (R7):** no dedicated vitest for the CC hook's abort-on-refresh race (only the API client is unit-tested). Nice-to-have, not required for this story.
+
+### Change Log addendum
+
+- 2026-06-14 — Round-2 re-review (wf_4b4c0912): **APPROVED**. Blocker verified closed end-to-end on the real wire (seconds_to_departure=599 stamped through the live producer→fusion→KPI chain). 2 surviving LOW findings = stale comments, fixed in place. Status review → done.
