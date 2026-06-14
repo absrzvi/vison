@@ -93,6 +93,27 @@ async def app_client(
     _subscribers.clear()
 
 
+async def _seed_parent(s: AsyncSession, *, eid: str, alert_code: str, t_event: datetime) -> None:
+    """Insert the escalations parent row keyed by `eid`.
+
+    escalation_audit.escalation_id is NOT NULL with a non-deferrable FK to
+    escalations.escalation_id (0007 / 0006), so every audit row needs a parent.
+    The funnel/rates queries read only escalation_audit, so the parent's other
+    columns just need to satisfy NOT NULL — status defaults to 'unacknowledged'.
+    """
+    await s.execute(
+        text("""
+            INSERT INTO escalations
+                (escalation_id, alert_id, alert_event_id, alert_code,
+                 journey_id, vehicle_id, t_fired)
+            VALUES
+                (:eid, :aid, :eid, :alert_code,
+                 'V001_RJ-1_20260614', 'V001', :t_event)
+        """),
+        {"eid": eid, "aid": str(uuid.uuid4()), "alert_code": alert_code, "t_event": t_event},
+    )
+
+
 async def _seed_resolved(
     factory: async_sessionmaker[AsyncSession],
     *,
@@ -100,12 +121,14 @@ async def _seed_resolved(
     action_tags: list[str] | None,
     t_event: datetime,
 ) -> None:
-    """Append one resolved escalation_audit row with the given canonical tags.
+    """Append one resolved escalation_audit row (+ its escalations parent).
 
     action_tags=None or [] models a zero-action resolve (no_action_rate numerator);
     ['false_alarm'] models the explicit-FP numerator.
     """
+    eid = str(uuid.uuid4())
     async with factory() as s:
+        await _seed_parent(s, eid=eid, alert_code=alert_code, t_event=t_event)
         await s.execute(
             text("""
                 INSERT INTO escalation_audit
@@ -118,7 +141,7 @@ async def _seed_resolved(
             """),
             {
                 "audit_id": str(uuid.uuid4()),
-                "eid": str(uuid.uuid4()),
+                "eid": eid,
                 "alert_code": alert_code,
                 "t_event": t_event,
                 "tags": json.dumps(action_tags) if action_tags is not None else None,
@@ -193,7 +216,9 @@ async def test_raised_rows_do_not_count_as_resolved(
 ) -> None:
     now = datetime.now(UTC)
     # A 'raised' audit row in window must not inflate resolved_total.
+    raised_eid = str(uuid.uuid4())
     async with factory() as s:
+        await _seed_parent(s, eid=raised_eid, alert_code="door_obstruction", t_event=now)
         await s.execute(
             text("""
                 INSERT INTO escalation_audit
@@ -204,7 +229,7 @@ async def test_raised_rows_do_not_count_as_resolved(
                     (:a, :e, 'raised', NULL, 'door_obstruction',
                      :t, :t, NULL, NULL, NULL, 'sensor', '{}'::jsonb)
             """),
-            {"a": str(uuid.uuid4()), "e": str(uuid.uuid4()), "t": now},
+            {"a": str(uuid.uuid4()), "e": raised_eid, "t": now},
         )
         await s.commit()
     await _seed_resolved(

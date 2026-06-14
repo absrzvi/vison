@@ -6,8 +6,12 @@ import './AIQualityRates.css';
 // no_action_rate + explicit_fp_rate shown side-by-side — never an aggregated
 // single quality score (AC3). Each rate rendered as "<pct>% (<n> of <denom>)" so
 // small-sample noise is visible (AC1). `—` when a rate is null/unavailable.
+// Two decimals (not one): the breach tint is decided on the raw float against the
+// 5% NFR3 gate, so a one-decimal label would round across the gate — e.g. 4.96%
+// and 5.04% would both read "5.0%" with only one tinted. Two decimals keeps the
+// shown number consistent with the tint at the boundary.
 const PCT = rate =>
-  rate === null || rate === undefined ? '—' : `${(rate * 100).toFixed(1)}%`;
+  rate === null || rate === undefined ? '—' : `${(rate * 100).toFixed(2)}%`;
 
 function rateCell(rate, count, denom) {
   if (rate === null || rate === undefined) {

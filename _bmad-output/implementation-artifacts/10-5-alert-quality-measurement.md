@@ -241,3 +241,29 @@ Amelia (claude-opus-4-8[1m])
 | Date | Change |
 |---|---|
 | 2026-06-14 | Implemented 10-5 (T1–T6): AI-quality resolution-rates endpoint + CC component + report NFR3 breach flag + PRD NFR3 redefinition + resolve hint. Reused shipped `false_alarm` (D1); shipped two rates (D2). Status → review. |
+| 2026-06-14 | Code-review Round 1 (multi-agent adversarial, wf_4b011970): 1 BLOCKER + 1 high + 1 medium fixed; 1 medium accepted-as-deferral; 1 low deferred; 6 refuted. Status stays review pending re-verify. |
+
+## Senior Developer Review (AI) — Round 1
+
+**Reviewer:** Amelia (multi-agent adversarial workflow `wf_4b011970`, 14 agents — Blind / Edge-Case / Acceptance-Auditor / SQL-Semantics find layers → per-finding refutation with diverse lenses → completeness critic). **Baseline:** `e42a912` → impl `ff96e4a`.
+**Outcome:** CHANGES_REQUESTED → fixed → re-verify.
+
+9 raw findings + 4 critic findings → 3 confirmed + 4 critic-confirmed, 6 refuted. The **completeness critic caught the headline defect all four find-layers missed** (the FK-broken integration seed) — classic green-test trap.
+
+### Action Items
+
+- [x] **[BLOCKER] Integration tests violate the `escalation_audit → escalations` FK** (`tests/integration/test_ai_quality_rates.py`). `_seed_resolved` and the raw `raised`-row insert wrote `escalation_audit` rows with orphan `escalation_id`s and never created the parent `escalations` row. `escalation_audit.escalation_id` is `NOT NULL` with a non-deferrable FK (`0007:37-42` → `0006:29`), so all 4 data-bearing tests would `ForeignKeyViolationError` on first CI run — leaving the novel `?`-operator SQL with **zero** passing coverage. **Fix:** added `_seed_parent()` that inserts the matching `escalations` row (NOT-NULL cols + default status) keyed by the same `eid`, called before every audit insert.
+- [x] **[HIGH] `AIQualityRates.test.jsx` was never committed** — the sole AC7 control-centre test deliverable was untracked (`?? `), absent from `ff96e4a` and CI, despite Completion Notes claiming "7 passing tests". **Fix:** staged + committed in the R1 fix commit (now 8 tests incl. the boundary case below).
+- [x] **[MEDIUM] Novel JSONB `?` operator unverified** (diverged from the LATERAL-unnest idiom the story said to copy). Verified correct against Postgres source via Context7: `jsonb ? text` tests membership of a string as a **top-level key OR array element** (exactly the use here), and `jsonb_array_length` is `proisstrict=true` so it returns NULL (never errors) on a NULL row — the `no_action` NULL branch is safe on all paths. **Resolution:** keep `?` (correct + idiomatic; unnest would multiply rows under GROUP BY); the BLOCKER fix makes the integration test actually exercise it on CI.
+- [x] **[LOW] Rounded label disagreed with the breach tint at the 5% gate** (`AIQualityRates.jsx`). One-decimal `4.96%` and `5.04%` both rendered `5.0%` with only one tinted. **Fix:** label now two decimals (`PCT` → `toFixed(2)`); raw-float gate unchanged so tile and report stay consistent; added an RTL boundary test asserting `4.96%`/`5.04%` render distinctly with exactly one tinted. (Report half of the finding was refuted — `_fmt_pct` only renders already-breaching classes, no contradictory pair.)
+- [x] **[LOW] `_render` NFR3 section had no rendered-output test** (only the pure `_nfr3_breaches` filter was covered). **Fix:** added two `_render` unit tests (breach listed + counts; empty-state line) — no DB needed.
+- [ ] **[MEDIUM — accepted deferral] Browser verification not performed** (AC7 / control-centre CLAUDE.md "not optional"). Blocked by a **pre-existing** mock-config failure: `control-centre-mock` doesn't wire `VITE_MOCK_API`, so `FleetContext` fails its fetch and the SPA shell doesn't mount at any route (reproduced on baseline `e42a912`; the diff touches none of FleetContext/WS/routing/mock-config). The component is defensively mounted in both the health-error and main branches and is covered by 8 RTL states. **Recorded as an open AC7 item** — to be discharged in a backend-connected env before pilot; not a code defect in this story.
+- [ ] **[LOW — deferred] `--font-size-sm` is an undefined token** (the real token is `--fs-small`). Pre-existing drift across 5 files / 11 occurrences (AIPipelineRow, ConfidenceChip, DegradedBanner, EscalationDetail); the new CSS correctly matched the established (broken) precedent per the surgical-change rule. **Deferred** to a token-cleanup story (fix once via an alias `--font-size-sm: var(--fs-small)` so all 5 files retro-fix together) — fixing only the 10-5 files would diverge them from their siblings.
+
+### Refuted (6 — verified false positives / out-of-scope)
+- Asymmetric default window when only `to` given — intended, spec-mandated reuse of the proven skew-proof idiom; all outcomes safe.
+- No `[0,1]` range validation on rates — mathematically impossible to violate (FILTER count is a subset of the COUNT(\*) denominator in the same GROUP BY).
+- Resolve-hint has no test — by-design copy-only (AC5), logic-free constant, AC7 deliberately excludes it.
+- Empty-string `alert_code` — unreachable (`alert_code` NOT NULL; response model only built server-side from real rows; matches sibling `AlertFunnel`).
+- Dead zero-denominator `None` guard — spec-mandated defensive contract (AC1), mirrors `analytics.py`/`alert_effectiveness_report.py`.
+- Report FP-rate at 0 decimals — pre-existing `_fmt_pct`, AC6 imposes no precision, and only already-breaching classes are rendered (no contradictory pair).
