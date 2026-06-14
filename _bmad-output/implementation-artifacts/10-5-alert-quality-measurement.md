@@ -4,7 +4,7 @@ baseline_commit: e42a912
 
 # Story 10.5: Alert Quality Measurement (Resolution-Quality Rates)
 
-Status: review
+Status: done
 
 <!-- Created 2026-06-14 via bmad-create-story (Amelia / Opus 4.8). P3 — final feature story in Epic 10 (Operator Adoption & Trust).
      Source of truth: E10-S5 in epics.md:2342-2377 (committed). Sprint-status names this 10-5-alert-quality-measurement, backlog.
@@ -241,7 +241,24 @@ Amelia (claude-opus-4-8[1m])
 | Date | Change |
 |---|---|
 | 2026-06-14 | Implemented 10-5 (T1–T6): AI-quality resolution-rates endpoint + CC component + report NFR3 breach flag + PRD NFR3 redefinition + resolve hint. Reused shipped `false_alarm` (D1); shipped two rates (D2). Status → review. |
-| 2026-06-14 | Code-review Round 1 (multi-agent adversarial, wf_4b011970): 1 BLOCKER + 1 high + 1 medium fixed; 1 medium accepted-as-deferral; 1 low deferred; 6 refuted. Status stays review pending re-verify. |
+| 2026-06-14 | Code-review Round 1 (multi-agent adversarial, wf_4b011970): 1 BLOCKER + 1 high + 1 medium + 2 low fixed; 1 medium accepted-as-deferral; 1 low deferred; 6 refuted. |
+| 2026-06-14 | Code-review Round 2 (wf_0c944bdb): all 3 R1 fixes re-verified correct; 1 new low (fixture truncated only escalation_audit, leaked escalations parents) → FIXED (TRUNCATE both). APPROVED. Status → done. |
+
+## Senior Developer Review (AI) — Round 2
+
+**Reviewer:** Amelia (re-verification workflow `wf_0c944bdb`, 2 parallel verifiers — FK-fix correctness + HIGH/LOW regression scan). **Delta:** `ff96e4a` → `9e280a3`.
+**Outcome:** APPROVED.
+
+All three R1 fixes verified correct against the real code and schema:
+- **FK seed fix (BLOCKER):** `_seed_parent()` inserts a valid `escalations` parent (every NOT-NULL col satisfied, status defaults) before every audit insert, matching `eid`; no residual constraint risk; the 4 data tests now genuinely exercise the `?`-operator + `jsonb_array_length` branches.
+- **Untracked test (HIGH):** committed as a new file; 8 tests cover all AC7 cases.
+- **2-decimal label (LOW):** keeps the `% (n of d)` contract; no other test expected one decimal; `_render` tests assert the exact emitted markdown.
+
+**1 new finding (LOW) — FIXED in R2:** the `factory` fixture truncated only `escalation_audit`, so the newly-seeded `escalations` parents leaked across the module's tests (no constraint violation — a hygiene issue). Fixed: `TRUNCATE escalations, escalation_audit RESTART IDENTITY CASCADE`.
+
+### Residual (CI-gated, not a defect)
+- The integration suite (`pytest -m integration`) proves the FK fix and the SQL end-to-end but needs Docker/testcontainers — **run on first CI**, same gate as 10-1/10-4. Structurally verified by two independent R2 agents + direct schema read; unit (100) + RTL (258) green locally.
+- Browser verification (AC7) — open item, blocked by the pre-existing mock-config SPA-mount failure; discharge in a backend-connected env before pilot.
 
 ## Senior Developer Review (AI) — Round 1
 

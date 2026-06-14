@@ -63,8 +63,11 @@ async def factory(pg_url: str) -> AsyncGenerator[async_sessionmaker[AsyncSession
     engine = create_async_engine(pg_url)
     sm = async_sessionmaker(bind=engine, expire_on_commit=False)
     async with sm() as session:
+        # Truncate both: this story now seeds escalations parents for the audit
+        # rows' FK, so clearing only escalation_audit would leak parent rows
+        # across the module's tests. CASCADE from escalations also clears audit.
         await session.execute(
-            text("TRUNCATE escalation_audit RESTART IDENTITY CASCADE")
+            text("TRUNCATE escalations, escalation_audit RESTART IDENTITY CASCADE")
         )
         await session.commit()
     try:
