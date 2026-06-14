@@ -210,13 +210,24 @@ development_status:
   # ── Epic 11: Control Centre Admin & Identity ──
   # Source: surfaced 2026-05-30 during E10-S1 grill-me. Prerequisite for the UI half of E10-S1's kill-switch + threshold mutability.
   # E10 work does NOT block on Epic 11 — E10-S1 uses an X-Admin-Key seam designed to be forward-compatible with JWT auth.
-  # Stories below are placeholders; full breakdown requires a separate planning conversation.
-  epic-11: backlog
-  11-1-auth-jwt-login-flow: backlog                             # JWT issuance, role claim (admin|operator), login screen
-  11-2-user-management: backlog                                 # CRUD users + role assignment, password reset
-  11-3-profile-management: backlog                              # extract OperatorPreferences to per-user persistence
-  11-4-admin-ui-alert-class-killswitch: backlog                 # replaces curl operation of E10-S1 endpoints; same backend, auth middleware swapped
-  11-5-configuration-surface: backlog                           # mutable confidence thresholds + per-operator alert thresholds
+  # PLANNING PASS 2026-06-14 (Saga, bmad-create-epics-and-stories): placeholders → full breakdown in epics.md §"Epic 11".
+  #   Auth decision: SELF-CONTAINED JWT for PoC (local users table + passlib/bcrypt; cloud-backend issues+verifies HS256).
+  #   NO external IdP. Keycloak / ÖBB-OIDC SSO = Phase 2, explicitly out of scope. ADR-23 (authored by E11-S1) records this +
+  #   the verification-seam contract: token verification isolated behind get_current_user, decoupled from issuance, so the
+  #   13 protected routers never change when SSO swaps in later (avoids building the integration twice).
+  #   Seam compat VERIFIED against live code first (epic-10-retro prerequisite). Shipped-seam facts: NO get_current_user today
+  #   (cloud-backend/CLAUDE.md is aspirational); auth = 2 flat key schemes (X-API-Key on 14 routers + X-Admin-Key on 1);
+  #   operator_preferences keyed by the API-KEY STRING (E11-S3 carries a re-key migration, not a clean extract); no auth libs
+  #   installed; migrations run 0001→0008 so users table = 0009. Retro action items wired: A1 hard integration gate +
+  #   A2 risk-tier review (auth+migration ⇒ FULL adversarial wire-replay for S1-S4) + A3 seed-via-real-path in every integration test.
+  #   Sequence: S1 → S2 → (S3 ∥ S4) → S5. Stories below are PLANNED (broken down) but NOT ready-for-dev.
+  #   Next: create-story E11-S1 in a fresh context (verify staged router-cutover vs main.py mounting before coding).
+  epic-11: backlog  # planned (breakdown done 2026-06-14); first create-story is E11-S1
+  11-1-jwt-auth-foundation-login: backlog                       # PLANNED. pyjwt+passlib, users table (Alembic 0009), get_current_user verification seam (OIDC-swappable), POST /auth/login + /auth/me, frontend login+token store+401 interceptor, ADR-23, staged cutover of 14 require_api_key routers. Tier 3. FULL review. Depends: —
+  11-2-user-management: backlog                                 # PLANNED. admin-only CRUD users + role assignment + deactivate + password reset, audited; frontend Users screen (admin-gated). Tier 3. FULL review. Depends: 11-1
+  11-3-profile-management-prefs-rekey: backlog                  # PLANNED. re-key operator_preferences from api-key-string → user_id (Alembic 0010; drop/seed Decision, no fabricated mapping), preferences.py key-source swap, frontend Profile screen. Tier 3 (migration on existing data). FULL review. Depends: 11-1, 11-2
+  11-4-admin-ui-alert-class-killswitch: backlog                 # PLANNED. swap admin_alert_classes dep require_admin_key → require_role('admin') (single clean swap point), actor from current_user, retire X-Admin-Key/CC_ADMIN_KEY on that router; frontend AlertClasses screen. Tier 3 (auth swap on live kill-switch). FULL review. Depends: 11-1, 11-2
+  11-5-configuration-surface: backlog                           # PLANNED. mutable confidence thresholds (persist + admin PATCH; Alembic 0011 if table; seed CALIBRATE defaults; gate reads persisted), admin Config screen. Per-operator alert threshold already re-keyed by 11-3. Tier 2→3 if migration. LIGHT→FULL review. Depends: 11-1, 11-3
   epic-11-retrospective: optional
 
   # ── Epic 6: Fusion Hardening — Journey Lifecycle & Handler Robustness ──

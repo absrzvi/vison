@@ -160,7 +160,7 @@ UX-DR15: Prototype to production delta (9 items from DD-001): replace MockWebSoc
 | 8 | Analytics UI Hardening | P2 | ✅ In scope — hardening sprint 1 |
 | 9 | Container & Infrastructure Hardening | P2 | ✅ In scope — hardening sprint 1 |
 | 10 | Operator Adoption & Trust (AI PM gap-closure) | P1 | 🆕 Proposed — pre-pilot |
-| 11 | Control Centre Admin & Identity | P1 | 🆕 Proposed — prerequisite for E10 admin surfaces |
+| 11 | Control Centre Admin & Identity | P1 | 📋 Planned 2026-06-14 — 5 stories broken down (self-contained JWT, OIDC-swappable); not yet ready-for-dev |
 
 ---
 
@@ -2384,15 +2384,184 @@ Each rate displayed with its count denominator (e.g. `4.2% (3 of 71)`) so small-
 
 **Goal:** Introduce authentication, user management, profile management, and a Control Centre admin/configuration surface. Unlocks the UI half of E10-S1's kill-switch and the mutability deferral on E10-S1's confidence thresholds.
 
-**Stories (placeholder — full breakdown in a separate planning conversation):**
-- E11-S1 — JWT-based auth: login flow, token issuance, role claim (`admin` | `operator`).
-- E11-S2 — User management: CRUD on users + role assignment; password reset.
-- E11-S3 — Profile management: extract from current `OperatorPreferences.jsx`; per-user persistence.
-- E11-S4 — Admin UI for E10-S1 kill-switch: replaces curl operation with a settings screen; same backend endpoint with auth middleware swapped from `X-Admin-Key` to JWT role check.
-- E11-S5 — Configuration surface: mutable confidence thresholds + per-operator alert thresholds (Story 2-8 already partially in place — Epic 11 makes them user-scoped).
+> **Planning pass: 2026-06-14 (Saga).** Placeholder → full breakdown. Auth-seam compatibility verified against live code first (epic-10-retro prerequisite). See **"Shipped-seam facts"** below — the breakdown is grounded in what is actually shipped, not the aspirational `cloud-backend/CLAUDE.md` description.
 
-**Out of scope:** SSO integration with ÖBB's IDP (Phase 2 — likely a separate epic once the ÖBB tenant is identified).
+#### Auth approach decision (PoC)
 
-**Status:** `backlog` — planning required before any story moves to `ready-for-dev`. E10 work does NOT block on Epic 11; E10 uses the shared-key seam designed to be forward-compatible.
+**Self-contained JWT** — cloud-backend issues and verifies its own tokens against a local `users` table (passlib/bcrypt password hashing). **No external IdP for the PoC.** Keycloak / ÖBB-OIDC SSO is the **Phase-2 upgrade path** and is explicitly out of scope here.
+
+Rationale (recorded in **ADR-23**, authored by E11-S1): standing up an IdP for ~3 operators + 1 admin is speculative infra the PoC doesn't need, and a *self*-hosted Keycloak would likely be replaced by *ÖBB's own* IdP at fleet rollout — building it now risks building the SSO integration twice. The cost of deferral is contained **iff** token *verification* is decoupled from token *issuance*: E11-S1 isolates verification behind a single `get_current_user` dependency that reads a validated claim set, indifferent to issuer. Moving to Keycloak/ÖBB-OIDC later becomes "point the verifier at the IdP's JWKS, delete local issuance, swap the login screen for a redirect" — the 13 protected routers never change. That seam contract is an E11-S1 acceptance criterion, not an aspiration.
+
+#### Shipped-seam facts (verified 2026-06-14 against live code)
+
+- **Current auth = two flat API-key schemes, NOT JWT.** `cloud-backend/src/cloud_backend/api/auth.py::require_api_key` checks one shared `X-API-Key` against `Settings.api_key`. `cloud-backend/src/cloud_backend/routes/admin_alert_classes.py::require_admin_key` checks `X-Admin-Key` against `Settings.cc_admin_key` (fail-closed via `secrets.compare_digest`).
+- **No user identity exists today.** `operator_id` is a free-text body field the client sends (`control-centre/src/api/escalations.js`); the server never verifies it. **`operator_preferences` rows are keyed by the *API-key string itself*** (`preferences.py`: `WHERE operator_id = :oid` where `:oid` = the API key) — so E11-S3 carries a data-migration concern, not a clean extract.
+- **`get_current_user` does NOT exist.** The `cloud-backend/CLAUDE.md` description of JWT/`get_current_user`/role-in-route is aspirational — E11-S1 makes it real and corrects the doc.
+- **No auth libs installed** (no `pyjwt`/`python-jose`/`passlib`). E11-S1 adds the dependency.
+- **Frontend has no login concept.** `VITE_API_KEY` is baked into the bundle and sent on every call. No token store, no login screen, no 401→re-auth flow. E11-S1 frontend is a genuinely new surface.
+- **Protected-route inventory (the JWT swap must keep every one covered):** 14 routers behind `require_api_key` — `fleet`, `alerts`/SSE, `escalations`, `escalations-audit`, `analytics`, `capacity_review`, `config`, `ai-quality`, `ai-pipeline`/`health`, `kpi`, `maintenance`, `events`(ingest), `operators/me`(preferences), plus the standalone `/api/v1/health` route. 1 router behind `require_admin_key` — `admin/alert-classes` (the E11-S4 swap point).
+- **Migrations run 0001→0008.** Epic 11's `users` table is **0009**.
+
+#### Story breakdown
+
+| Story | Title | Tier | Depends on | Review tier (A2) |
+|---|---|---|---|---|
+| E11-S1 | JWT auth foundation + login flow | 3 | — | **FULL** (auth) |
+| E11-S2 | User management (CRUD + roles + password reset) | 3 | E11-S1 | **FULL** (auth + migration) |
+| E11-S3 | Profile management + preferences re-key migration | 3 | E11-S1, E11-S2 | **FULL** (migration) |
+| E11-S4 | Admin UI for kill-switch (X-Admin-Key → JWT swap) | 3 | E11-S1, E11-S2 | **FULL** (auth swap) |
+| E11-S5 | Configuration surface (mutable thresholds, user-scoped) | 2/3 | E11-S1, E11-S3 | LIGHT→FULL if migration |
+
+**Sequence:** S1 → S2 → (S3 ∥ S4) → S5. S3 and S4 are independent once S1+S2 land.
+
+---
+
+##### E11-S1 — JWT auth foundation + login flow
+
+**As** the cloud-backend, **I want** to issue and verify my own JWTs against a local credential store, with role-claim-based authorization behind a single `get_current_user` dependency, **so that** every protected route knows *who* is calling and with *what role*, and an external IdP can later be swapped in without touching those routes.
+
+**Scope:**
+- Add `pyjwt` + `passlib[bcrypt]` to `cloud-backend/pyproject.toml`. New `Settings` fields: `jwt_secret` (HS256 PoC; env, fail-closed empty default), `jwt_issuer`, `jwt_algorithm` (default HS256), `jwt_access_ttl_minutes`. **Config-driven so an RS256/JWKS issuer drops in later without code change.**
+- `users` table (**Alembic 0009**): `user_id` (uuid pk), `username` (unique), `password_hash`, `role` (`admin`|`operator` check constraint), `is_active`, `created_at`, `updated_at`.
+- `api/auth.py`: add `create_access_token(user)`, `get_current_user` (verifies signature/exp/issuer, loads claim set → `CurrentUser{user_id, username, role}`), and `require_role(*roles)` dependency factory. **`get_current_user` is the single verification seam — it does NOT know how the token was issued.**
+- `routes/auth.py`: `POST /api/v1/auth/login` (username+password → access token; bcrypt verify; 401 on bad creds, same ADR-10 error envelope), `GET /api/v1/auth/me` (returns `CurrentUser`).
+- **Keep `require_api_key` alive in parallel** (do NOT rip out the 14 routers yet) — E11-S1 ships the JWT machinery + login; the route-by-route cutover is staged so no protected surface is left unauthenticated mid-epic. Cutover of the 14 `require_api_key` routers to `get_current_user` happens at the end of S1 in one reviewed pass, with a contract test asserting all 14 reject a missing/invalid token 401.
+- Frontend: login screen (`/login` route), token store (in-memory + sessionStorage), `Authorization: Bearer` on all API calls (replace `VITE_API_KEY` header usage), 401→redirect-to-login interceptor, logout.
+- **ADR-23** (self-contained JWT for PoC; OIDC/Keycloak Phase-2 swap-in; the verification-seam contract) — shipped in the same commit per the ADR-FRESHNESS create-story rule.
+- Correct `cloud-backend/CLAUDE.md` auth section to describe the now-real `get_current_user`.
+
+**Acceptance criteria:**
+1. `POST /api/v1/auth/login` with valid creds returns a signed JWT carrying `sub`, `role`, `iss`, `exp`; invalid creds return 401 with `{"error":"UNAUTHORIZED",...}` (ADR-10 shape) and no token.
+2. A protected route called with a valid Bearer token resolves `get_current_user` to the correct `{user_id, username, role}`; called with a missing, expired, tampered-signature, or wrong-issuer token returns 401 — **never 500** (mirrors the JWT-edge-case scenario in `cloud-backend/CLAUDE.md`).
+3. `require_role("admin")` returns 403 for a valid `operator` token; 200 for a valid `admin` token.
+4. **Seam contract:** token verification is isolated in `get_current_user`; issuer, algorithm, and signing key are config-driven; a documented test/assertion demonstrates that introducing a second (external) issuer would not require editing any of the 13 protected routers. (This is the OIDC-swap guarantee — its violation is an AC fail.)
+5. All 14 previously-`require_api_key` routers + the standalone `/api/v1/health` route reject a request with no/invalid token (401), proven by a single parametrized integration test enumerating every protected prefix.
+6. Frontend: unauthenticated user hitting any route is redirected to `/login`; successful login stores the token and lands on the dashboard; a 401 from any API call clears the token and redirects to `/login`; logout clears the token.
+7. `jwt_secret` empty/unset fails closed (no token verifies; login cannot mint a usable token) — same fail-closed posture as `cc_admin_key`.
+8. ADR-23 exists and is referenced; `cloud-backend/CLAUDE.md` auth section matches shipped reality.
+
+**Security Tests (RED-first):** expired token → 401; tampered signature → 401; `alg:none` / algorithm-confusion attempt → 401; wrong-issuer token → 401; operator token on admin route → 403; missing role claim → 401/403 not 500; login brute-force returns uniform 401 (no user-enumeration timing/message difference).
+
+**Integration test (A1 + A3):** real Postgres (testcontainers) seeded with a real bcrypt-hashed user **via the actual user-creation path / login flow — not a raw INSERT of a hand-computed hash**; drive `login → Bearer → protected route → 401-on-tamper` end-to-end. Must run and pass before review (A1 hard gate).
+
+**Permission tier:** **Tier 3** — new dependency, DB migration, auth. Default permission mode.
+
+**Deliverables:** `cloud-backend/pyproject.toml`, `cloud-backend/src/cloud_backend/config/__init__.py`, `cloud-backend/migrations/versions/0009_users.py`, `cloud-backend/src/cloud_backend/api/auth.py`, `cloud-backend/src/cloud_backend/routes/auth.py`, `cloud-backend/src/cloud_backend/main.py` (mount + staged cutover), `cloud-backend/CLAUDE.md`, `control-centre/src/components/auth/Login.jsx` + token store + fetch interceptor, `_bmad-output/architecture-artifacts/ADR-23-self-contained-jwt.md`.
+
+---
+
+##### E11-S2 — User management (CRUD + roles + password reset)
+
+**As** an admin, **I want** to create, list, deactivate, and role-assign operator/admin accounts and reset passwords, **so that** ÖBB ops can manage who has Control Centre access without editing the database by hand.
+
+**Scope:**
+- `routes/users.py` behind `require_role("admin")`: `GET /api/v1/admin/users`, `POST /api/v1/admin/users` (create with role + initial password), `PATCH /api/v1/admin/users/{id}` (role, is_active), `POST /api/v1/admin/users/{id}/reset-password`. All audited the same way `admin_alert_classes` audits (structured log + landside-origin event envelope).
+- Password policy at the boundary (min length; reject empty). bcrypt cost factor in config.
+- Frontend: admin "Users" settings screen (list, create-user modal, role toggle, deactivate, reset-password) — gated on `role === 'admin'`; hidden/blocked for operators.
+
+**Acceptance criteria:**
+1. Admin creates an operator; the new user can immediately `login` and receives an `operator`-role token.
+2. Operator token on any `/api/v1/admin/users` endpoint → 403; admin token → 200.
+3. Deactivating a user (`is_active=false`) causes their subsequent `login` to fail 401 **and** any existing token of theirs to fail `get_current_user` (active-check on verify, not just at login).
+4. Password reset invalidates the old password (old creds 401, new creds 200).
+5. Every user-management mutation writes an audit event (actor = admin `user_id`, target, action) — queryable like the kill-switch audit.
+6. Cannot delete/deactivate the last active admin (lock-out guard) → 409.
+7. Frontend Users screen renders loading/error/populated; create + role-toggle + deactivate + reset round-trip and reflect in the list.
+
+**Security Tests (RED-first):** operator escalating self to admin via PATCH → 403; user-enumeration on create (duplicate username) returns a uniform error; reset-password requires admin role not just authentication; deactivated-user token rejected mid-session.
+
+**Integration test (A1 + A3):** seed the acting admin **via the real user-creation flow**, then drive create→login-as-new-user→deactivate→login-fails end-to-end on real Postgres. Run + pass before review.
+
+**Permission tier:** **Tier 3** — auth + migration-adjacent. Default permission mode.
+
+**Deliverables:** `cloud-backend/src/cloud_backend/routes/users.py`, `cloud-backend/src/cloud_backend/api/users.py` (Pydantic models), `control-centre/src/components/admin/Users.jsx` + `src/api/users.js`.
+
+---
+
+##### E11-S3 — Profile management + preferences re-key migration
+
+**As** a logged-in operator, **I want** my preferences (alert threshold, staleness threshold) stored against *my* identity and editable from a profile screen, **so that** my settings follow me regardless of which shared key the deployment uses.
+
+**Scope:**
+- **Data migration concern (load-bearing):** `operator_preferences.operator_id` currently holds the **shared API-key string**, not a user identity. **Alembic 0010** must re-key existing rows. Decision required at create-story: existing rows are keyed to a now-defunct secret — the safe PoC choice is to **drop/seed** preferences against real `user_id`s (there is no real per-user data to preserve — every "operator" was the same shared key), rather than attempt a fabricated mapping. Document this in the story as a Decision; do not silently migrate.
+- Re-point `preferences.py` from `:oid = api_key` to `:oid = current_user.user_id` via `get_current_user`. The `/api/v1/operators/me/preferences` GET/PATCH endpoints already exist — this is a key-source swap, not a new endpoint.
+- Frontend: Profile screen surfacing the existing preference controls (extracted from wherever `OperatorPreferences` currently lives) under the authenticated user.
+
+**Acceptance criteria:**
+1. Two different logged-in users have independent preferences; user A's PATCH never affects user B's row.
+2. `operator_preferences` is keyed by `user_id` (FK to `users`); the old API-key-string keying is gone (verified by schema + a test that the column references a real user).
+3. Alembic 0010 applies cleanly and idempotently on a DB containing pre-migration rows; the re-key Decision (drop/seed vs map) is documented and the migration does exactly what's documented — no data invented.
+4. Profile screen renders loading/error/populated; PATCH round-trips and persists across logout/login.
+5. A logged-out user cannot read or write preferences (401).
+
+**Security Tests (RED-first):** user A cannot read/write user B's preferences by manipulating the request (no `operator_id` accepted from the client body — identity comes only from the token); SQL-safety on the user-id key path.
+
+**Integration test (A1 + A3):** real Postgres; create two users via the real flow, drive independent PATCH/GET, assert isolation; run the 0009→0010 migration chain and assert idempotency. Run + pass before review.
+
+**Permission tier:** **Tier 3** — DB migration on existing data. Default permission mode.
+
+**Deliverables:** `cloud-backend/migrations/versions/0010_preferences_rekey_user_id.py`, `cloud-backend/src/cloud_backend/routes/preferences.py`, `control-centre/src/components/profile/Profile.jsx`.
+
+---
+
+##### E11-S4 — Admin UI for kill-switch (X-Admin-Key → JWT swap)
+
+**As** an admin, **I want** to disable/enable an alert class from a settings screen, **so that** the E10-S1 kill-switch is operated through the UI with role-based auth instead of a shared admin key and curl.
+
+**Scope:**
+- Swap `admin_alert_classes` router's dependency from `Security(require_admin_key)` to `Security(require_role("admin"))` — the **single clean swap point** confirmed against live code. Remove `X-Admin-Key`/`CC_ADMIN_KEY` usage for this router (keep the audit-event plumbing intact — `actor_name` now comes from `current_user`, not a body field).
+- Frontend: admin "Alert Classes" settings screen — list (from existing `GET /api/v1/admin/alert-classes`), per-class disable/enable toggle calling the existing POST endpoints; gated on `role === 'admin'`.
+
+**Acceptance criteria:**
+1. Admin toggles an alert class from the UI; the change takes effect at the fan-out filter (a new alert of a disabled class is suppressed from REST + SSE; in-flight escalations stay visible) — i.e. the E10-S1 behavior is preserved end-to-end through the new auth path.
+2. Operator token on the kill-switch endpoints → 403; the UI toggle is not shown to operators.
+3. Audit event still written on every toggle, now with `actor = current_user.user_id` (no more body-supplied `actor_name`); the audit trail is unbroken across the auth swap.
+4. `X-Admin-Key`/`CC_ADMIN_KEY` is no longer accepted on this router (old curl path 401s).
+5. Frontend screen renders loading/error/populated; toggle round-trips and reflects current state.
+
+**Security Tests (RED-first):** operator cannot disable an alert class (403); request with old `X-Admin-Key` but no Bearer token → 401; admin role required, authentication alone insufficient.
+
+**Integration test (A1):** real Postgres; admin-token toggle → assert fan-out filter state changed and audit row written; operator-token toggle → 403. Run + pass before review.
+
+**Permission tier:** **Tier 3** — auth swap on a live kill-switch. Default permission mode.
+
+**Deliverables:** `cloud-backend/src/cloud_backend/routes/admin_alert_classes.py` (dependency swap + actor source), `control-centre/src/components/admin/AlertClasses.jsx` + `src/api/alertClasses.js`, `cloud-backend/src/cloud_backend/config/__init__.py` (deprecate `cc_admin_key`).
+
+---
+
+##### E11-S5 — Configuration surface (mutable thresholds, user-scoped)
+
+**As** an admin, **I want** the per-class confidence thresholds (currently hardcoded, read-only) to be editable, and per-operator alert thresholds to be genuinely user-scoped, **so that** calibration values can change without a redeploy and operator settings are owned by real users.
+
+**Scope:**
+- Confidence thresholds: today `cloud-backend/src/cloud_backend/config/confidence_thresholds.py` is hardcoded with a read-only `GET /api/v1/config/confidence-thresholds` (E10-S1). Make them mutable — persisted (small `config_kv` or `confidence_thresholds` table, **Alembic 0011 if a table is added**) with an admin-only `PATCH`. The kill-switch fan-out / confidence-gating reads the persisted values.
+- Per-operator alert threshold (E2-S8 / Story 2-8): **already shipped** in `preferences.py`, but was keyed by API-key-as-operator-id; E11-S3 already re-keys it to real users. E11-S5's remaining job is the **admin-facing** config surface, not re-building the operator preference.
+- Frontend: admin "Configuration" settings screen for the confidence thresholds (operator-facing alert threshold stays on the Profile screen from S3).
+
+**Acceptance criteria:**
+1. Admin edits a per-class confidence threshold via UI; the new value is persisted and used by the live confidence gate / degraded-banner logic (verified end-to-end, not just stored).
+2. Operator token on the threshold-PATCH endpoint → 403; read may stay operator-visible (matches current read-only GET exposure).
+3. If a table is added: Alembic 0011 applies cleanly + idempotently; seeded with the current hardcoded `# CALIBRATE` defaults so behavior is unchanged until edited.
+4. Invalid threshold values (out of 0.0–1.0, or below the degraded floor) rejected 422 with ADR-10 envelope.
+5. Config screen renders loading/error/populated; edit round-trips and persists.
+
+**Security Tests (RED-first):** operator cannot mutate thresholds (403); out-of-range/NaN values rejected at the boundary; a malformed value cannot disable the confidence gate (fail-safe to the hardcoded default, not to "no gating").
+
+**Integration test (A1 + A3):** real Postgres; admin PATCH a threshold → assert the persisted value is read by the gate on the next evaluation (drive an alert through, not just re-GET the config). Run + pass before review.
+
+**Permission tier:** **Tier 2** (mutable config) escalating to **Tier 3** if a migration is added. Default permission mode.
+
+**Deliverables:** `cloud-backend/src/cloud_backend/routes/config.py` (add PATCH), `cloud-backend/src/cloud_backend/config/confidence_thresholds.py` (read from store), optional `cloud-backend/migrations/versions/0011_confidence_thresholds.py`, `control-centre/src/components/admin/Configuration.jsx`.
+
+---
+
+**Out of scope:** SSO integration with ÖBB's IDP / Keycloak (Phase 2 — the verification seam built by E11-S1/ADR-23 is designed to accept it as a contained swap once the ÖBB tenant is identified). Refresh-token rotation / sliding sessions (PoC uses a single short-TTL access token + re-login). Multi-tenant / org-scoping. Email-based password-reset flows (admin-initiated reset only).
+
+**Cross-cutting (retro action items wired in):**
+- **A1 (hard integration gate)** — already in `_bmad/custom/bmad-dev-story.toml`; every story above names an integration test that must *run and pass* on real Postgres before flipping to `review`. Auth is the canonical test/prod-divergence risk (epic-10-retro §Key Insights) — the gate matters most here.
+- **A2 (risk-tier review)** — already in `_bmad/custom/bmad-code-review.toml`; auth + migration ⇒ every story except possibly E11-S5 is **FULL adversarial wire-replay** review tier. Each story states its tier in the table above.
+- **A3 (create-story divergence rule)** — applied per-story at create-story time: integration tests seed via the **real user-creation/login path**, never raw INSERTs of hand-computed hashes or client-supplied identities.
+
+**Status:** `backlog` — breakdown complete (2026-06-14), **not yet `ready-for-dev`**. Next: `create-story E11-S1` in a fresh context (verify the staged-cutover approach against `main.py` router mounting before coding). E10 work does NOT block Epic 11; the shared-key seam was designed forward-compatible and that has now been verified.
 
 ---
