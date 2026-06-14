@@ -4,7 +4,7 @@ baseline_commit: c2db726
 
 # Story 6.4: vlan-pollers↔fusion `/context` Push Contract Reconciliation
 
-Status: review
+Status: done
 
 <!-- Created 2026-06-14 via bmad-create-story (Amelia / Opus 4.8). P1 — NEW fourth story in Epic 6 (Fusion Hardening).
      Source: surfaced by the 10-4 dwell-time-KPI code review (wf_eb03b492 + wf_4b4c0912) as a PRE-EXISTING integration
@@ -220,3 +220,22 @@ The contract reconciliation itself is sound (real full-delta body validates 200;
 - [x] **[LOW] R4 — stale comments in `test_pis_update_suppresses_on_no_change` described the removed targeted push.** Rewritten to state `update_pis` now fires only `_push_context_delta`. [test_context_state.py]
 
 **Clean ACs the review confirmed (verified live, not from notes):** AC1-3 (real full-delta push → 200, scheduled_departure from nested pis); AC4 (per-service isolation genuinely attempts both consumers after one fails — closes F21); AC5 (`shared/http/retry.py` not in the commit); D4 (`ContextState` has no occupancy/alarms/trip_number attrs). One dismissed finding: per-service `except Exception` is acceptably broad (the payload is always JSON-serializable primitives; no maskable programming-error path).
+
+## Senior Developer Review (AI) — Round 2 (re-review of Round-1 fixes)
+
+**Reviewer:** Multi-agent adversarial re-review (wf_aad17dad — r1-closure + regression-hunter + completeness-edge layers; resumed once after a transient API socket error, completed agents cached). **Date:** 2026-06-14. **Outcome: APPROVED.**
+
+**The journey-change-stale-departure regression is genuinely CLOSED — verified end-to-end on the real wire.** 12 fix-confirmations, **zero surviving problems, zero new regressions.**
+
+- **Real-chain reproduction:** drove the actual `update_journey(J1) → update_pis(real dep) → update_journey(J2)`; the J2 full-delta push carries `pis.scheduled_departure=""` (reset, not J1's value); fed to real fusion (pre-seeded with J1's departure) → `journey_id=J2`, `scheduled_departure=None` (cleared).
+- **Worst-case path analysis:** `_state.journey_id` is written in exactly one place (`update_journey`, single call site `snmp_poller._process`) — **no journey-change path bypasses the `_state.pis` reset**. `set_station_approach` (journey_id, no pis) also clears correctly via the truthiness gate.
+- **All six gate paths verified:** happy path stores; journey-change-with-fresh-departure stores (the `if new_dep:` precedes the clear); empty/absent pis clears on journey change; keeps prior within a journey.
+- **No consumer broken** by the pis reset: inference ignores pis; the station-approach watchdog correctly clears stale approach on the new journey; `update_pis` suppression still distinguishes the new journey's first real PIS from the reset empty state.
+- **R2 test genuinely fails on pre-fix, passes on fix** (reviewers reconstructed the pre-fix `is not None` gate and confirmed it leaked `""`/stale; the new truthiness gate returns None).
+- Suites: fusion **177** (93.74%, context_state.py 97%); vlan-pollers **91** (97.87%, context_state.py 99%); mypy --strict clean.
+
+**No surviving findings. 6-4 is mergeable.**
+
+### Change Log addendum
+
+- 2026-06-14 — Round-2 re-review (wf_aad17dad): **APPROVED**. Journey-change regression verified closed end-to-end on the real wire (J2 push carries empty pis; fusion clears to None; only one journey_id writer, no bypass). 12 confirmations, zero surviving problems. Status review → done.
