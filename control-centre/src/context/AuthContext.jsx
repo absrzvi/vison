@@ -2,7 +2,7 @@
 // login/logout, and wires the global 401 signal (from authFetch) to a logout so
 // any expired-token response redirects to /login.
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getToken } from '../lib/auth/tokenStore';
+import { getToken, getRole } from '../lib/auth/tokenStore';
 import { onUnauthorized } from '../lib/auth/authFetch';
 import { login as apiLogin, logout as apiLogout } from '../api/auth';
 
@@ -10,23 +10,30 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(getToken()));
+  // role drives UI gating of the admin screens (server still enforces — E11-S2).
+  const [role, setRole] = useState(() => getRole());
 
   const login = useCallback(async (username, password) => {
     await apiLogin(username, password);
     setIsAuthenticated(true);
+    setRole(getRole());
   }, []);
 
   const logout = useCallback(() => {
     apiLogout();
     setIsAuthenticated(false);
+    setRole(null);
   }, []);
 
   // A 401 from any API call clears the token (in authFetch) and flips us to
   // unauthenticated → the route guard redirects to /login.
-  useEffect(() => onUnauthorized(() => setIsAuthenticated(false)), []);
+  useEffect(
+    () => onUnauthorized(() => { setIsAuthenticated(false); setRole(null); }),
+    []
+  );
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, role, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

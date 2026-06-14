@@ -143,9 +143,12 @@ async def test_auth_flow_end_to_end(
     )
     assert ok.status_code == 200, ok.text
 
-    # tamper one signature byte → 401
+    # tamper the signature → 401. Reverse the whole signature segment: guaranteed
+    # to change the signature bytes (vs the old last-char A/B flip, which left the
+    # signature byte-identical ~5% of the time because the trailing base64url char
+    # carries only ~2 significant bits — a latent flake; the verifier itself is fine).
     head, payload, sig = token.split(".")
-    tampered = f"{head}.{payload}.{sig[:-1]}{'A' if sig[-1] != 'A' else 'B'}"
+    tampered = f"{head}.{payload}.{sig[::-1]}"
     bad = await app_client.get(
         "/api/v1/fleet/overview", headers={"Authorization": f"Bearer {tampered}"}
     )
@@ -223,7 +226,7 @@ async def test_protected_route_requires_token(
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_sse_query_token_gate_accepts_valid_rejects_invalid(
-    app_client: AsyncClient,
+    app_client: AsyncClient, factory: async_sessionmaker[AsyncSession]
 ) -> None:
     """Positive + negative coverage for the ?token= SSE extractor
     (get_current_user_from_query) — the only route on that distinct code path. A
@@ -244,16 +247,26 @@ async def test_sse_query_token_gate_accepts_valid_rejects_invalid(
         get_current_user_from_query,
     )
 
+    # Seed an ACTIVE user via the real path so the E11-S2 liveness gate (added to
+    # both extractors) passes for the valid-token case. Mint the token for THAT
+    # user_id so sub matches the row.
+    sse_uid = await _seed_user(
+        factory, username="sse", password="pw-sse-12345", role="operator"
+    )
+
     # Valid ?token= → resolves the user via the same verify core as the header path.
-    token = create_access_token(user_id="u-sse", username="sse", role="operator")
-    user = await get_current_user_from_query(token=token)
-    assert user.user_id == "u-sse"
+    token = create_access_token(user_id=sse_uid, username="sse", role="operator")
+    async with factory() as session:
+        user = await get_current_user_from_query(token=token, db=session)
+    assert user.user_id == sse_uid
     assert user.role == "operator"
 
-    # Invalid / missing ?token= → 401 at the dependency.
+    # Invalid / missing ?token= → 401 at the dependency (raises in _verify_token
+    # before the liveness check, so no db is needed).
     for bad in ("not-a-jwt", None):
         with pytest.raises(HTTPException) as exc:
-            await get_current_user_from_query(token=bad)
+            async with factory() as session:
+                await get_current_user_from_query(token=bad, db=session)
         assert exc.value.status_code == 401
 
     # And over the real HTTP route the bad token short-circuits to 401 (no stream).

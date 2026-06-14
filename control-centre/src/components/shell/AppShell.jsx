@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useFleetData } from '../../hooks/useFleetData';
+import { useAuth } from '../../context/AuthContext';
 import { OperatorPreferences } from './OperatorPreferences';
 import './AppShell.css';
 
@@ -16,6 +17,7 @@ function secsElapsed(timestamp) {
 
 export function AppShell() {
   const { escalations, wsStatus, alertThresholdSeconds } = useFleetData();
+  const { role } = useAuth();
   const navigate = useNavigate();
   const [, setTick] = useState(0);
   const [showPrefs, setShowPrefs] = useState(false);
@@ -73,6 +75,9 @@ export function AppShell() {
         <NavLink to="/dashboard/luggage"   className={({ isActive }) => `tab-bar__tab ${isActive ? 'tab-bar__tab--active' : ''}`}>Luggage</NavLink>
         <NavLink to="/dashboard/health"    className={({ isActive }) => `tab-bar__tab ${isActive ? 'tab-bar__tab--active' : ''}`}>System Health</NavLink>
         <NavLink to="/dashboard/analytics" className={({ isActive }) => `tab-bar__tab ${isActive ? 'tab-bar__tab--active' : ''}`}>Analytics</NavLink>
+        {role === 'admin' && (
+          <NavLink to="/dashboard/users" className={({ isActive }) => `tab-bar__tab ${isActive ? 'tab-bar__tab--active' : ''}`} data-testid="nav-users">Users</NavLink>
+        )}
       </nav>
 
       {wsStatus === 'reconnecting' && (

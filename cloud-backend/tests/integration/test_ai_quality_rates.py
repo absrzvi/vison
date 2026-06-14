@@ -27,7 +27,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-from .conftest import auth_header
+from .conftest import auth_header, seed_auth_users
 
 _ALEMBIC_INI = str(Path(__file__).parents[2] / "alembic.ini")
 _API_HEADERS = auth_header()
@@ -50,6 +50,7 @@ def pg_url() -> Generator[str, None, None]:
             cfg = Config(_ALEMBIC_INI)
             cfg.set_main_option("sqlalchemy.url", url)
             command.upgrade(cfg, "head")
+            seed_auth_users(url)
             yield url
         finally:
             if prev is None:

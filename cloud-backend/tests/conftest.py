@@ -19,3 +19,9 @@ _JWT_ISSUER = "oebb-cloud-backend"
 os.environ["JWT_SECRET"] = _JWT_SECRET
 os.environ["JWT_ISSUER"] = _JWT_ISSUER
 os.environ["JWT_ALGORITHM"] = "HS256"
+
+# E11-S2 D6: mark the whole suite as the test env so the cheap bcrypt cost is
+# permitted (the prod floor is >= 10). Cost 4 keeps the real-path user-creation
+# integration tests fast (~250ms/hash at cost 12 would dominate the suite).
+os.environ.setdefault("APP_ENV", "test")
+os.environ.setdefault("BCRYPT_ROUNDS", "4")

@@ -23,8 +23,11 @@ import jwt
 from fastapi import Depends, HTTPException, Security
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
+from ..database import get_db
 
 # ── Legacy shared-key scheme (pre-E11; removed when E11-S3 re-keys preferences) ──
 
@@ -57,8 +60,13 @@ class CurrentUser(BaseModel):
 def hash_password(password: str) -> str:
     """bcrypt hash. bcrypt only mixes the first 72 bytes; we truncate explicitly
     rather than letting the library raise, so over-long passwords hash
-    deterministically (the same rule is applied on verify)."""
-    return bcrypt.hashpw(password.encode("utf-8")[:72], bcrypt.gensalt()).decode("ascii")
+    deterministically (the same rule is applied on verify). The cost factor is
+    config-driven (E11-S2 D6): prod stays 12, the test env lowers it so the
+    real-path integration suite isn't taxed by cost-12 bcrypt on every user."""
+    rounds = get_settings().bcrypt_rounds
+    return bcrypt.hashpw(
+        password.encode("utf-8")[:72], bcrypt.gensalt(rounds=rounds)
+    ).decode("ascii")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
@@ -112,17 +120,47 @@ def _verify_token(raw: str | None) -> CurrentUser:
     )
 
 
+async def assert_user_active(user: CurrentUser, db: AsyncSession) -> CurrentUser:
+    """Liveness gate (E11-S2 D2/AC3). After the token is cryptographically valid,
+    confirm the principal is still ACTIVE in the local user store — so deactivating
+    a user invalidates their EXISTING token mid-session, not only their next login.
+
+    This is AUTHORIZATION (a local question), kept deliberately OUTSIDE the
+    `_verify_token` crypto seam (authentication). The seam stays issuer/algorithm/
+    key-driven (the AC4 OIDC-swap guarantee); this check survives a Keycloak swap
+    unchanged (ÖBB still deactivates operators in our `users` table). A missing
+    row (deleted / never-existed `sub`) is treated exactly like deactivated → 401.
+
+    Do NOT fold this SELECT into `_verify_token` — that would couple the verifier
+    to local state and break the seam (guarded by test_seam_liveness_survives_verifier_swap).
+    """
+    result = await db.execute(
+        text("SELECT is_active FROM users WHERE user_id = :uid"),
+        {"uid": user.user_id},
+    )
+    row = result.fetchone()
+    if row is None or not row.is_active:
+        raise HTTPException(status_code=401, detail=_UNAUTHORIZED)
+    return user
+
+
 async def get_current_user(
     creds: HTTPAuthorizationCredentials | None = Security(_bearer_scheme),
+    db: AsyncSession = Depends(get_db),
 ) -> CurrentUser:
-    """Header extractor: Authorization: Bearer <token> → CurrentUser (or 401)."""
-    return _verify_token(creds.credentials if creds else None)
+    """Header extractor: Authorization: Bearer <token> → CurrentUser (or 401).
+    Verifies the token (crypto seam) then applies the liveness gate (D2)."""
+    return await assert_user_active(_verify_token(creds.credentials if creds else None), db)
 
 
-async def get_current_user_from_query(token: str | None = None) -> CurrentUser:
+async def get_current_user_from_query(
+    token: str | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> CurrentUser:
     """Query extractor for SSE/EventSource (?token=<jwt>), which cannot set an
-    Authorization header (D8). Same verification core as the header path."""
-    return _verify_token(token)
+    Authorization header (D8). Same verification core AND same liveness gate as
+    the header path — a deactivated user must lose the live stream too (D2 trap)."""
+    return await assert_user_active(_verify_token(token), db)
 
 
 def require_role(*roles: str) -> Any:

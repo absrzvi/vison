@@ -27,3 +27,19 @@ export function setToken(token) {
 export function clearToken() {
   setToken(null);
 }
+
+// Decode the `role` claim from the current JWT for UI gating ONLY (show/hide the
+// admin screens). NOT a security boundary — the server independently enforces
+// require_role on every admin endpoint (E11-S2). No signature check is done or
+// needed here; a forged role only changes what the UI renders, never what the API
+// permits. Returns null if there is no token or it can't be parsed.
+export function getRole() {
+  if (!_token) return null;
+  try {
+    const payload = _token.split('.')[1];
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(json).role ?? null;
+  } catch {
+    return null;
+  }
+}

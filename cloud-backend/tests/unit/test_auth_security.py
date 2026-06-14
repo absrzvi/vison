@@ -26,6 +26,27 @@ from cloud_backend.api.auth import (
     require_role,
 )
 from cloud_backend.config import Settings, get_settings
+from cloud_backend.database import get_db
+
+
+async def _active_user_db() -> AsyncGenerator[AsyncMock, None]:
+    """get_db override for the unit auth app: the E11-S2 liveness check
+    (assert_user_active) does a `SELECT is_active ...` after token verification.
+    These unit tests exercise the CRYPTO path (valid/invalid token, role), not
+    deactivation — so the liveness SELECT must see an ACTIVE user. A bad token
+    raises in _verify_token BEFORE this is reached, so it doesn't affect the
+    rejection tests."""
+    session = AsyncMock()
+
+    async def _execute(stmt: object, params: object = None) -> MagicMock:
+        result = MagicMock()
+        row = MagicMock()
+        row.is_active = True
+        result.fetchone = MagicMock(return_value=row)
+        return result
+
+    session.execute = _execute
+    yield session
 
 # Use the suite-stable secret/issuer from the root conftest so a token minted
 # here verifies consistently regardless of test ordering.
@@ -63,6 +84,9 @@ def _app_with_protected() -> FastAPI:
     async def _admin_only() -> dict[str, str]:
         return {"ok": "yes"}
 
+    # The liveness check (E11-S2) makes get_current_user depend on get_db; in unit
+    # tests we feed it an always-active user so the crypto-path assertions hold.
+    app.dependency_overrides[get_db] = _active_user_db
     return app
 
 

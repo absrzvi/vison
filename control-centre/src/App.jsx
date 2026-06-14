@@ -7,6 +7,7 @@ import { LuggageMonitoring } from './components/luggage/LuggageMonitoring';
 import { SystemHealth } from './components/health/SystemHealth';
 import { Analytics } from './components/analytics/Analytics';
 import { EscalationsDashboard } from './components/escalations/EscalationsDashboard';
+import { Users } from './components/admin/Users';
 import { Login } from './components/auth/Login';
 import { useAuth } from './context/AuthContext';
 import './styles/global.css';
@@ -16,6 +17,13 @@ import './styles/skeletons.css';
 function RequireAuth({ children }) {
   const { isAuthenticated } = useAuth();
   return isAuthenticated ? children : <Navigate to="/login" replace />;
+}
+
+// E11-S2 — admin-only screens. A non-admin who reaches the route directly is
+// bounced to the dashboard (the nav entry is also hidden). Server still enforces.
+function RequireAdmin({ children }) {
+  const { role } = useAuth();
+  return role === 'admin' ? children : <Navigate to="/dashboard/live" replace />;
 }
 
 export default function App() {
@@ -39,6 +47,7 @@ export default function App() {
           <Route path="health"       element={<ErrorBoundary><SystemHealth /></ErrorBoundary>} />
           <Route path="analytics"    element={<ErrorBoundary><Analytics /></ErrorBoundary>} />
           <Route path="escalations"  element={<ErrorBoundary><EscalationsDashboard /></ErrorBoundary>} />
+          <Route path="users"        element={<RequireAdmin><ErrorBoundary><Users /></ErrorBoundary></RequireAdmin>} />
         </Route>
       </Routes>
     </BrowserRouter>

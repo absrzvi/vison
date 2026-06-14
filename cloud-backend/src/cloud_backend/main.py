@@ -21,6 +21,7 @@ from .routes.ingest import router as ingest_router
 from .routes.kpi import router as kpi_router
 from .routes.maintenance import router as maintenance_router
 from .routes.preferences import router as preferences_router
+from .routes.users import router as users_router
 
 structlog.configure(
     processors=[
@@ -52,6 +53,7 @@ app.include_router(preferences_router)
 app.include_router(escalations_router)
 app.include_router(escalations_audit_router)
 app.include_router(kpi_router)
+app.include_router(users_router)
 
 
 @app.on_event("startup")

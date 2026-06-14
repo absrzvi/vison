@@ -12,13 +12,17 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-from .conftest import auth_header
+from .conftest import auth_header, seed_auth_users
 
 
 @pytest.fixture(scope="module")
 def pg_url() -> Generator[str, None, None]:
     with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "asyncpg")
+        url = pg.get_connection_url().replace("psycopg2", "asyncpg")
+        # E11-S2: create + seed synthetic auth users so the liveness check on the
+        # protected routes passes (this module builds schema ad-hoc — no Alembic).
+        seed_auth_users(url)
+        yield url
 
 
 async def _seed(session_factory: async_sessionmaker[AsyncSession]) -> None:
