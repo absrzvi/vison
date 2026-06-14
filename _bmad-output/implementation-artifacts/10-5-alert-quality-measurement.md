@@ -256,9 +256,9 @@ All three R1 fixes verified correct against the real code and schema:
 
 **1 new finding (LOW) — FIXED in R2:** the `factory` fixture truncated only `escalation_audit`, so the newly-seeded `escalations` parents leaked across the module's tests (no constraint violation — a hygiene issue). Fixed: `TRUNCATE escalations, escalation_audit RESTART IDENTITY CASCADE`.
 
-### Residual (CI-gated, not a defect)
-- The integration suite (`pytest -m integration`) proves the FK fix and the SQL end-to-end but needs Docker/testcontainers — **run on first CI**, same gate as 10-1/10-4. Structurally verified by two independent R2 agents + direct schema read; unit (100) + RTL (258) green locally.
-- Browser verification (AC7) — open item, blocked by the pre-existing mock-config SPA-mount failure; discharge in a backend-connected env before pilot.
+### Residual
+- ~~Integration suite needs Docker~~ — **DISCHARGED 2026-06-14.** Docker came up; ran `pytest -m integration` on real Postgres (testcontainers + Alembic head): all **6 of 6** 10-5 integration tests PASS (`test_two_rates_with_denominators` 0.25/0.25, `test_null_action_tags_counts_as_no_action`, `test_raised_rows_do_not_count_as_resolved`, `test_window_upper_bound_is_half_open`, `test_empty_window_returns_empty_list`, `test_requires_api_key`). This empirically proves the BLOCKER fix (FK `_seed_parent`) and the novel `?`-operator + `jsonb_array_length` SQL on real Postgres. Full cloud-backend integration suite: **92 passed, 0 failed** — no regressions.
+- Browser verification (AC7) — **still open**, blocked by the pre-existing mock-config SPA-mount failure (FleetContext needs a real backend); not a code defect in this story. Discharge in a backend-connected env before pilot. Component is defensively mounted + covered by 8 RTL states.
 
 ## Senior Developer Review (AI) — Round 1
 
