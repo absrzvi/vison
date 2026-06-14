@@ -592,6 +592,52 @@ async def test_report_empty_week_does_not_crash(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_report_renders_median_and_p95_ack_latency(
+    app_client: AsyncClient, factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """The report mirrors the funnel route's median + p95 ack-latency parity. Seed
+    acknowledged rows with distinct latencies so the two percentiles differ, then
+    assert both render. Latencies 10/20/30/40/50s → median 30s, PERCENTILE_CONT(0.95)
+    interpolates to 48s (0.95*(5-1)=3.8 → 40 + 0.8*(50-40))."""
+    from cloud_backend.services.alert_effectiveness_report import (
+        generate_alert_effectiveness_report,
+    )
+
+    # FK parent for the audit rows; its 'raised' row is ignored (percentiles FILTER
+    # on transition = 'acknowledged'). All timestamps pinned inside ISO 2020-W10.
+    eid = await _ingest_alert(app_client)
+    t_fired = datetime(2020, 3, 2, 1, 0, tzinfo=UTC)
+    async with factory() as s:
+        for latency in (10, 20, 30, 40, 50):
+            await s.execute(
+                text(
+                    "INSERT INTO escalation_audit "
+                    "(audit_id, escalation_id, transition, operator_id, alert_code, "
+                    "t_event, t_fired, action_tags, dwell_focus_ms, confidence_score, "
+                    "confidence_basis, model_versions) "
+                    "VALUES (:aid, :eid, 'acknowledged', 'op-1', 'UNATTENDED_BAG', "
+                    ":t_event, :t_fired, NULL, NULL, 0.9, 'model', NULL)"
+                ),
+                {
+                    "aid": str(uuid.uuid4()),
+                    "eid": eid,
+                    "t_event": t_fired + timedelta(seconds=latency),
+                    "t_fired": t_fired,
+                },
+            )
+        await s.commit()
+
+    async with factory() as session:
+        path = await generate_alert_effectiveness_report(session, 2020, 10)
+    content = path.read_text(encoding="utf-8")
+    path.unlink()
+    assert "P95 ack" in content  # the new column header
+    assert "30s" in content  # median
+    assert "48s" in content  # p95, distinct from the median
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_report_clamps_negative_ack_latency(
     app_client: AsyncClient, factory: async_sessionmaker[AsyncSession]
 ) -> None:
