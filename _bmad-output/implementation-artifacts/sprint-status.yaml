@@ -205,7 +205,7 @@ development_status:
   #   [BLOCKER] life-safety closure rule (no field-verify rule before closing fire/slip_fall false_alarm/no_action_needed)
   #   [BLOCKER] onboard retention window sized vs worst-case dead-zone (truncate_old_journeys retain=3; SOP §3.4 silent-drop edge)
   #   [TUNABLE] train-type fleet-config source (D6; pick safe default unknown→conductorless) · amber-window value (D4; consider shorter for life-safety) · live-drill scheduled
-  epic-10-retrospective: optional
+  epic-10-retrospective: done  # 2026-06-14 — epic-10-retro-2026-06-14.md. Headline: 5 of 6 stories carried a BLOCKER into review, all the SAME species (test/prod divergence — green tests not exercising the real path); all caught by discretionary adversarial-wire review. 4 action items: A1 HARD integration-before-review gate (would have killed 3 of 5 blockers at the dev desk), A2 risk-tier the review (light for docs/additive, full wire-replay for contract/migration/auth), A3 create-story divergence rule (seed via real producer not raw inserts), A4 fix control-centre-mock launch config (VITE_MOCK_API is dead; real seam is VITE_WS_URL — caused 10-5 browser-verify misdiagnosis). Epic-4 A1 lesson (ADR-as-checkbox) confirmed applied (10-6 shipped ADR-21 in-commit). Next: wire A1-A3 into harness configs before first Epic-11 (Auth/Identity) dev-story; Epic 11 needs a planning pass (placeholder → breakdown, verify X-API-Key→JWT seam compat first).
 
   # ── Epic 11: Control Centre Admin & Identity ──
   # Source: surfaced 2026-05-30 during E10-S1 grill-me. Prerequisite for the UI half of E10-S1's kill-switch + threshold mutability.
