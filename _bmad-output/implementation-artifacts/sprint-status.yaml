@@ -229,6 +229,9 @@ development_status:
   11-3-profile-management-prefs-rekey: backlog                  # PLANNED. re-key operator_preferences from api-key-string → user_id (Alembic 0010; drop/seed Decision, no fabricated mapping), preferences.py key-source swap, frontend Profile screen. Tier 3 (migration on existing data). FULL review. Depends: 11-1, 11-2
   11-4-admin-ui-alert-class-killswitch: backlog                 # PLANNED. swap admin_alert_classes dep require_admin_key → require_role('admin') (single clean swap point), actor from current_user, retire X-Admin-Key/CC_ADMIN_KEY on that router; frontend AlertClasses screen. Tier 3 (auth swap on live kill-switch). FULL review. Depends: 11-1, 11-2
   11-5-configuration-surface: backlog                           # PLANNED. mutable confidence thresholds (persist + admin PATCH; Alembic 0011 if table; seed CALIBRATE defaults; gate reads persisted), admin Config screen. Per-operator alert threshold already re-keyed by 11-3. Tier 2→3 if migration. LIGHT→FULL review. Depends: 11-1, 11-3
+  # UX: each story ships MINIMAL functional UI (theme-correct, browser-verified) so the backend critical path isn't gated on design.
+  # Freya runs ONE coherent WDS UX pass over the whole Epic-11 admin/identity surface (login + logout + role-gated nav + S2-S5 admin shell)
+  # once S2-S5 screens exist — tracked epic-exit step (avoids redesigning login in isolation). See epics.md §Epic 11 "UX pass (Freya)".
   epic-11-retrospective: optional
 
   # ── Epic 6: Fusion Hardening — Journey Lifecycle & Handler Robustness ──

@@ -2555,6 +2555,8 @@ Rationale (recorded in **ADR-23**, authored by E11-S1): standing up an IdP for ~
 
 ---
 
+**UX pass (Freya) — planned before the epic closes:** Each story (S1–S5) ships a **minimal functional** UI (theme-correct via `--obb-*`, browser-verified per control-centre/CLAUDE.md) so the backend critical path is not gated on design. Once S2–S5 screens exist, **Freya runs one coherent WDS UX pass over the whole Epic-11 admin/identity surface** — login, logout, role-gated nav, and the settings/admin shell that Users (S2) / Profile (S3) / Alert-Classes (S4) / Configuration (S5) live in — designed together, not per-story. Rationale: the login screen designed in isolation now would be partly redone when the admin shell is designed; one pass at the end avoids the rework. This is a tracked epic-exit step, not optional.
+
 **Out of scope:** SSO integration with ÖBB's IDP / Keycloak (Phase 2 — the verification seam built by E11-S1/ADR-23 is designed to accept it as a contained swap once the ÖBB tenant is identified). Refresh-token rotation / sliding sessions (PoC uses a single short-TTL access token + re-login). Multi-tenant / org-scoping. Email-based password-reset flows (admin-initiated reset only).
 
 **Cross-cutting (retro action items wired in):**
