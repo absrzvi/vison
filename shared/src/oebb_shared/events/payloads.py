@@ -108,6 +108,11 @@ class AlertRaisedPayload(_BasePayload):
     confidence_score: float | None
     confidence_basis: Literal["model", "sensor", "fused"]
     model_versions: dict[str, str]
+    # E10-S4: seconds until scheduled departure, stamped by fusion when the train is
+    # pre-departure at a station and the PIS feed is healthy; None otherwise (in-transit
+    # or feed-degraded). Optional + dropped-when-None to stay byte-compatible with
+    # existing ALERT_RAISED consumers (event-store + cloud-backend).
+    seconds_to_departure: _NonNegInt | None = None
 
     @model_validator(mode="after")
     def _validate_confidence(self) -> AlertRaisedPayload:
@@ -136,7 +141,8 @@ class AlertRaisedPayload(_BasePayload):
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler: Any) -> dict[str, Any]:
-        return _drop_none(handler(self), "priority")
+        data = _drop_none(handler(self), "priority")
+        return _drop_none(data, "seconds_to_departure")
 
 
 class AlertResolvedPayload(_BasePayload):

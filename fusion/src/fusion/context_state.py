@@ -38,6 +38,10 @@ class ContextState:
     vehicle_id: str | None = None
     speed_kmh: float | None = None
     station_approach: bool = False
+    # E10-S4: scheduled departure (ISO-UTC string) from vlan-pollers PIS feed.
+    # Already on the /context wire (vlan-pollers _state_to_dict["pis"]) — fusion
+    # now keeps it so enrichment can derive seconds_to_departure. "" / None = unknown.
+    scheduled_departure: str | None = None
     maintenance_mode: bool = False
     depot_mode: bool = False
     gps_valid: bool = True
@@ -100,6 +104,8 @@ class ContextState:
             self.consist = dict(model.consist)
         if model.door_firmware_version is not None:
             self.door_firmware_version = model.door_firmware_version
+        if model.scheduled_departure is not None:
+            self.scheduled_departure = model.scheduled_departure
         after = (
             self.maintenance_mode,
             self.depot_mode,

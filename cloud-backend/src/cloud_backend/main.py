@@ -16,6 +16,7 @@ from .routes.escalations_audit import router as escalations_audit_router
 from .routes.fleet import router as fleet_router
 from .routes.health import router as health_router
 from .routes.ingest import router as ingest_router
+from .routes.kpi import router as kpi_router
 from .routes.maintenance import router as maintenance_router
 from .routes.preferences import router as preferences_router
 
@@ -46,6 +47,7 @@ app.include_router(maintenance_router)
 app.include_router(preferences_router)
 app.include_router(escalations_router)
 app.include_router(escalations_audit_router)
+app.include_router(kpi_router)
 
 
 @app.on_event("startup")

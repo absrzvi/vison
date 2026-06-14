@@ -11,12 +11,15 @@ Code-review patches (2026-05-20):
 """
 from __future__ import annotations
 
+import math
 import uuid
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 import httpx
 import structlog
 from oebb_shared.events import AlertRaisedPayload, EventEnvelope, EventType
+from oebb_shared.events.envelope import TIMESTAMP_RE
 from oebb_shared.http.retry import DEFAULT_RETRY
 
 from fusion.config import Settings
@@ -25,6 +28,34 @@ from fusion.context_state import ContextState
 log = structlog.get_logger(__name__)
 
 Severity = Literal["critical", "warning", "info"]
+
+
+def _seconds_to_departure(
+    *,
+    scheduled_departure: str | None,
+    station_approach: bool,
+    speed_kmh: float | None,
+    now: datetime,
+) -> int | None:
+    """E10-S4: seconds until scheduled departure when pre-departure at a station.
+
+    Returns a non-negative ``int`` only when the train is pre-departure
+    (``station_approach`` true, or stopped with ``speed_kmh == 0``) AND
+    ``scheduled_departure`` is a parseable ISO-UTC instant. Otherwise ``None``:
+      - in-transit (moving, not flagged at a station) → ``None``;
+      - empty / malformed / non-UTC departure (feed-degraded) → ``None`` (no raise).
+
+    The full instant is parsed (not time-of-day), so a departure across the
+    midnight boundary yields the correct positive delta (ADR-2 trap precedent).
+    A past departure clamps to ``0``.
+    """
+    pre_departure = station_approach or speed_kmh == 0.0
+    if not pre_departure:
+        return None
+    if not scheduled_departure or not TIMESTAMP_RE.fullmatch(scheduled_departure):
+        return None
+    sched = datetime.fromisoformat(scheduled_departure.replace("Z", "+00:00"))
+    return max(0, math.floor((sched - now).total_seconds()))
 
 
 def _severity_for(alert_code: str, speed_kmh: float | None) -> Severity:
@@ -116,9 +147,19 @@ class Enrichment:
         BEFORE any POST (AC10 two-phase discipline: nothing leaves fusion with
         inconsistent confidence metadata).
         """
-        severity = _severity_for(alert_code, self._ctx.speed_kmh)
+        # Snapshot context once, synchronously, before any await (the POST below) —
+        # a concurrent /context push must not change the values mid-build.
+        speed_kmh = self._ctx.speed_kmh
+        station_approach = self._ctx.station_approach
+        severity = _severity_for(alert_code, speed_kmh)
         priority: Literal["escalated", "normal"] = (
-            "escalated" if self._ctx.station_approach else "normal"
+            "escalated" if station_approach else "normal"
+        )
+        seconds_to_departure = _seconds_to_departure(
+            scheduled_departure=self._ctx.scheduled_departure,
+            station_approach=station_approach,
+            speed_kmh=speed_kmh,
+            now=datetime.now(UTC),
         )
         payload_model = AlertRaisedPayload(
             alert_id=str(uuid.uuid4()),
@@ -130,6 +171,7 @@ class Enrichment:
             confidence_score=confidence_score,
             confidence_basis=confidence_basis,
             model_versions=model_versions if model_versions is not None else {},
+            seconds_to_departure=seconds_to_departure,
         )
         envelope = self._build_envelope(
             EventType.ALERT_RAISED,

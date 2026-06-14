@@ -135,6 +135,69 @@ def test_unknown_basis_raises() -> None:
 
 
 # ---------------------------------------------------------------------------
+# E10-S4 AC1 — seconds_to_departure is optional + omitted-when-None
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.contract
+def test_seconds_to_departure_defaults_to_none_and_is_omitted() -> None:
+    """Old producers (field absent) still validate; the field never serialises when None."""
+    p = _alert("model", 0.91, {"detector_arch": "yolox_s_leaky"})
+    assert p.seconds_to_departure is None
+    dumped = p.model_dump()
+    assert "seconds_to_departure" not in dumped  # byte-compat with existing consumers
+
+
+@pytest.mark.contract
+def test_seconds_to_departure_roundtrips_when_set() -> None:
+    p = AlertRaisedPayload(
+        **_ALERT_BASE,
+        confidence_basis="model",
+        confidence_score=0.91,
+        model_versions={"detector_arch": "yolox_s_leaky"},
+        seconds_to_departure=90,
+    )
+    dumped = p.model_dump()
+    assert dumped["seconds_to_departure"] == 90
+    restored = AlertRaisedPayload.model_validate(dumped)
+    assert restored.seconds_to_departure == 90
+
+
+@pytest.mark.contract
+def test_seconds_to_departure_rejects_negative() -> None:
+    with pytest.raises(ValidationError):
+        AlertRaisedPayload(
+            **_ALERT_BASE,
+            confidence_basis="sensor",
+            confidence_score=None,
+            model_versions={},
+            seconds_to_departure=-1,
+        )
+
+
+@pytest.mark.contract
+def test_seconds_to_departure_survives_envelope_roundtrip() -> None:
+    """Both event-store and cloud-backend deserialise via the envelope + PAYLOAD_MODELS.
+
+    Confirms a payload carrying the new field round-trips through the registered
+    model (the regression guard from the story — both services parse this).
+    """
+    payload = {
+        **_ALERT_BASE,
+        "confidence_basis": "sensor",
+        "confidence_score": None,
+        "model_versions": {},
+        "seconds_to_departure": 42,
+    }
+    model = PAYLOAD_MODELS[EventType.ALERT_RAISED]
+    restored = model.model_validate(payload)
+    assert restored.seconds_to_departure == 42
+    # and an absent field still validates through the same registry path
+    payload_old = {k: v for k, v in payload.items() if k != "seconds_to_departure"}
+    assert model.model_validate(payload_old).seconds_to_departure is None
+
+
+# ---------------------------------------------------------------------------
 # AC2 — detection payloads require model_versions
 # ---------------------------------------------------------------------------
 

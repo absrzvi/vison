@@ -130,11 +130,13 @@ async def ingest_events(
                         INSERT INTO escalations
                             (escalation_id, alert_id, alert_event_id, alert_code,
                              journey_id, vehicle_id, status, t_fired,
-                             confidence_score, confidence_basis, model_versions)
+                             confidence_score, confidence_basis, model_versions,
+                             seconds_to_departure)
                         VALUES
                             (:escalation_id, :alert_id, :alert_event_id, :alert_code,
                              :journey_id, :vehicle_id, 'unacknowledged', :t_fired,
-                             :confidence_score, :confidence_basis, :model_versions)
+                             :confidence_score, :confidence_basis, :model_versions,
+                             :seconds_to_departure)
                         ON CONFLICT (escalation_id) DO NOTHING
                     """),
                     {
@@ -148,6 +150,8 @@ async def ingest_events(
                         "confidence_score": ev.payload.get("confidence_score"),
                         "confidence_basis": ev.payload.get("confidence_basis"),
                         "model_versions": json.dumps(ev.payload.get("model_versions", {})),
+                        # E10-S4: stamped by fusion when pre-departure; NULL otherwise.
+                        "seconds_to_departure": ev.payload.get("seconds_to_departure"),
                     },
                 )
                 # E10-S2 AC1: one 'raised' audit row per new escalation. Gate on the

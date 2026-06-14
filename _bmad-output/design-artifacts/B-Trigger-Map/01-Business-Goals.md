@@ -23,6 +23,7 @@ The prerequisite: the service must create observable, defensible operational imp
 ### SMART Objectives
 - **2.1** Reduce conductor time spent on manual occupancy assessment by ≥50% per journey (measured via time-motion study on pilot trains)
 - **2.2** Reduce delayed departures attributable to door obstruction incidents by ≥30% on pilot fleet within pilot period
+  - **Measured by:** the **"delay-minutes avoided (24h)"** KPI on the Control Centre fleet strip (E10-S4) — the fleet-wide sum of `seconds_to_departure / 60` over escalations resolved *before* their scheduled departure. This is the operator-observable proxy ÖBB rewards: every in-time resolution of a pre-departure alert is a delayed departure prevented. Sourced from the `escalations` lifecycle (`t_resolve < t_fired + seconds_to_departure`); feed-degraded / in-transit alerts (no `seconds_to_departure`) are excluded, not counted as zero saves.
 - **2.3** Achieve ≥80% adoption rate among pilot-fleet conductors within 4 weeks of launch (measured by daily active use)
 
 ---

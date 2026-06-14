@@ -4,7 +4,7 @@ baseline_commit: 4b4a840
 
 # Story 10.4: Dwell-Time-Aware Alert Framing & Delay-Minutes-Avoided KPI
 
-Status: ready-for-dev
+Status: review
 
 <!-- Created 2026-06-14 via bmad-create-story (Amelia / Opus 4.8). P2 — fifth story in Epic 10 (Operator Adoption & Trust).
      Source of truth: E10-S4 in epics.md:2307-2338 (committed). Sprint-status names this as "Next P2: 10-4 dwell-time KPI".
@@ -83,7 +83,9 @@ then a spec stub `_bmad-output/design-artifacts/D-UX-Design/conductor-app-dwell-
 
 ## Decisions (locked — review before dev)
 
-- **D1 — There is no `DWELL` state; derive `seconds_to_departure` from the shipped PIS substate. (PAYLOAD/STATE AUDIT)** The epic's "in `DWELL` state at a station" does not map to any shipped state. Verified: [context_state.py:70-76](../../vlan-pollers/src/vlan_pollers/context_state.py) tracks `station_approach: bool` (set/cleared by SNMP+GPS proximity per ADR-18 Trigger 3), `speed_kmh: float`, and a `pis: PisState` substate. `PisState.scheduled_departure` ([models.py:33](../../vlan-pollers/src/vlan_pollers/models.py)) is an **already-polled ISO-UTC string** ([pis_poller.py:57](../../vlan-pollers/src/vlan_pollers/pis_poller.py)). **Decision:** "pre-departure at a station" = `station_approach == true` OR (`speed_kmh == 0` AND `scheduled_departure` parses to a future instant). Derive `seconds_to_departure` from `scheduled_departure − now`. **No new poller, no ZFR integration, no new state machine** — the data is already in context-state. This keeps the change surgical (Karpathy #3) and uses the existing ADR-18 station-approach signal.
+- **D1 — There is no `DWELL` state; derive `seconds_to_departure` from the shipped PIS substate. (PAYLOAD/STATE AUDIT)** The epic's "in `DWELL` state at a station" does not map to any shipped state. Verified: vlan-pollers [context_state.py:70-76](../../vlan-pollers/src/vlan_pollers/context_state.py) tracks `station_approach: bool` (set/cleared by SNMP+GPS proximity per ADR-18 Trigger 3), `speed_kmh: float`, and a `pis: PisState` substate. `PisState.scheduled_departure` ([models.py:33](../../vlan-pollers/src/vlan_pollers/models.py)) is an **already-polled ISO-UTC string** ([pis_poller.py:57](../../vlan-pollers/src/vlan_pollers/pis_poller.py)). **Decision:** "pre-departure at a station" = `station_approach == true` OR (`speed_kmh == 0` AND `scheduled_departure` parses to a future instant). Derive `seconds_to_departure` from `scheduled_departure − now`. **No new poller, no ZFR integration, no new state machine.**
+
+  - **D1-PLUMBING (dev-story finding 2026-06-14, confirmed before RED):** the derivation runs in **fusion** (the only place `AlertRaisedPayload` is built), and fusion has its **own** `ContextState` ([fusion/context_state.py](../../fusion/src/fusion/context_state.py)) populated from `ContextPushModel` ([fusion/models.py:25](../../fusion/src/fusion/models.py)). vlan-pollers **already POSTs** `pis` to fusion `/context` (`_state_to_dict` includes `"pis"` — [vlan-pollers/context_state.py:114-124](../../vlan-pollers/src/vlan_pollers/context_state.py)), **but fusion's `ContextPushModel` has no `pis`/`scheduled_departure` field**, so Pydantic silently drops it and fusion never sees the departure time. **The minimal change is fusion-side only** (one package): add `scheduled_departure: str | None = None` to `ContextPushModel` + `ContextState` + `update_from_push` (present-replaces / absent-keeps, like the other optionals). No vlan-pollers change is needed — the data is already on the wire. This is slightly more than the original D1 wording ("already in context-state") implied; it is contained to fusion and rides the existing optional-push pattern. Tracked as task **T1.5** so the context-push contract change has its own RED tests before the derivation depends on it.
 
 - **D2 — No `DWELL_FEED_DEGRADED` EventType; reuse the existing graceful-degradation log path. (PAYLOAD AUDIT / ADR FRESHNESS)** The epic asks for a `DWELL_FEED_DEGRADED` event on feed loss. Verified: no such member in [types.py](../../shared/src/oebb_shared/events/types.py), and `pis_poller` **already** degrades gracefully — missing fields become `""` and a failed poll logs `log.warning("pis_poll_failed", recoverable=True)` ([pis_poller.py:57,69](../../vlan-pollers/src/vlan_pollers/pis_poller.py)). Adding a new EventType + payload class is a Tier-3 contract change that cascades to event-store ingest, the EventType registry, and contract tests — disproportionate to "the departure time was unknown for one alert." **Decision:** the feed-degraded path is simply `seconds_to_departure = None` plus a structured log line (AC2); **do not** add `DWELL_FEED_DEGRADED`. Because no EventType, payload shape, or fusion ingest endpoint changes in a way that contradicts an existing ADR, **no ADR update is required** (ADR-FRESHNESS rule checked: the additive optional field on `AlertRaisedPayload` does not contradict ADR-20/21/22; the highest existing ADR is ADR-22). If the dev disagrees and wants a new EventType, that is a scope escalation — surface it, do not just add it.
 
@@ -95,43 +97,51 @@ then a spec stub `_bmad-output/design-artifacts/D-UX-Design/conductor-app-dwell-
 
 ## Tasks / Subtasks
 
-- [ ] **T0 — Explore pass (large-codebase discipline)** — before editing, confirm the file list below by reading each UPDATE target in full (FULL-FILE-READS rule). UPDATE targets: `shared/.../payloads.py`, `fusion/src/fusion/enrichment.py` (+ the emit_alert call site), `cloud-backend/.../main.py`, `control-centre/.../KpiStrip.jsx` + `KpiStrip.css` + `LiveMonitoring.jsx`, `01-Business-Goals.md`. Document current-state / what-changes / what-must-be-preserved for each in the Dev Agent Record.
+- [x] **T0 — Explore pass (large-codebase discipline)** — read each UPDATE target in full. **Key finding:** fusion has its own `ContextState`/`ContextPushModel` that does NOT carry `scheduled_departure` (vlan-pollers sends `pis` but fusion drops it) → D1-PLUMBING + T1.5. 10-6 ingest upsert reads `ev.payload.get(...)` with `ON CONFLICT (escalation_id) DO NOTHING` → clean write point for the new column. `escalations` (0006) has `t_fired`/`t_resolve`/`status` → D3 in-time SQL buildable. fusion DoD = `--cov-fail-under=90` + `mypy --strict` (fusion/CLAUDE.md). Alert emit goes through `enrichment.py` `emit_envelope`; `_severity_for` is the speed-correlated severity decision.
 
-- [ ] **T1 — `shared/`: add `seconds_to_departure` to `AlertRaisedPayload`** (AC1, D1, D2)
-  - [ ] Add `seconds_to_departure: int | None = None` (additive, optional, non-negative when set).
-  - [ ] Extend `_serialize` `_drop_none` set so the field is omitted when `None` (byte-compat with existing consumers).
-  - [ ] Add a `contract` test (`-m contract`) asserting the field is optional + omitted-when-None + accepted-when-int.
-  - [ ] `python -m pytest -m "unit or contract"`, `ruff`, `mypy src/` clean in `shared/`.
+- [x] **T1 — `shared/`: add `seconds_to_departure` to `AlertRaisedPayload`** (AC1, D1, D2)
+  - [x] Add `seconds_to_departure: _NonNegInt | None = None` (additive, optional, non-negative when set).
+  - [x] Extend `_serialize` to chain a second `_drop_none(data, "seconds_to_departure")` so the field is omitted when `None` (byte-compat).
+  - [x] Added 4 `contract` tests: optional+omitted-when-None, roundtrips-when-set, rejects-negative, survives-envelope-roundtrip-both-directions (regression guard — both services deserialise via `PAYLOAD_MODELS`).
+  - [x] `shared`: 4/4 new green, **196/196** full suite (no regressions), `mypy src/` clean, no new `ruff` violations (1 pre-existing E501 at payloads.py:426 `expect_orphan`, unrelated — left per surgical-change rule).
 
-- [ ] **T2 — `fusion/`: derive and stamp `seconds_to_departure`** (AC2, AC6, D1, D2)
-  - [ ] In the alert-enrichment path, read `context_state` (`station_approach`, `speed_kmh`, `pis.scheduled_departure`); compute `max(0, floor(scheduled_departure_epoch − now_epoch))` when pre-departure + parseable; else `None`.
-  - [ ] **Async-safety:** snapshot `context_state` values before any `await` (project-context async stale-closure rule); do not re-read after awaiting.
-  - [ ] Reuse the ISO-UTC parse already validated in shared (`_validate_iso_utc` style); on parse failure → `None` + structured log (no raise, no new EventType).
-  - [ ] RED first: write the four AC6 cases (healthy / past-clamped-to-0 / unparseable→None / in-transit→None) and watch them fail, then implement.
-  - [ ] `python -m pytest` in `fusion/` green; coverage ≥ project bar; `mypy --strict` + `ruff` clean.
+- [x] **T1.5 — `fusion/`: plumb `scheduled_departure` into fusion ContextState** (AC2, D1-PLUMBING)
+  - [x] RED tests: `/context` push carrying `scheduled_departure` lands on `ContextState`; absent field keeps prior (present-replaces/absent-keeps).
+  - [x] Added `scheduled_departure: str | None = None` to `ContextPushModel` ([fusion/models.py:64-67](../../fusion/src/fusion/models.py)) and `ContextState` ([fusion/context_state.py:42-45](../../fusion/src/fusion/context_state.py)); wired in `update_from_push`.
+  - [x] No vlan-pollers change (already sends `pis`); fusion stops dropping it. `mypy --strict` + `ruff` clean.
 
-- [ ] **T3 — `cloud-backend/`: schema column + KPI endpoint** (AC4, D3)
-  - [ ] Alembic **0008**: `ALTER TABLE escalations ADD COLUMN seconds_to_departure INTEGER NULL` (new-column-only; verify safe-under-concurrent-reads, no table rewrite). Down-migration drops it.
-  - [ ] Populate the column in the `ALERT_RAISED → escalation upsert` (10-6 ingest path) from the payload's `seconds_to_departure`.
-  - [ ] `services/delay_minutes_avoided.py`: SQL summing `seconds_to_departure/60` over escalations `resolved` in the trailing 24h whose `t_resolve < t_fired + (seconds_to_departure || ' seconds')::interval` (in-time). Use the DB clock for the window (skew-proof, like the funnel's `NOW()` pattern).
-  - [ ] `routes/kpi.py`: `GET /api/v1/kpi/delay-minutes-avoided`, `Security(require_api_key)`, returns `{delay_minutes_avoided_24h, window_hours: 24}`; register in `main.py`. Define the JSON response as a Pydantic model in `api/kpi.py` (mirror the `api/escalations_audit.py` → `AlertFunnel` response-model split — routes/ hold handlers only, api/ holds the response models, per cloud-backend/CLAUDE.md). **`escalations` columns confirmed present** (0006): `t_fired`, `t_resolve` (nullable), `status`, `alert_code` — the in-time SQL below is buildable against them.
-  - [ ] Unit + integration test (testcontainers Postgres): seeded in-time resolves sum correctly; out-of-time / unresolved / null-seconds rows excluded; empty window → 0.
-  - [ ] `python -m pytest`, `ruff`, `mypy src/` clean in `cloud-backend/`.
+- [x] **T2 — `fusion/`: derive and stamp `seconds_to_departure`** (AC2, AC6, D1, D2)
+  - [x] `_seconds_to_departure()` pure helper in [enrichment.py:22-52](../../fusion/src/fusion/enrichment.py): `max(0, floor(sched_epoch − now_epoch))` when pre-departure (`station_approach OR speed==0`) + parseable; else `None`.
+  - [x] **Async-safety:** `emit_alert` snapshots `speed_kmh`/`station_approach` before the single `await self._post_envelope`; `now=datetime.now(UTC)` computed at build time.
+  - [x] Reuses shared `TIMESTAMP_RE` (the ISO-UTC-with-Z validator) — a non-Z/empty/malformed departure → `None`, no raise, no new EventType (D2). Full-instant parse handles the midnight-crossing case (tested).
+  - [x] 6 derivation cases (healthy / standstill / past→0 / midnight-cross / unparseable×3→None / in-transit→None) + 2 emit-integration (stamped-when-pre-departure / dropped-in-transit) + 2 plumbing = 12 new tests.
+  - [x] `fusion`: **170 passed, 93.56% cov** (gate ≥90; enrichment.py 98%), `mypy --strict` clean (13 files), `ruff` clean.
 
-- [ ] **T4 — `control-centre/`: KPI tile** (AC3, D4)
-  - [ ] Add a non-interactive `delay-min avoided (24h)` tile to `KpiStrip.jsx` (mirror the `active trains` `<div>` tile; `—` on missing).
-  - [ ] CSS: reuse existing `.kpi-tile*` classes; if any new rule is needed use **only** `--obb-*` tokens (no hex, no `--obb-sev-warning`/`--obb-sev-danger` — they don't exist; see Dev Notes token list).
-  - [ ] Data: one-shot fetch of `/api/v1/kpi/delay-minutes-avoided` on mount + interval refresh (a hook under `src/hooks/`), passed into `KpiStrip`; **not** through the live SSE `kpis` object (D4). Handle loading/error/empty (three-state rule).
-  - [ ] **Browser-verify (required, not optional — control-centre/CLAUDE.md):** `npm run dev`, render the tile via Claude Preview / `verify` skill; confirm golden path (populated) + one edge state (empty → `—`); console clean. `npm run lint` clean (incl. no `src/mock/` import in the new path).
+- [x] **T3 — `cloud-backend/`: schema column + KPI endpoint** (AC4, D3)
+  - [x] Alembic **0008** ([0008_escalation_seconds_to_departure.py](../../cloud-backend/migrations/versions/0008_escalation_seconds_to_departure.py)): `op.add_column` nullable `seconds_to_departure INTEGER` — additive, no rewrite, idempotent (verified by `test_upgrade_head_idempotent`). Down-migration drops it.
+  - [x] Populated in the `ALERT_RAISED → escalation upsert` ([ingest.py:127-153](../../cloud-backend/src/cloud_backend/routes/ingest.py)) from `ev.payload.get("seconds_to_departure")` — verified by `test_ingest_stamps_seconds_to_departure`.
+  - [x] [services/delay_minutes_avoided.py](../../cloud-backend/src/cloud_backend/services/delay_minutes_avoided.py): `SUM(seconds_to_departure)/60` over escalations `status='resolved'`, non-NULL seconds, `t_resolve` in trailing 24h, and `t_resolve < t_fired + make_interval(secs => seconds_to_departure)` (in-time). DB-clock window (`NOW()`), skew-proof.
+  - [x] [routes/kpi.py](../../cloud-backend/src/cloud_backend/routes/kpi.py): `GET /api/v1/kpi/delay-minutes-avoided`, `Security(require_api_key)`, returns `{delay_minutes_avoided, window_hours: 24}`; response model in [api/kpi.py](../../cloud-backend/src/cloud_backend/api/kpi.py) (mirrors the `AlertFunnel` split); registered in `main.py`.
+  - [x] 8 integration tests (real Postgres via testcontainers): empty→0; in-time summed; late-resolve / null-seconds / unresolved / outside-24h excluded; ingest stamps the column; auth required. **8/8 deterministic across 3 runs.**
+  - [x] `cloud-backend`: mypy clean (34 files), ruff clean (new files), unit 92/92, full suite **176/176** on a clean run; coverage **83%** (≥80 bar; kpi.py 92%, service 83%).
+  - **Pre-existing flake (NOT this story):** 3 `test_escalation_audit.py` tests (`test_funnel_aggregates_per_alert_code`, `test_funnel_filter_by_alert_code`, `test_full_lifecycle_appends_three_rows`) fail ~2-3 of 4 runs **on the untouched baseline ca4a219** (verified by stash + re-run). Root cause: fixtures client-stamp `t_event`/`t_fired` (`datetime.now(UTC)`, ms-truncated) while the funnel window upper bound and the `ORDER BY t_event` use the DB clock — a client-vs-DB clock-skew race. My change (one additive INSERT column) does not touch `t_event` or ordering. Flagged as a separate task; do not block 10-4 on it.
 
-- [ ] **T5 — Business-goals doc + Conductor-App spec stub** (AC5, AC7)
-  - [ ] Add the "delay-minutes avoided" measurable criterion under Goal 2 / Objective 2.2 in [01-Business-Goals.md](../design-artifacts/B-Trigger-Map/01-Business-Goals.md).
-  - [ ] Author `_bmad-output/design-artifacts/D-UX-Design/conductor-app-dwell-aware-alerts.md` (the deferred banner suffix + amber→red `<30s` + per-shift totaliser), marked **Phase 2 — not built in 10-4**.
+- [x] **T4 — `control-centre/`: KPI tile** (AC3, D4)
+  - [x] Added a non-interactive `delay-min avoided (24h)` `<div>` tile to [KpiStrip.jsx](../../control-centre/src/components/live/KpiStrip.jsx) (mirrors the `active trains` tile; `Math.round(value)` whole minutes; `—` when not a number). New `delayMinutesAvoided` prop.
+  - [x] **No CSS change** — reuses existing `.kpi-tile` / `.kpi-tile__value` / `.kpi-tile__label` (all `--obb-*` tokens already; positive metric → default `--obb-text-on-dark-1`, not a severity colour).
+  - [x] [api/kpi.js](../../control-centre/src/api/kpi.js) + [hooks/useDelayMinutesAvoided.js](../../control-centre/src/hooks/useDelayMinutesAvoided.js): one-shot fetch on mount + 5-min interval, `AbortController` cleanup, returns `null` until/​on-error (three-state); wired in [LiveMonitoring.jsx](../../control-centre/src/components/live/LiveMonitoring.jsx). **NOT** on the live SSE `kpis` object (D4). No `src/mock/` import.
+  - [x] **Browser-verified (Claude Preview, port 5173):** golden path — stubbed `12.6` → tile renders **`13`** (round correct); edge state — no backend → fetch fails → tile shows **`—`** (no crash/NaN). Console: zero errors from my code (the `getDelayMinutesAvoided` failure degrades silently to `—`; only pre-existing `[FleetContext] fetchTrainAlerts` mock-mode errors present). Screenshot captured.
+  - [x] Tests: [api/__tests__/kpi.test.js](../../control-centre/src/api/__tests__/kpi.test.js) 3/3; full vitest **250/250** (was 247; +3, no regressions). My new files are eslint-clean; the project lint gate is pre-existing red (34 errors in 5 unrelated files — FleetContext/mock/vite.config/etc. + pre-existing `Date.now()` purity violations in KpiStrip/LiveMonitoring lines I did not author).
 
-- [ ] **T6 — Self-review + sentinel + commit** (DoD)
-  - [ ] Run `bmad-security-sentinel` (touches `shared/` payload + ingest path + a new auth-guarded endpoint — sentinel scope: no secrets, JWT/api-key trust on the new route, no raw-video/PII in the new field or KPI). No prompt-injection surface added (the new field is an `int` derived server-side, not external free-text).
-  - [ ] Confirm no ADR contradiction (D2): if dev chose the D3 alternative or added an EventType against recommendation, add the ADR-update checkbox here.
-  - [ ] Per CLAUDE.md git rule: stage only this story's files, commit `feat(...)` with the agent block, push `origin master`.
+- [x] **T5 — Business-goals doc + Conductor-App spec stub** (AC5, AC7)
+  - [x] Added the "delay-minutes avoided (24h)" measurable criterion under Goal 2 / Objective **2.2** in [01-Business-Goals.md](../design-artifacts/B-Trigger-Map/01-Business-Goals.md), defining it as the operator-observable proxy with its exact computation + exclusion rule.
+  - [x] Authored [conductor-app-dwell-aware-alerts.md](../design-artifacts/D-UX-Design/conductor-app-dwell-aware-alerts.md): deferred banner `· {N}s to departure` suffix, amber→red `<30s` shift (correct `--obb-sev-medium`/`--obb-sev-critical` tokens), per-shift totaliser, actor-model note. Marked **Phase 2 — NOT built in 10-4**.
+
+- [x] **T6 — Self-review + sentinel + commit** (DoD)
+  - [x] `bmad-security-sentinel` → **APPROVED** (no Critical/Major). New KPI endpoint is api-key-guarded + takes no user input; `seconds_to_departure` is server-derived + schema-validated (no prompt-injection / untrusted-input surface); no secrets, no raw-video/CCTV/Conrad path, zero new deps.
+  - [x] **No ADR contradiction (D2 confirmed):** additive optional field + new-column migration + new read endpoint contradict no existing ADR (ceiling ADR-22); chose the recommended D3 (column on `escalations`, not audit denormalisation); added no new EventType. No ADR-update checkbox needed.
+  - [x] Final gate sweep all green: shared 196 + mypy; fusion 170 (cov 93.56%, ≥90) + mypy --strict; cloud-backend 176 + mypy; CC vitest 250. Browser-verified.
+  - [x] Staged **only** the 10-4 files (excluded the unrelated external `test_escalation_audit.py` flake fix — see Completion Notes); committed `feat(...)` with agent block; pushed `origin master`.
 
 ## Dev Notes
 
@@ -193,22 +203,87 @@ The dev agent must read each UPDATE target in full before editing and record cur
 ## Dev Agent Record
 
 ### Context Reference
-<!-- dev populates -->
+
+Story self-contained. Key shipped contracts cited inline: `AlertRaisedPayload` (shared), fusion `ContextState`/`Enrichment`, 10-6 `escalations` table + ingest upsert, 10-2 `escalation_audit` funnel pattern, CC `KpiStrip`.
 
 ### Agent Model Used
-<!-- dev populates -->
+
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context)
 
 ### Pre-Flight
-<!-- dev populates: assumptions, open questions, simplicity check, surgical-change test -->
+
+**Assumptions**
+- The `seconds_to_departure` derivation belongs in fusion's enrichment path — the only producer of `AlertRaisedPayload`.
+- vlan-pollers already POSTs `pis.scheduled_departure` to fusion `/context`; fusion drops it (no field on `ContextPushModel`). Fixed in T1.5.
+- Pre-departure = `station_approach == true` OR (`speed_kmh == 0` AND `scheduled_departure` parses to a future instant) — D1.
+- The D3 minimum is one additive nullable column on `escalations` (not `escalation_audit`); the 10-6 ingest upsert is the write point (confirmed: `ON CONFLICT (escalation_id) DO NOTHING`, reads `ev.payload.get(...)`).
+
+**Open Questions** — one surfaced and resolved with the user before RED: D1 understated the fusion plumbing (fusion can't see `scheduled_departure`). User chose "build full story"; D1-PLUMBING + task T1.5 added. No remaining blockers.
+
+**Simplicity Check**
+- Add: `scheduled_departure` to fusion `ContextPushModel`/`ContextState` (T1.5); derivation helper (T2); `seconds_to_departure` optional field on shared `AlertRaisedPayload` (T1); `escalations.seconds_to_departure` col + KPI service/route + `api/kpi.py` response model (T3); CC tile + fetch hook (T4); docs (T5).
+- Rejected: new `DWELL_FEED_DEGRADED` EventType (D2 — reuse graceful log); new poller (data already on the wire); a `pis` sub-object on fusion's push model (only `scheduled_departure` is needed — keep the contract minimal); forcing the 24h KPI through the live SSE `kpis` object (D4 — separate slow-changing fetch).
+
+**Surgical-Change Test** — file→AC trace:
+- `shared/.../payloads.py` + contract test → AC1
+- `fusion/.../models.py`, `context_state.py` → AC2 (T1.5 plumbing); `fusion/.../enrichment.py` (or health.py emit path) + tests → AC2/AC6
+- `cloud-backend/.../migrations/0008`, `routes/ingest.py`, `services/delay_minutes_avoided.py`, `routes/kpi.py`, `api/kpi.py`, `main.py` + tests → AC4 (+ AC3 data source)
+- `control-centre/.../KpiStrip.jsx`, `KpiStrip.css`, `hooks/useDelayMinutesAvoided.js`, `LiveMonitoring.jsx` → AC3
+- `01-Business-Goals.md` → AC5; `conductor-app-dwell-aware-alerts.md` → AC7
 
 ### Debug Log References
-<!-- dev populates -->
+
+- `grep alert_code= fusion/src/` + read of fusion `enrichment.py`/`context_state.py`/`models.py` → confirmed D1-PLUMBING (fusion drops vlan-pollers' `pis`).
+- RED runs: shared contract tests (3 fail `extra_forbidden`), fusion (collection ImportError on `_seconds_to_departure`) — both failed for the right reason before GREEN.
+- Flaky-test attribution: stashed all my changes → 3 `test_escalation_audit.py` tests still fail 2-3/4 on baseline ca4a219 → **pre-existing**, not from 10-4.
 
 ### Completion Notes List
-<!-- dev populates; MUST record the D3 choice (escalations column vs audit denormalisation) and whether any D2 EventType escalation occurred -->
+
+- **D3 choice = the recommended option: one additive `seconds_to_departure INTEGER NULL` column on `escalations` (Alembic 0008), not denormalisation onto `escalation_audit`.** Single source of truth; the 10-6 ingest upsert already writes that row. The KPI sums `seconds_to_departure/60` over `status='resolved'` rows whose `t_resolve < t_fired + make_interval(secs => seconds_to_departure)` (in-time), DB-clock window.
+- **D2 honoured: no `DWELL_FEED_DEGRADED` EventType added.** Feed-degraded path = `seconds_to_departure=None`. No new EventType, no ADR change (additive optional field doesn't contradict ADR-20/21/22).
+- **D1-PLUMBING (Pre-Flight finding, user-approved "build full story"):** fusion's `ContextPushModel`/`ContextState` did not carry `scheduled_departure` (vlan-pollers sends `pis`, fusion dropped it). Added the field fusion-side only (T1.5) — no vlan-pollers change. Snapshot-before-await in `emit_alert` honours the async stale-closure rule.
+- **Conductor App (D4):** out of scope — shipped the CC read-only tile (REST, not SSE) + a Phase-2 spec stub. Epic AC2/AC3 (onboard banner colour-shift + per-shift totaliser) deferred per epic AC8.
+- **PRE-EXISTING flake NOT caused by 10-4:** 3 `test_escalation_audit.py` tests (funnel ×2 + full-lifecycle) failed ~2-3/4 on the untouched baseline (client-vs-DB clock skew in the test fixtures). Flagged as a separate task. **A fix for this landed in my working tree from outside this story** (a back-dating + explicit-`to`-window change to `test_escalation_audit.py`); with it present the suite is deterministically 176/176. **That test-file change was deliberately EXCLUDED from the 10-4 commit** (CLAUDE.md: stage only this milestone's files) — it belongs to the flaky-test task.
+- **Pre-existing tech debt left untouched (surgical-change rule):** project-wide eslint debt (34 errors in FleetContext/mock/vite.config/etc. + `react-hooks/purity` `Date.now()` violations in KpiStrip/LiveMonitoring lines I did not author); `payloads.py:426` E501 (`expect_orphan`, story 4-8). None introduced by 10-4.
 
 ### File List
-<!-- dev populates -->
+
+**shared/**
+- `src/oebb_shared/events/payloads.py` (EDIT — `seconds_to_departure` field + serializer drop — AC1)
+- `tests/contract/test_alert_raised_compat.py` (EDIT — 4 contract tests — AC1)
+
+**fusion/**
+- `src/fusion/models.py` (EDIT — `scheduled_departure` on `ContextPushModel` — T1.5)
+- `src/fusion/context_state.py` (EDIT — `scheduled_departure` field + `update_from_push` — T1.5)
+- `src/fusion/enrichment.py` (EDIT — `_seconds_to_departure` helper + `emit_alert` stamping — AC2)
+- `tests/unit/test_enrichment.py` (EDIT — 12 tests — AC2/AC6/T1.5)
+
+**cloud-backend/**
+- `migrations/versions/0008_escalation_seconds_to_departure.py` (NEW — AC4/D3)
+- `src/cloud_backend/routes/ingest.py` (EDIT — persist `seconds_to_departure` on upsert — AC4)
+- `src/cloud_backend/services/delay_minutes_avoided.py` (NEW — AC4)
+- `src/cloud_backend/api/kpi.py` (NEW — AC4 response model)
+- `src/cloud_backend/routes/kpi.py` (NEW — AC4 endpoint)
+- `src/cloud_backend/main.py` (EDIT — register `kpi_router` — AC4)
+- `tests/integration/test_delay_minutes_avoided.py` (NEW — 8 tests — AC4)
+
+**control-centre/**
+- `src/api/kpi.js` (NEW — AC3)
+- `src/hooks/useDelayMinutesAvoided.js` (NEW — AC3)
+- `src/components/live/KpiStrip.jsx` (EDIT — tile + prop — AC3)
+- `src/components/live/LiveMonitoring.jsx` (EDIT — wire hook → tile — AC3)
+- `src/api/__tests__/kpi.test.js` (NEW — AC3)
+
+**docs/**
+- `_bmad-output/design-artifacts/B-Trigger-Map/01-Business-Goals.md` (EDIT — KPI under Goal 2.2 — AC5)
+- `_bmad-output/design-artifacts/D-UX-Design/conductor-app-dwell-aware-alerts.md` (NEW — Phase-2 stub — AC7)
+
+**bookkeeping**
+- `_bmad-output/implementation-artifacts/10-4-dwell-time-aware-alert-framing-and-kpi.md` (EDIT — story record)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (EDIT — status)
+
+> **Explicitly NOT in this story's commit:** `cloud-backend/tests/integration/test_escalation_audit.py` — an external flaky-test fix present in the working tree; belongs to the separate flaky-test task.
 
 ### Change Log
-<!-- dev populates -->
+
+- 2026-06-14 — Implemented E10-S4 (dwell-time KPI): `seconds_to_departure` on `AlertRaisedPayload` (shared) + fusion derivation/plumbing + `escalations` column (Alembic 0008) + `/api/v1/kpi/delay-minutes-avoided` endpoint + Control Centre KPI tile + business-goal wiring + Conductor-App Phase-2 spec stub. Pre-Flight surfaced + resolved the fusion-plumbing gap (D1-PLUMBING, T1.5). Security-sentinel APPROVED. Gates: shared 196, fusion 170 (cov 93.56%), cloud-backend 176, CC vitest 250 — all green; mypy clean across packages. Status ready-for-dev → review.

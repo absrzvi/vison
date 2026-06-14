@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useFleetData } from '../../hooks/useFleetData';
+import { useDelayMinutesAvoided } from '../../hooks/useDelayMinutesAvoided';
 import { KpiStrip, KpiStripSkeleton } from './KpiStrip';
 import { FleetList, FleetListSkeleton } from './FleetList';
 import { FleetMap } from './FleetMap';
@@ -43,6 +44,7 @@ export function LiveMonitoring() {
     }
   }, [fleet.length]);
   const luggageKpis = useMemo(() => getLuggageKPIs(luggageEvents), [luggageEvents]);
+  const delayMinutesAvoided = useDelayMinutesAvoided();
 
   const selectedTrain = fleet.find(t => t.id === selectedTrainId) ?? null;
   const isStale = lastUpdate && (Date.now() - lastUpdate.getTime()) > 60000;
@@ -69,7 +71,7 @@ export function LiveMonitoring() {
       {isLoading ? (
         <KpiStripSkeleton />
       ) : (
-        <KpiStrip kpis={kpis} lastUpdate={lastUpdate} luggageAlerts={luggageKpis.totalActive} onTileClick={(type) => {
+        <KpiStrip kpis={kpis} lastUpdate={lastUpdate} luggageAlerts={luggageKpis.totalActive} delayMinutesAvoided={delayMinutesAvoided} onTileClick={(type) => {
           if (type === 'escalations') {
             setFeedTypeFilter('all');
             setFeedStatusFilter('unacknowledged');

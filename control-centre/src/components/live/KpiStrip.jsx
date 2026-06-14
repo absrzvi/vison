@@ -20,8 +20,10 @@ function freshnessLabel(date) {
   return `${Math.floor(s / 60)}m ago`;
 }
 
-export function KpiStrip({ kpis, lastUpdate, luggageAlerts, onTileClick }) {
+export function KpiStrip({ kpis, lastUpdate, luggageAlerts, delayMinutesAvoided, onTileClick }) {
   const stale = lastUpdate && (Date.now() - lastUpdate.getTime()) > 60000;
+  const delayMin =
+    typeof delayMinutesAvoided === 'number' ? Math.round(delayMinutesAvoided) : '—';
 
   return (
     <div className="kpi-strip">
@@ -72,6 +74,10 @@ export function KpiStrip({ kpis, lastUpdate, luggageAlerts, onTileClick }) {
         </span>
         <span className="kpi-tile__label">luggage alerts</span>
       </button>
+      <div className="kpi-tile" data-testid="pid-kpi-tile-delay-avoided">
+        <span className="kpi-tile__value">{delayMin}</span>
+        <span className="kpi-tile__label">delay-min avoided (24h)</span>
+      </div>
       <div className={`kpi-tile kpi-tile--refresh ${stale ? 'kpi-tile--stale' : ''}`}>
         <span className="kpi-tile__value kpi-tile__value--sm">{freshnessLabel(lastUpdate)}</span>
         <span className="kpi-tile__label">{stale ? 'reconnecting…' : 'last update'}</span>

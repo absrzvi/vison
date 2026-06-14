@@ -1,6 +1,8 @@
 """Enrichment envelope construction + station_approach escalation — AC7, AC11."""
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import httpx
 import pytest
 import respx
@@ -8,7 +10,7 @@ from oebb_shared.events import EventEnvelope, EventType
 
 from fusion.config import Settings
 from fusion.context_state import ContextState
-from fusion.enrichment import Enrichment, _severity_for
+from fusion.enrichment import Enrichment, _seconds_to_departure, _severity_for
 
 
 def _make_settings() -> Settings:
@@ -164,3 +166,172 @@ async def test_emit_skipped_when_journey_id_is_none() -> None:
             confidence_basis="sensor",
         )
     assert not route.called  # NO emit with empty journey_id
+
+
+# ---------------------------------------------------------------------------
+# E10-S4 — seconds_to_departure derivation (AC2, AC6, D1)
+# ---------------------------------------------------------------------------
+
+_NOW = datetime(2026, 5, 20, 8, 0, 0, tzinfo=UTC)
+
+
+@pytest.mark.unit
+def test_seconds_to_departure_healthy_pre_departure_at_station() -> None:
+    """station_approach + a parseable future departure → positive whole seconds."""
+    assert (
+        _seconds_to_departure(
+            scheduled_departure="2026-05-20T08:01:30Z",  # 90s after _NOW
+            station_approach=True,
+            speed_kmh=0.0,
+            now=_NOW,
+        )
+        == 90
+    )
+
+
+@pytest.mark.unit
+def test_seconds_to_departure_standstill_with_future_departure() -> None:
+    """Not flagged station_approach but stopped (speed 0) with a future sched → derived."""
+    assert (
+        _seconds_to_departure(
+            scheduled_departure="2026-05-20T08:02:00Z",  # 120s
+            station_approach=False,
+            speed_kmh=0.0,
+            now=_NOW,
+        )
+        == 120
+    )
+
+
+@pytest.mark.unit
+def test_seconds_to_departure_past_departure_clamps_to_zero() -> None:
+    """A departure already in the past clamps to 0 (never negative)."""
+    assert (
+        _seconds_to_departure(
+            scheduled_departure="2026-05-20T07:59:00Z",  # 60s before _NOW
+            station_approach=True,
+            speed_kmh=0.0,
+            now=_NOW,
+        )
+        == 0
+    )
+
+
+@pytest.mark.unit
+def test_seconds_to_departure_crosses_midnight() -> None:
+    """Full-instant parse: 23:58 now, 00:05 next-day sched → 420s, not negative.
+    Guards against a time-of-day-only subtraction (ADR-2 midnight trap precedent)."""
+    now = datetime(2026, 5, 20, 23, 58, 0, tzinfo=UTC)
+    assert (
+        _seconds_to_departure(
+            scheduled_departure="2026-05-21T00:05:00Z",  # 7 min later across date boundary
+            station_approach=True,
+            speed_kmh=0.0,
+            now=now,
+        )
+        == 420
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("bad", ["", "not-a-timestamp", "2026-05-20T08:01:30"])  # last: no Z
+def test_seconds_to_departure_unparseable_feed_returns_none(bad: str) -> None:
+    """Empty / malformed / non-UTC departure → None (feed-degraded path, no raise)."""
+    assert (
+        _seconds_to_departure(
+            scheduled_departure=bad,
+            station_approach=True,
+            speed_kmh=0.0,
+            now=_NOW,
+        )
+        is None
+    )
+
+
+@pytest.mark.unit
+def test_seconds_to_departure_in_transit_returns_none() -> None:
+    """In-transit (moving, not at a station) → None even with a valid future sched."""
+    assert (
+        _seconds_to_departure(
+            scheduled_departure="2026-05-20T08:01:30Z",
+            station_approach=False,
+            speed_kmh=80.0,
+            now=_NOW,
+        )
+        is None
+    )
+
+
+# --- T1.5: ContextPushModel / ContextState plumbing ---
+
+
+@pytest.mark.unit
+def test_context_push_carries_scheduled_departure() -> None:
+    """A /context push with scheduled_departure lands on ContextState."""
+    from fusion.models import ContextPushModel
+
+    ctx = ContextState()
+    ctx.update_from_push(ContextPushModel(scheduled_departure="2026-05-20T08:01:30Z"))
+    assert ctx.scheduled_departure == "2026-05-20T08:01:30Z"
+
+
+@pytest.mark.unit
+def test_context_push_absent_scheduled_departure_keeps_prior() -> None:
+    """Absent field keeps prior state (present-replaces / absent-keeps)."""
+    from fusion.models import ContextPushModel
+
+    ctx = ContextState(scheduled_departure="2026-05-20T08:01:30Z")
+    ctx.update_from_push(ContextPushModel(speed_kmh=12.0))  # no scheduled_departure key
+    assert ctx.scheduled_departure == "2026-05-20T08:01:30Z"
+
+
+# --- AC2: emit_alert stamps the derived value end-to-end ---
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_emit_alert_stamps_seconds_to_departure_when_pre_departure() -> None:
+    settings = _make_settings()
+    # sched == now → 0 seconds; the field is present (not dropped) because it's an int.
+    sched = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    ctx = _make_ctx(station_approach=True, speed_kmh=0.0, scheduled_departure=sched)
+    route = respx.post("http://event-store-test/api/v1/events").mock(
+        return_value=httpx.Response(201, json={"data": {"stored": True}})
+    )
+    async with httpx.AsyncClient() as client:
+        enricher = Enrichment(client, settings, ctx)
+        await enricher.emit_alert(
+            alert_code="door_obstruction",
+            car_id="car-6",
+            description="door obstruction",
+            confidence_basis="sensor",
+        )
+    body = route.calls.last.request.content.decode()
+    env = EventEnvelope.model_validate_json(body)
+    assert env.payload["seconds_to_departure"] == 0
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_emit_alert_omits_seconds_to_departure_in_transit() -> None:
+    settings = _make_settings()
+    ctx = _make_ctx(
+        station_approach=False,
+        speed_kmh=80.0,
+        scheduled_departure="2026-05-20T08:01:30Z",
+    )
+    route = respx.post("http://event-store-test/api/v1/events").mock(
+        return_value=httpx.Response(201, json={"data": {"stored": True}})
+    )
+    async with httpx.AsyncClient() as client:
+        enricher = Enrichment(client, settings, ctx)
+        await enricher.emit_alert(
+            alert_code="slip_fall",
+            car_id="car-1",
+            description="fall detected",
+            confidence_basis="sensor",
+        )
+    body = route.calls.last.request.content.decode()
+    env = EventEnvelope.model_validate_json(body)
+    # None → dropped from serialization (byte-compat with consumers)
+    assert "seconds_to_departure" not in env.payload

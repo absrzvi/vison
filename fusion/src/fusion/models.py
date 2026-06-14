@@ -59,6 +59,11 @@ class ContextPushModel(BaseModel):
     # E10-S1 AC9: door controller firmware version from SNMP (absent keeps prior).
     door_firmware_version: str | None = None
 
+    # E10-S4: scheduled departure (ISO-UTC) for seconds_to_departure derivation.
+    # vlan-pollers already POSTs this inside its push body; fusion stops dropping it.
+    # Absent keeps prior; an explicit value (incl. "") replaces.
+    scheduled_departure: str | None = None
+
 
 class SlipFallCandidate(BaseModel):
     """Body shape inference posts to /candidates/alert_raised.
