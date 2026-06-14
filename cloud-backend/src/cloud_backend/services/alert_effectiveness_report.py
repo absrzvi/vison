@@ -61,6 +61,10 @@ def _iso_week_bounds(iso_year: int, iso_week: int) -> tuple[datetime, datetime]:
 async def _funnel_rows(
     db: AsyncSession, dt_from: datetime, dt_to: datetime
 ) -> list[_Funnel]:
+    # GREATEST(…, 0) mirrors the funnel route (routes/escalations_audit.py): t_fired
+    # is the onboard, ingest-parsed timestamp (untrusted external clock); a fast train
+    # clock can make it later than the landside t_ack, yielding a negative latency that
+    # would render as e.g. "-60s". Clamp per-row before taking the percentile.
     rows = await db.execute(
         text("""
             SELECT
@@ -70,7 +74,7 @@ async def _funnel_rows(
                 COUNT(*) FILTER (WHERE transition = 'resolved')           AS resolved,
                 COUNT(*) FILTER (WHERE transition = 'silently_dismissed') AS dismissed,
                 PERCENTILE_CONT(0.5) WITHIN GROUP (
-                    ORDER BY EXTRACT(EPOCH FROM (t_event - t_fired))
+                    ORDER BY GREATEST(EXTRACT(EPOCH FROM (t_event - t_fired)), 0)
                 ) FILTER (WHERE transition = 'acknowledged')             AS median_ack
             FROM escalation_audit
             WHERE t_event >= :from AND t_event < :to

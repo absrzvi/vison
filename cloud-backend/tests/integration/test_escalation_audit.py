@@ -100,8 +100,22 @@ def _alert_envelope(
 ) -> dict[str, object]:
     """Build a schema-valid ALERT_RAISED envelope. AlertRaisedPayload enforces
     per-basis confidence invariants: model → score in [0,1] + non-empty
-    model_versions; sensor → score is None + empty model_versions."""
-    ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    model_versions; sensor → score is None + empty model_versions.
+
+    The envelope timestamp becomes the escalation's t_fired and the 'raised' audit
+    row's t_event (ingest stamps both from the parsed envelope clock — the client/
+    train clock). The later 'acknowledged'/'resolved' audit rows take t_event from
+    the DB clock (t_ack/t_resolve = NOW()). If t_fired were stamped at wall-clock
+    now() and the client clock ran a few ms AHEAD of the DB, the raised row would
+    sort after — and fall outside the funnel's [.., NOW()) window — relative to the
+    DB-clock transitions. Back-dating a few seconds (an alert always fires onboard
+    BEFORE it is ingested landside, so this also mirrors real data) keeps t_fired
+    deterministically earlier than every DB-clock transition, well inside the
+    7-day default window — without weakening the route's skew-proof NOW() default.
+    """
+    ts = (datetime.now(UTC) - timedelta(seconds=5)).strftime("%Y-%m-%dT%H:%M:%S.%f")[
+        :-3
+    ] + "Z"
     if confidence_basis == "sensor":
         payload: dict[str, object] = {
             "alert_id": alert_id,
@@ -175,6 +189,19 @@ async def _resolve(
         json={"outcome": "done", "action_tags": action_tags, "operator_id": operator_id},
     )
     return r.status_code
+
+
+def _funnel_window() -> dict[str, str]:
+    """Query params pinning the funnel's upper bound safely into the future.
+
+    The fixture stamps t_event with the CLIENT clock (datetime.now(UTC)), but the
+    route's default `to` is the DB clock's NOW(). A few ms of client→DB skew puts
+    freshly-ingested rows at t_event > NOW(), so they fall outside the default
+    half-open [NOW()-7d, NOW()) window non-deterministically. Passing an explicit
+    `to` one hour ahead dwarfs any ms-level skew and makes the window deterministic
+    without weakening the route's skew-proof default for real (non-test) callers.
+    """
+    return {"to": (datetime.now(UTC) + timedelta(hours=1)).isoformat()}
 
 
 async def _audit_rows(
@@ -419,7 +446,9 @@ async def test_funnel_aggregates_per_alert_code(
     await _ack(app_client, e3)
     await _ingest_alert(app_client, alert_code="UNATTENDED_BAG")  # raised only
 
-    r = await app_client.get("/api/v1/escalations-audit", headers=_API_HEADERS)
+    r = await app_client.get(
+        "/api/v1/escalations-audit", headers=_API_HEADERS, params=_funnel_window()
+    )
     assert r.status_code == 200, r.text
     funnels = {f["alert_code"]: f for f in r.json()}
     bag = funnels["UNATTENDED_BAG"]
@@ -444,7 +473,9 @@ async def test_funnel_handles_null_confidence_rows(
     )
     await _ack(app_client, eid)
     r = await app_client.get(
-        "/api/v1/escalations-audit?alert_code=DOOR_OBSTRUCTION", headers=_API_HEADERS
+        "/api/v1/escalations-audit",
+        headers=_API_HEADERS,
+        params={"alert_code": "DOOR_OBSTRUCTION", **_funnel_window()},
     )
     assert r.status_code == 200, r.text
     funnels = {f["alert_code"]: f for f in r.json()}
@@ -459,7 +490,9 @@ async def test_funnel_filter_by_alert_code(
     await _ingest_alert(app_client, alert_code="UNATTENDED_BAG")
     await _ingest_alert(app_client, alert_code="DOOR_OBSTRUCTION")
     r = await app_client.get(
-        "/api/v1/escalations-audit?alert_code=UNATTENDED_BAG", headers=_API_HEADERS
+        "/api/v1/escalations-audit",
+        headers=_API_HEADERS,
+        params={"alert_code": "UNATTENDED_BAG", **_funnel_window()},
     )
     assert r.status_code == 200
     codes = {f["alert_code"] for f in r.json()}
@@ -555,3 +588,45 @@ async def test_report_empty_week_does_not_crash(
     assert "No escalations raised" in content
     assert "No kill-switch activity" in content
     path.unlink()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_report_clamps_negative_ack_latency(
+    app_client: AsyncClient, factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """A fast onboard clock can stamp t_fired LATER than the landside t_ack, giving a
+    negative raw latency. The report's median must clamp to 0 (like the funnel route),
+    never render a negative "-Ns" ack time."""
+    from cloud_backend.services.alert_effectiveness_report import (
+        generate_alert_effectiveness_report,
+    )
+
+    # FK parent (escalations row); its incidental 'raised' audit row is ignored —
+    # the median FILTERs on transition = 'acknowledged'.
+    eid = await _ingest_alert(app_client)
+    # Both timestamps pinned inside ISO 2020-W10 (Mon 2020-03-02), t_fired AFTER
+    # t_event so the un-clamped latency would be -60s.
+    t_event = datetime(2020, 3, 2, 1, 0, tzinfo=UTC)
+    t_fired = t_event + timedelta(seconds=60)
+    async with factory() as s:
+        await s.execute(
+            text(
+                "INSERT INTO escalation_audit "
+                "(audit_id, escalation_id, transition, operator_id, alert_code, "
+                "t_event, t_fired, action_tags, dwell_focus_ms, confidence_score, "
+                "confidence_basis, model_versions) "
+                "VALUES (:aid, :eid, 'acknowledged', 'op-1', 'UNATTENDED_BAG', "
+                ":t_event, :t_fired, NULL, NULL, 0.9, 'model', NULL)"
+            ),
+            {"aid": str(uuid.uuid4()), "eid": eid, "t_event": t_event, "t_fired": t_fired},
+        )
+        await s.commit()
+
+    async with factory() as session:
+        path = await generate_alert_effectiveness_report(session, 2020, 10)
+    content = path.read_text(encoding="utf-8")
+    path.unlink()
+    assert "UNATTENDED_BAG" in content  # the row is in-window
+    assert "-60s" not in content  # would appear pre-clamp
+    assert "0s" in content  # clamped median renders as 0s
