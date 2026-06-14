@@ -6,7 +6,8 @@ Create Date: 2026-06-14
 
 New table only — safe under concurrent reads (no rewrite, no lock on existing
 tables). Local credential store for self-contained JWT auth (ADR-23): one row
-per Control Centre operator/admin. password_hash is a passlib bcrypt hash;
+per Control Centre operator/admin. password_hash is a bcrypt hash (the
+`bcrypt` library directly — passlib was dropped, see story Change Log 1);
 role is constrained to admin|operator. user_id (uuid) is the stable identity
 used as the JWT `sub` claim and, from E11-S3, the operator_preferences FK.
 """

@@ -23,7 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-from .conftest import auth_header
+from .conftest import api_key_header, auth_header
 
 _ALEMBIC_INI = str(Path(__file__).parents[2] / "alembic.ini")
 
@@ -120,7 +120,7 @@ async def _ingest_alert(
     event_id = str(uuid.uuid4())
     alert_id = str(uuid.uuid4())
     env = _alert_envelope(event_id=event_id, alert_id=alert_id)
-    r = await client.post("/api/v1/events", headers=_API_HEADERS, json={"events": [env]})
+    r = await client.post("/api/v1/events", headers=api_key_header(), json={"events": [env]})
     assert r.status_code == 202, r.text
     return event_id, alert_id
 
@@ -191,7 +191,7 @@ async def test_alert_raised_empty_payload_skips_escalation_no_500(
         "schema_version": 1,
         "payload": {},
     }
-    r = await app_client.post("/api/v1/events", headers=_API_HEADERS, json={"events": [env]})
+    r = await app_client.post("/api/v1/events", headers=api_key_header(), json={"events": [env]})
     # Ingest still succeeds (the event is stored); no escalation row is created.
     assert r.status_code == 202, r.text
     assert await _fetch_escalation(factory, event_id) is None
@@ -206,8 +206,8 @@ async def test_alert_raised_escalation_idempotent(
     alert_id = str(uuid.uuid4())
     env = _alert_envelope(event_id=event_id, alert_id=alert_id)
     # Same event ingested twice → ON CONFLICT DO NOTHING, still one escalation row.
-    await app_client.post("/api/v1/events", headers=_API_HEADERS, json={"events": [env]})
-    await app_client.post("/api/v1/events", headers=_API_HEADERS, json={"events": [env]})
+    await app_client.post("/api/v1/events", headers=api_key_header(), json={"events": [env]})
+    await app_client.post("/api/v1/events", headers=api_key_header(), json={"events": [env]})
     async with factory() as s:
         n = (
             await s.execute(

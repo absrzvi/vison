@@ -24,7 +24,7 @@ from testcontainers.postgres import PostgresContainer
 
 from cloud_backend.services.fanout_filter import alert_class_filter
 
-from .conftest import auth_header
+from .conftest import api_key_header, auth_header
 
 _ALEMBIC_INI = str(Path(__file__).parents[2] / "alembic.ini")
 _ADMIN_KEY = "integration-admin-key-fixture"
@@ -126,7 +126,7 @@ async def test_disabled_class_filtered_from_live_fanout_and_replay(
 
     # 1. Ingest a pre-disable alert (in-flight escalation).
     pre = _alert_envelope("UNATTENDED_BAG", datetime.now(UTC) - timedelta(minutes=5))
-    r = await app_client.post("/api/v1/events", headers=_API_HEADERS, json={"events": [pre]})
+    r = await app_client.post("/api/v1/events", headers=api_key_header(), json={"events": [pre]})
     assert r.status_code == 202
 
     # 2. Disable the class.
@@ -144,7 +144,7 @@ async def test_disabled_class_filtered_from_live_fanout_and_replay(
         post = _alert_envelope("UNATTENDED_BAG", datetime.now(UTC) + timedelta(seconds=5))
         other = _alert_envelope("slip_fall", datetime.now(UTC) + timedelta(seconds=6))
         r = await app_client.post(
-            "/api/v1/events", headers=_API_HEADERS, json={"events": [post, other]}
+            "/api/v1/events", headers=api_key_header(), json={"events": [post, other]}
         )
         assert r.status_code == 202
 
@@ -182,7 +182,7 @@ async def test_inflight_escalation_survives_disable_in_replay(
     cursor = _alert_envelope("slip_fall", datetime.now(UTC) - timedelta(minutes=30))
     inflight = _alert_envelope("UNATTENDED_BAG", datetime.now(UTC) - timedelta(minutes=10))
     r = await app_client.post(
-        "/api/v1/events", headers=_API_HEADERS, json={"events": [cursor, inflight]}
+        "/api/v1/events", headers=api_key_header(), json={"events": [cursor, inflight]}
     )
     assert r.status_code == 202
 
@@ -251,7 +251,7 @@ async def test_enable_restores_fanout_and_audit_rows_persisted(
     try:
         ev = _alert_envelope("UNATTENDED_BAG", datetime.now(UTC) + timedelta(seconds=5))
         r = await app_client.post(
-            "/api/v1/events", headers=_API_HEADERS, json={"events": [ev]}
+            "/api/v1/events", headers=api_key_header(), json={"events": [ev]}
         )
         assert r.status_code == 202
         delivered = queue.get_nowait()

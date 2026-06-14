@@ -223,6 +223,38 @@ def test_login_unknown_user_and_wrong_password_are_identical_401() -> None:
         app_unknown.dependency_overrides.clear()
 
 
+@pytest.mark.unit
+def test_login_runs_password_verify_even_for_unknown_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pin the TIMING property, not just the response shape: the byte-identity test
+    would still pass if a regression short-circuited `row is None` BEFORE the bcrypt
+    verify (a timing oracle). Spy on verify_password and assert it IS called on the
+    unknown-user path (against the dummy hash) — so the constant-time guard can't be
+    silently removed."""
+    import cloud_backend.routes.auth as auth_routes
+
+    calls: list[tuple[str, str]] = []
+    real_verify = auth_routes.verify_password
+
+    def _spy(password: str, password_hash: str) -> bool:
+        calls.append((password, password_hash))
+        return real_verify(password, password_hash)
+
+    monkeypatch.setattr(auth_routes, "verify_password", _spy)
+
+    app_unknown = _login_app([])  # no such user
+    try:
+        c = TestClient(app_unknown)
+        r = c.post("/api/v1/auth/login", json={"username": "ghost", "password": "x"})
+        assert r.status_code == 401
+        # The dummy-hash verify MUST have run despite the user being absent.
+        assert len(calls) == 1, "verify_password was not called on the unknown-user path"
+        assert calls[0][1] == auth_routes._DUMMY_HASH
+    finally:
+        app_unknown.dependency_overrides.clear()
+
+
 # ── Security Test 8 — empty jwt_secret fails closed ──────────────────────────
 
 

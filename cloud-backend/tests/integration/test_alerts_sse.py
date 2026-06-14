@@ -50,7 +50,7 @@ from testcontainers.postgres import PostgresContainer
 
 from cloud_backend.config import get_settings
 
-from .conftest import auth_header
+from .conftest import api_key_header, auth_header
 
 _ALEMBIC_INI = str(Path(__file__).parents[2] / "alembic.ini")
 
@@ -492,7 +492,7 @@ async def test_non_allow_listed_event_persisted_but_not_pushed(
                 },
             }],
         }
-        r = await app_client.post("/api/v1/events", headers=_HEADERS, json=payload)
+        r = await app_client.post("/api/v1/events", headers=api_key_header(), json=payload)
         assert r.status_code in (200, 202), r.text
 
         # Half 1: row exists in events
@@ -769,8 +769,8 @@ async def test_api_key_does_not_appear_in_emitted_logs(
     try:
         # P9: exercise an authenticated endpoint that DOES log (the SSE handshake
         # logs nothing structurally — use a regular protected route instead).
-        # /api/v1/health or /api/v1/fleet/overview both go through require_api_key
-        # and emit structlog records.
+        # /api/v1/fleet/overview goes through get_current_user (JWT) and emits
+        # structlog records.
         r = await app_client.get("/api/v1/fleet/overview", headers=_HEADERS)
         assert r.status_code in (200, 500)  # don't depend on DB content for this assertion
     finally:

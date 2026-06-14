@@ -105,7 +105,9 @@ def _verify_token(raw: str | None) -> CurrentUser:
         raise HTTPException(status_code=401, detail=_UNAUTHORIZED) from exc
     return CurrentUser(
         user_id=str(payload["sub"]),
-        username=str(payload.get("username", "")),
+        # `or ""` (not `get(..., "")`) so a present-but-null username claim from an
+        # external IdP becomes "" rather than the literal string "None".
+        username=str(payload.get("username") or ""),
         role=str(payload["role"]),
     )
 

@@ -21,3 +21,12 @@ def auth_header(role: str = "operator", *, username: str = "tester") -> dict[str
 
     token = create_access_token(user_id=f"u-{role}", username=username, role=role)
     return {"Authorization": f"Bearer {token}"}
+
+
+def api_key_header() -> dict[str, str]:
+    """X-API-Key header for the machine-to-machine ingest endpoint, which stays on
+    the shared-key scheme (E11-S1 code-review Decision 1). All other routes use
+    auth_header() (Bearer)."""
+    from cloud_backend.config import get_settings
+
+    return {"X-API-Key": get_settings().api_key}

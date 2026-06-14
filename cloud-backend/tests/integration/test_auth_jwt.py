@@ -191,7 +191,7 @@ _PROTECTED_PATHS = [
     ("GET", "/api/v1/analytics/dwell-time?range=7d"),
     ("POST", "/api/v1/analytics/exceptions/x/review"),
     ("GET", "/api/v1/capacity-review-queue/export"),
-    ("GET", "/api/v1/alerts/stream"),  # SSE: gated via ?token= (no token here → 401)
+    ("GET", "/api/v1/alerts/stream"),  # SSE: gated via ?token= query param (no token → 401)
     ("GET", "/api/v1/config/confidence-thresholds"),
     ("GET", "/api/v1/health/ai-pipeline"),
     ("GET", "/api/v1/ai-quality/resolution-rates"),
@@ -218,6 +218,49 @@ async def test_protected_route_requires_token(
 ) -> None:
     r = await app_client.request(method, path)
     assert r.status_code == 401, f"{method} {path} returned {r.status_code}, expected 401"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_sse_query_token_gate_accepts_valid_rejects_invalid(
+    app_client: AsyncClient,
+) -> None:
+    """Positive + negative coverage for the ?token= SSE extractor
+    (get_current_user_from_query) — the only route on that distinct code path. A
+    regression in the query wiring would 401 a valid token while the negative
+    no-token HTTP test still passed.
+
+    The route body is a long-lived text/event-stream that blocks on the live queue,
+    and httpx ASGITransport buffers the full response (it won't surface the head of
+    a never-ending stream) — so we CANNOT exercise the valid path over HTTP without
+    hanging. Instead we call the dependency directly for the valid token (proving it
+    resolves the same CurrentUser via the shared _verify_token core) and assert the
+    invalid/missing token is rejected both at the dependency AND over the real HTTP
+    route (which short-circuits to 401 before any stream starts)."""
+    from fastapi import HTTPException
+
+    from cloud_backend.api.auth import (
+        create_access_token,
+        get_current_user_from_query,
+    )
+
+    # Valid ?token= → resolves the user via the same verify core as the header path.
+    token = create_access_token(user_id="u-sse", username="sse", role="operator")
+    user = await get_current_user_from_query(token=token)
+    assert user.user_id == "u-sse"
+    assert user.role == "operator"
+
+    # Invalid / missing ?token= → 401 at the dependency.
+    for bad in ("not-a-jwt", None):
+        with pytest.raises(HTTPException) as exc:
+            await get_current_user_from_query(token=bad)
+        assert exc.value.status_code == 401
+
+    # And over the real HTTP route the bad token short-circuits to 401 (no stream).
+    resp = await app_client.get("/api/v1/alerts/stream?token=not-a-jwt")
+    assert resp.status_code == 401
+    resp2 = await app_client.get("/api/v1/alerts/stream")  # no token at all
+    assert resp2.status_code == 401
 
 
 @pytest.mark.integration
@@ -295,11 +338,52 @@ async def test_seam_oidc_swap(
 
 
 @pytest.mark.integration
-def test_upgrade_head_idempotent(pg_url: str) -> None:
+def test_migration_0009_genuinely_reapplies(pg_url: str) -> None:
+    """Actually RE-RUN 0009's DDL (downgrade to 0008 then upgrade head), not just
+    a no-op `upgrade head` while already at head — which would never execute
+    create_table again. 0009 has no IF NOT EXISTS, so a broken re-apply would
+    raise DuplicateTable. Then assert the users table + unique index + role check
+    constraint exist.
+
+    SYNC test (not async): Alembic's async env.py calls asyncio.run() internally,
+    which cannot be nested inside a running event loop — so this must run outside
+    one, exactly like the pg_url fixture. The post-apply schema check uses a sync
+    psycopg2 connection (testcontainers' default URL) for the same reason."""
+    import psycopg2
     from alembic import command
     from alembic.config import Config
 
     cfg = Config(_ALEMBIC_INI)
     cfg.set_main_option("sqlalchemy.url", pg_url)
-    # Already at head from the module fixture; applying head again must not raise.
-    command.upgrade(cfg, "head")
+    # env.py prefers the DATABASE_URL env var over sqlalchemy.url, so pin it to THIS
+    # container around the alembic calls and restore it after — otherwise the
+    # downgrade/upgrade could target the wrong container and leak DATABASE_URL to a
+    # later test module (cross-module flakiness).
+    _prev_db_url = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = pg_url
+    try:
+        # Roll 0009 back, then forward — genuinely re-executes create_table("users").
+        command.downgrade(cfg, "0008")
+        command.upgrade(cfg, "head")  # must not raise (DuplicateTable = non-idempotent)
+    finally:
+        if _prev_db_url is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = _prev_db_url
+
+    # Sync DB check (psycopg2 — strip the asyncpg driver suffix from the URL).
+    sync_url = pg_url.replace("+asyncpg", "").replace("postgresql+asyncpg", "postgresql")
+    conn = psycopg2.connect(sync_url)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT to_regclass('public.users')")
+        assert cur.fetchone()[0] == "users", "users table missing after re-apply"
+        cur.execute(
+            "SELECT 1 FROM pg_indexes "
+            "WHERE tablename = 'users' AND indexname = 'uq_users_username'"
+        )
+        assert cur.fetchone() is not None, "uq_users_username index missing after re-apply"
+        cur.execute("SELECT 1 FROM pg_constraint WHERE conname = 'ck_users_role_valid'")
+        assert cur.fetchone() is not None, "role check constraint missing after re-apply"
+    finally:
+        conn.close()

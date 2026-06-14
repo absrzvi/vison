@@ -23,7 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-from .conftest import auth_header
+from .conftest import api_key_header, auth_header
 
 _ALEMBIC_INI = str(Path(__file__).parents[2] / "alembic.ini")
 _API_HEADERS = auth_header()
@@ -258,7 +258,7 @@ async def test_ingest_stamps_seconds_to_departure(
         },
     }
     r = await app_client.post(
-        "/api/v1/events", headers=_API_HEADERS, json={"events": [env]}
+        "/api/v1/events", headers=api_key_header(), json={"events": [env]}
     )
     assert r.status_code == 202, r.text
     async with factory() as s:

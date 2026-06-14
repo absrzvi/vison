@@ -23,7 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-from .conftest import auth_header
+from .conftest import api_key_header, auth_header
 
 _ALEMBIC_INI = str(Path(__file__).parents[2] / "alembic.ini")
 _API_HEADERS = auth_header()
@@ -162,7 +162,7 @@ async def _ingest_alert(
         alert_code=alert_code,
         confidence_basis=confidence_basis,
     )
-    r = await client.post("/api/v1/events", headers=_API_HEADERS, json={"events": [env]})
+    r = await client.post("/api/v1/events", headers=api_key_header(), json={"events": [env]})
     assert r.status_code == 202, r.text
     return event_id
 
@@ -299,8 +299,8 @@ async def test_reingested_alert_does_not_double_write_raised(
 ) -> None:
     event_id = str(uuid.uuid4())
     env = _alert_envelope(event_id=event_id, alert_id=str(uuid.uuid4()))
-    await app_client.post("/api/v1/events", headers=_API_HEADERS, json={"events": [env]})
-    await app_client.post("/api/v1/events", headers=_API_HEADERS, json={"events": [env]})
+    await app_client.post("/api/v1/events", headers=api_key_header(), json={"events": [env]})
+    await app_client.post("/api/v1/events", headers=api_key_header(), json={"events": [env]})
     rows = await _audit_rows(factory, event_id)
     assert len([r for r in rows if r["transition"] == "raised"]) == 1
 
@@ -324,7 +324,7 @@ async def test_empty_payload_alert_writes_no_audit_row(
         "schema_version": 1,
         "payload": {},
     }
-    r = await app_client.post("/api/v1/events", headers=_API_HEADERS, json={"events": [env]})
+    r = await app_client.post("/api/v1/events", headers=api_key_header(), json={"events": [env]})
     assert r.status_code == 202
     assert await _audit_rows(factory, event_id) == []
 

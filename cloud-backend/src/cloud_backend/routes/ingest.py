@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..api.auth import get_current_user
+from ..api.auth import require_api_key
 from ..database import get_db
 from ..routes.alerts_sse import ALERT_EVENT_TYPES, publish_alert
 from ..services.escalation_audit import record_raised
@@ -20,7 +20,13 @@ from ..services.heartbeat_ingest import upsert_heartbeat
 
 log = structlog.get_logger()
 
-router = APIRouter(prefix="/api/v1/events", dependencies=[Security(get_current_user)])
+# E11-S1 code-review Decision 1: this is an unattended machine-to-machine ingest
+# (heartbeats + alert events from the landside MQTT->REST path). A human's
+# short-TTL JWT with no refresh is the wrong credential model for an unattended
+# producer, so this ONE router stays on the shared-key scheme. Migrating it to a
+# service-account token is a follow-up story. This is the documented AC5
+# exception — the only protected router still on require_api_key.
+router = APIRouter(prefix="/api/v1/events", dependencies=[Security(require_api_key)])
 
 
 class IngestRequest(BaseModel):

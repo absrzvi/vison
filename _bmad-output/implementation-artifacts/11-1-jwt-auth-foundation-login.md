@@ -4,7 +4,7 @@ baseline_commit: 2e2f5a4
 
 # Story 11.1: JWT Auth Foundation + Login Flow
 
-Status: review
+Status: done
 
 <!-- PRE-FLIGHT RESOLUTION (Amelia, 2026-06-14, dev-story): The D8 open question is resolved.
      Verified: the live frontend has NO SSE/EventSource client — FleetContext.jsx:24-31 wires
@@ -250,3 +250,44 @@ claude-opus-4-8[1m] (Amelia)
 | 3 | Silent-dismissal beacon → Bearer (security-sentinel Major) | The beacon's endpoint is now JWT-gated; it still sent X-API-Key → would 401 silently. |
 | 4 | Root `tests/conftest.py` pins a suite-stable JWT secret | `get_settings()` reads env per-call; cross-module secret mutation caused flaky tests. |
 | 5 | `vite.config.js` dev proxy (VITE_DEV_PROXY) + `control-centre-verify` launch config | Browser-verify needs same-origin (prod serves SPA from backend origin; no CORS). Dev-only, opt-in via env. |
+
+## Senior Developer Review (AI) — Round 1
+
+**Date:** 2026-06-14 · **Reviewer:** Code-review skill (FULL adversarial wire-replay, A2 tier) · **Diff:** 2e2f5a4..718e56f (75 files, +1761/-223) · **Layers:** Blind Hunter + Edge Case Hunter + Acceptance Auditor (3/3 completed)
+
+**Outcome: APPROVED with action items — no Blocker, no High.** All three layers independently cleared the security-critical core: the `_verify_token` JWT verification (explicit `algorithms=[...]` allow-list, issuer enforced, `require:[exp,sub,role]`, fail-closed empty secret — no `alg:none`/confusion bypass, no 500 path); the two extractors share the same core (the SSE `?token=` query param is correctly wired and NOT weaker — empirically confirmed against FastAPI); login has no user-enumeration body-shape oracle (byte-identical 401s); the 16-surface cutover is COMPLETE (no second missed consumer, no protected router left on `require_api_key`, no over-gated probe/login); and the A3 integration test seeds via the real `create_user` path. All 9 ACs SATISFIED, no test/prod-divergence in the AC-backing tests.
+
+### Review Findings
+
+**decision-needed → RESOLVED (both became patches, applied):**
+- [x] **[Review][Decision] `/api/v1/events` ingest cut to JWT may 401 an unattended machine producer** → **RESOLVED: option (a) carve-out.** Reverted `/api/v1/events` ONLY to `require_api_key` (machine producers keep the shared-key model); service-token migration is a follow-up story. This is the documented AC5 exception — the one protected router still on `require_api_key`. Ingest-POST test calls re-pointed to a new `api_key_header()` helper (integration conftest). ADR-23 + the cutover doc updated to record the exception.
+- [x] **[Review][Decision] SSE `?token=<jwt>` puts the full 60-min access token in the URL** → **RESOLVED: option (a) accept for PoC + strip from access logs.** Kept `?token=` (only EventSource option); updated ADR-23's known-limitation note to record the decision and that the **deployment mitigation is to strip the `token` query param from the access-log format** (an nginx/uvicorn log-config concern, not app code). TLS + short TTL bound the blast radius for the PoC.
+
+**patch → ALL APPLIED + verified:**
+- [x] **[Review][Patch] `username: null` claim becomes literal string `"None"`** [api/auth.py] — FIXED: `str(payload.get("username") or "")` coerces a present-null claim to `""`, not `"None"`.
+- [x] **[Review][Patch] migration test didn't actually re-apply 0009** [test_auth_jwt.py] — FIXED: replaced the no-op `upgrade head` with `downgrade 0008` → `upgrade head` (genuinely re-runs `create_table`), then asserts the users table + `uq_users_username` index + `ck_users_role_valid` constraint exist (sync psycopg2 — async env.py can't nest `asyncio.run`). Also pins/restores `DATABASE_URL` around the alembic calls so it can't leak cross-module.
+- [x] **[Review][Patch] No positive-auth test for the SSE `?token=` gate** [test_auth_jwt.py] — FIXED: `test_sse_query_token_gate_accepts_valid_rejects_invalid` calls `get_current_user_from_query` directly (valid token → correct CurrentUser via the shared core) + asserts invalid/missing → 401 at the dependency AND over the real HTTP route. (HTTP-streaming the valid path hangs — ASGITransport buffers the never-ending event-stream — so the valid case is proven at the dependency, not by consuming the stream.)
+- [x] **[Review][Patch] `confidenceThresholds.js` caches a rejected fetch promise** — FIXED: renamed `_cache`→`_inflight`, nulled on rejection so a failure is never cached (a same-tab re-login refetches).
+- [x] **[Review][Patch] Security Test 7 pins body-identity but not the timing path** — FIXED: added `test_login_runs_password_verify_even_for_unknown_user` which spies on `verify_password` and asserts it IS called against `_DUMMY_HASH` on the unknown-user path (so the constant-time guard can't be silently removed).
+- [x] **[Review][Patch] Stale docstring in `0009_users.py`** — FIXED: now says "bcrypt hash (the `bcrypt` library directly — passlib was dropped, see Change Log 1)".
+
+**defer (pre-existing or out-of-scope):**
+- [x] **[Review][Defer] Empty-string/garbage `role` claim authenticates** [api/auth.py] — `role=""` → valid CurrentUser. Contained today (no route uses `require_role` yet); harden when E11-S2/S4 add role-gated routes.
+- [x] **[Review][Defer] `get_settings()` uncached on the hot auth path** [config/__init__.py:32] — per-request env/.env re-parse. Required by the env-mutation test pattern (incl. the AC4 OIDC-swap test); caching risks that test. Revisit as a perf pass.
+- [x] **[Review][Defer] Stale `VITE_API_KEY=` in `.env`/`.env.example`** — dead env var; adjacent to 8-3's `VITE_WS_URL` cleanup.
+- [x] **[Review][Defer] PRE-EXISTING integration-test isolation flaky** — `test_ai_quality_rates.py`'s 3 rate tests (`test_two_rates_with_denominators`, `test_null_action_tags_counts_as_no_action`, `test_raised_rows_do_not_count_as_resolved`) intermittently fail when the module runs alongside `test_alerts_sse.py` in the same process; each PASSES in isolation (and with `-k` selecting one). Root cause: every integration module's `pg_url` fixture mutates the process-global `os.environ["DATABASE_URL"]` at module scope, so when pytest interleaves two module fixtures' setup/teardown the app can query the wrong testcontainer. **CONFIRMED pre-existing — reproduced identically with all 11-1 review patches stashed (at commit 718e56f state), and the original 11-1 dev run passed 115 only because the nondeterministic ordering happened to avoid it.** NOT introduced by this story; the 11-1 auth tests themselves (`test_auth_jwt.py`) are deterministically green (24/24 repeatedly). Fix = make the `pg_url` fixtures hermetic (don't leak `DATABASE_URL`; pass the URL explicitly to the app under test, or session-scope a single container). Bundle into an integration-test-hardening follow-up. [cloud-backend/tests/integration/*.py pg_url fixtures]
+
+**dismissed (1):** AC4 seam test stays HS256 (doesn't exercise an RS256 algorithm swap) — the algorithm is config-driven and covered by the allow-list; an RS256 keypair test is out of PoC scope; the seam contract is proven by the key+issuer swap.
+
+### Round-1 resolution — DONE (2026-06-14)
+
+Both decision-needed resolved (ingest carve-out; SSE-log scrub note) and all 6 patches applied. **Post-patch gates all green:** cloud-backend **114 unit + 116 integration** on real Postgres (the new SSE-seam + strengthened-migration tests pass; the migration test genuinely re-applies 0009; A1 gate ran locally, Docker up), **mypy --strict** clean (38 files), **ruff** clean; control-centre **264 vitest**. The login flow was unchanged by the patches, so the prior AC6 browser verification (redirect / golden / bad-creds / tamper→401) still holds. One pre-existing integration-test isolation flaky surfaced (3 `test_ai_quality_rates.py` tests under multi-module ordering) — **confirmed not introduced by this story** (reproduced identically with all review patches stashed at 718e56f) and deferred to a follow-up (DATABASE_URL hermetic-fixtures task). **Outcome: APPROVED → story DONE.**
+
+## Change Log (Round-1 review patches)
+
+| # | Change | Rationale |
+|---|---|---|
+| 6 | `/api/v1/events` ingest carved back to `require_api_key` (Decision 1) | Unattended machine producer; human JWT is the wrong credential model. The one documented AC5 exception. Service-token migration deferred. |
+| 7 | `username` claim null-coercion `get(...) or ""` (Patch) | A present-null username from an external IdP became the literal `"None"` in attribution. |
+| 8 | Migration test downgrade→upgrade + schema assertions; SSE positive-auth test; Test-7 timing spy; `confidenceThresholds` rejected-promise fix; `0009` docstring (Patches) | Close test/prod-divergence + coverage gaps the review found. |
+| 9 | ADR-23 SSE-log note + cutover-exception doc (Decision 2 + Decision 1) | Record the accepted PoC limitation (strip `token` from access logs in deployment) and the ingest carve-out. |
