@@ -174,7 +174,12 @@ async def test_empty_window_returns_empty_list(app_client: AsyncClient) -> None:
 async def test_two_rates_with_denominators(
     app_client: AsyncClient, factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    now = datetime.now(UTC)
+    # Back-date well inside the window. The query's upper bound is the DB clock
+    # (`t_event < NOW()`); seeding at the Python-host clock is flaky because under
+    # testcontainers the host clock can run ~100s of ms AHEAD of the container's,
+    # so a t_event stamped at host-now() lands >= the container's NOW() at query
+    # time and the half-open upper bound drops every freshly-seeded row.
+    now = datetime.now(UTC) - timedelta(minutes=1)
 
     async def seed(tags: list[str] | None) -> None:
         await _seed_resolved(
@@ -202,7 +207,9 @@ async def test_two_rates_with_denominators(
 async def test_null_action_tags_counts_as_no_action(
     app_client: AsyncClient, factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    now = datetime.now(UTC)
+    # Back-date inside the window — see test_two_rates_with_denominators for why
+    # host-now() flakes against the DB-clock half-open upper bound.
+    now = datetime.now(UTC) - timedelta(minutes=1)
     # NULL action_tags (not just []) must count toward no_action and not crash.
     await _seed_resolved(factory, alert_code="slip_fall", action_tags=None, t_event=now)
     row = _by_code(await _get(app_client))["slip_fall"]
@@ -217,7 +224,9 @@ async def test_null_action_tags_counts_as_no_action(
 async def test_raised_rows_do_not_count_as_resolved(
     app_client: AsyncClient, factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    now = datetime.now(UTC)
+    # Back-date inside the window — see test_two_rates_with_denominators for why
+    # host-now() flakes against the DB-clock half-open upper bound.
+    now = datetime.now(UTC) - timedelta(minutes=1)
     # A 'raised' audit row in window must not inflate resolved_total.
     raised_eid = str(uuid.uuid4())
     async with factory() as s:
