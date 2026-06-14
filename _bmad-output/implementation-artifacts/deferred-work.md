@@ -351,7 +351,7 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - **F18: AC1 — no 30 s startup timer** [health.py] — spec says "within 30 s"; current impl just returns 503 until SNMP connects; acceptable for PoC single-process deployment
 - **F19: AC8 — station-approach "after stop" semantics not enforced; 2 s SLA fragile** [main.py] — watchdog sleeps 2 s; "after stop" (speed reached ~0) not tracked; add `has_stopped` flag and tighten poll interval in hardening story
 - **F20: Module-level `_snmp_connected` global defeats multi-worker deploys** [health.py] — PoC single-worker; migrate to `app.state` before multi-worker production deploy
-- **F21: `_push_context_delta` non-atomic across fusion+inference** [context_state.py] — sequential posts may leave consumers divergent on retry failure; add sequence number + per-service error capture in hardening story
+- **F21: `_push_context_delta` non-atomic across fusion+inference** [context_state.py] — ✅ RESOLVED in 6-4 (per-service error isolation: each consumer POST is try/wrapped + logged independently, so one consumer's failure no longer starves the other). Sequence-number ordering was NOT added (not needed for the PoC single-train case; the divergence risk was the starvation, now fixed).
 - **F23: `snmp_speed_oid` configured but never used** [snmp_poller.py / config.py] — speed varbind polling deferred until Stadler MIB OID for speed is confirmed; wire `update_speed` in E4-S2 when APC/SNMP speed OID is known
 
 ## Deferred from: code review of 4-2-vlan-pollers-apc-pis-reservation round 2 (2026-05-19)
@@ -409,7 +409,7 @@ Items from previous stories reviewed for E4 relevance. E4 is the onboard edge pi
 - **`mark_published`/`mark_failed` commits per row** — at 500 ev/s sustained, that's 500 fsyncs/sec under WAL on the R5001C SYS2. Batch commits per N rows or per timer in a perf-tuning follow-up.
 - **`/health` opens a fresh SQLite connection per request** — k8s liveness at 1s frequency × WAL fsync churn. Use a long-lived /health connection in a follow-up.
 - **`init_db` on a corrupt SQLite buffer file** — raises out of lifespan with no quarantine. Document the recovery procedure (rename + reinit + cursor-rebuild from event-store cursor); auto-quarantine in a future hardening pass.
-- **`oebb_shared.http.retry.DEFAULT_RETRY` retries on permanent 4xx** — burns 50s of retries on a 422. Same finding carried from story 4-7; needs cross-container coordination.
+- **`oebb_shared.http.retry.DEFAULT_RETRY` retries on permanent 4xx** — burns 50s of retries on a 422. Same finding carried from story 4-7; needs cross-container coordination. **Note (6-4):** the worst offender on this — the vlan-pollers→fusion `/context` full-delta 422 — is **eliminated** by 6-4 (fusion now accepts the body, no 422). The DEFAULT_RETRY policy fix itself is still owned by **Epic 7 / 7-1** (`shared-retry-policy-exclude-4xx`); 6-4 only removed the 422 trigger on this path.
 - **No jitter on MQTT reconnect schedule** — single-train PoC has only one cloud-sync, so no thundering-herd risk. Add jitter when the fleet scales (multiple cloud-sync replicas reconnecting after a Mosquitto bounce).
 - **`truncate_old_journeys` is synchronous inside the event-store route handler** — blocks the uvicorn worker on multi-thousand-row deletes. Offload to a background task or run in a thread-pool executor in a follow-up.
 - **`pull_loop` cursor monotonicity check** — defence in depth against event-store re-emitting an older id; not needed today.

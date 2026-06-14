@@ -4,7 +4,7 @@ baseline_commit: c2db726
 
 # Story 6.4: vlan-pollers↔fusion `/context` Push Contract Reconciliation
 
-Status: ready-for-dev
+Status: review
 
 <!-- Created 2026-06-14 via bmad-create-story (Amelia / Opus 4.8). P1 — NEW fourth story in Epic 6 (Fusion Hardening).
      Source: surfaced by the 10-4 dwell-time-KPI code review (wf_eb03b492 + wf_4b4c0912) as a PRE-EXISTING integration
@@ -83,27 +83,25 @@ then the `DEFAULT_RETRY`-on-4xx burn (deferred-work.md line 412: "burns 50s of r
 
 ## Tasks / Subtasks
 
-- [ ] **T0 — Explore pass (FULL-FILE-READS rule)** — read in full before editing: `fusion/src/fusion/models.py` (ContextPushModel), `fusion/src/fusion/context_state.py` (update_from_push), `fusion/src/fusion/comfort_index.py` (does it need occupancy from context?), `inference/src/inference/health.py` (the asymmetry reference), `vlan-pollers/src/vlan_pollers/context_state.py` (_state_to_dict + _push_context_delta + the 10-4 update_pis targeted push), `vlan-pollers/src/vlan_pollers/models.py` (PisState). Document current-state / what-changes / what-must-preserve for each.
+- [x] **T0 — Explore pass (FULL-FILE-READS rule)** — read fusion `models.py`/`context_state.py`/`comfort_index.py`, inference `health.py`, vlan-pollers `context_state.py`/`models.py`. **Key D4 resolution:** `comfort_index.py:26` says "D4 — Ingest reuses Story 4-9's `/candidates/occupancy_update` endpoint" — so fusion gets occupancy via that dedicated POST, NOT the context push; and it does no reservations math (D3). → fusion reads NONE of the 4 undeclared keys except `pis` (for `scheduled_departure`). Decision: type `pis` (read it), accept-and-ignore `trip_number`/`alarms`/`occupancy`. Inference `ContextPushModel` is `ConfigDict(strict=True)` only (extra='ignore') — confirms fusion is the outlier. The full-delta `_state_to_dict` always carries `pis`, so removing the 10-4 targeted push is safe (scheduled_departure rides every full-delta push).
 
-- [ ] **T1 — RED: real-producer contract test** (AC1, AC2)
-  - [ ] Write a fusion contract test that POSTs the actual `_state_to_dict(state)` body (fully-populated, incl. nested `pis`) to `/context` and asserts **200** + declared fields land. Watch it FAIL (422) against the current model.
-  - [ ] Confirm `test_context_push_extra_field_rejected` + `test_context_push_strict_bool_rejects_strings` still express the strict-validation intent you must keep.
+- [x] **T1 — RED: real-producer contract test** (AC1, AC2)
+  - [x] Added `test_real_full_delta_push_accepted_and_scheduled_departure_lands` (POSTs the full `_state_to_dict`-shaped body incl. nested `pis`) — RED-confirmed it 422'd on `trip_number`/`alarms`/`pis`/`occupancy`. Plus `test_context_push_still_rejects_genuinely_unknown_field` (AC2). The two strict-validation unit tests preserved.
 
-- [ ] **T2 — Reconcile `ContextPushModel`** (AC1, AC2, AC3, D1, D4)
-  - [ ] Per D1 Option B (unless team overrides): add a typed optional `pis` sub-model (with `scheduled_departure` etc.) + `trip_number`/`alarms`/`occupancy` as optional accepted fields; keep `extra='forbid'`.
-  - [ ] In `update_from_push`, read `scheduled_departure` from the nested `pis` (AC3). Only store `occupancy`/`alarms`/`trip_number` into `ContextState` if something actually reads them (D4) — else accept-and-ignore.
-  - [ ] GREEN the T1 contract test; AC2 tests stay green.
+- [x] **T2 — Reconcile `ContextPushModel`** (AC1, AC2, AC3, D1, D4)
+  - [x] Option B: added `PisPush` sub-model (`extra='ignore'`, reads `scheduled_departure`) + `trip_number`/`alarms`/`occupancy` as accept-and-ignore fields; kept `extra='forbid'`. Removed the E10-S4 flat `scheduled_departure` field (single source of truth).
+  - [x] `update_from_push` reads `scheduled_departure` from nested `pis`; journey-change clear preserved. `occupancy`/`alarms`/`trip_number` NOT written to `ContextState` (D4 — no reader). GREEN: 176 fusion tests, cov 93.73%, mypy --strict + ruff clean.
 
-- [ ] **T3 — Resolve the 10-4 targeted-push fate** (AC3, D3)
-  - [ ] Per D3: remove the redundant `update_pis` targeted push (recommended) OR document why it's kept. If removed, add/keep a test proving `scheduled_departure` lands via the nested `pis` body so 10-4's feature is not silently re-broken.
+- [x] **T3 — Resolve the 10-4 targeted-push fate** (AC3, D3)
+  - [x] D3-a: removed the redundant `update_pis` targeted push; rewrote its producer test (`test_update_pis_delivers_scheduled_departure_via_nested_pis`) to assert PIS rides the full-delta push's **nested `pis`** AND no flat key remains. fusion-side guard proven by `test_real_full_delta_push_accepted_and_scheduled_departure_lands`.
 
-- [ ] **T4 — `_push_context_delta` per-service error isolation** (AC4, F21)
-  - [ ] Wrap each service POST so one failure doesn't skip the other; log per-service. RED test: fusion POST raises → inference still receives.
+- [x] **T4 — `_push_context_delta` per-service error isolation** (AC4, F21)
+  - [x] Each consumer POST is `try/except`-wrapped + logged (`context_push_failed`, `target=url`) so one failure doesn't starve the other. RED test `test_push_context_delta_isolates_per_service_failure` (fusion raises → inference still attempted).
 
-- [ ] **T5 — Quality gates + cross-references** (AC5, AC6, D2)
-  - [ ] Note in Dev Notes that 7-1 owns the DEFAULT_RETRY-on-4xx fix (this story only removes the 422 trigger). Update deferred-work.md: mark F21 resolved; cross-link the 422/retry interaction to 7-1.
-  - [ ] fusion suite (cov≥90) + mypy --strict + ruff; vlan-pollers suite + mypy + ruff — all green.
-  - [ ] Per CLAUDE.md git rule: stage only this story's files, commit `fix(...)`/`refactor(...)` with the agent block, push `origin master`.
+- [x] **T5 — Quality gates + cross-references** (AC5, AC6, D2)
+  - [x] deferred-work.md: F21 marked **RESOLVED**; the DEFAULT_RETRY-on-4xx entry annotated — 6-4 eliminates the `/context` 422 trigger, **7-1 still owns the retry-policy fix** (D2). ADR-freshness checked: no ADR documents the `/context` contract (grep empty) → no ADR update needed.
+  - [x] fusion **176** (cov 93.73%) + mypy --strict + ruff clean; vlan-pollers **90** + mypy + ruff clean.
+  - [x] security-sentinel APPROVED; commit + push.
 
 ## Dev Notes
 
@@ -150,22 +148,58 @@ then the `DEFAULT_RETRY`-on-4xx burn (deferred-work.md line 412: "burns 50s of r
 ## Dev Agent Record
 
 ### Context Reference
-<!-- dev populates -->
+
+Self-contained. Cited: fusion `ContextPushModel`/`update_from_push`/`comfort_index.py` (D4), inference `ContextPushModel` (the asymmetry), vlan-pollers `_state_to_dict`/`_push_context_delta`/`update_pis`, the 10-4 story (the targeted-push workaround this supersedes).
 
 ### Agent Model Used
-<!-- dev populates -->
+
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context)
 
 ### Pre-Flight
-<!-- dev populates: assumptions, open questions (D1 approach if not Option B), simplicity check, surgical-change test -->
+
+**Assumptions** — D1 = **Option B** (declare real producer keys, keep `extra='forbid'`). `pis` → typed `PisPush` sub-model, read `scheduled_departure`. `trip_number`/`alarms`/`occupancy` → accept-and-ignore (D4: nothing in fusion reads them — comfort_index gets occupancy via `/candidates/occupancy_update`). D3 = remove the 10-4 targeted PIS push; `scheduled_departure` now rides every full-delta push's nested `pis`.
+
+**Open Questions** — none blocking. D1 ratified via story approval; D3/D4 resolved above.
+
+**Simplicity Check** — add `PisPush` sub-model + 3 accept-ignore fields to `ContextPushModel`; read `pis.scheduled_departure` in `update_from_push`; remove the targeted push + its now-superseded test; per-service error isolation in `_push_context_delta`. Rejected: storing occupancy/alarms/trip_number (no reader — no speculative plumbing); `extra='ignore'` (breaks the strict-validation tests AC2 pins). R3-D1 fold-in only if 1-2 lines in the method already being edited.
+
+**Surgical-Change Test** — fusion `models.py` + `context_state.py` + tests → AC1/AC2/AC3; vlan-pollers `context_state.py` (error isolation + targeted-push removal) + tests → AC4/D3. Baseline preserved (c2db726).
 
 ### Debug Log References
-<!-- dev populates -->
+
+- RED: `test_real_full_delta_push_accepted_and_scheduled_departure_lands` 422'd on `trip_number`/`alarms`/`pis`/`occupancy` (the exact 4 undeclared keys) before the model change.
+- RED: `test_push_context_delta_isolates_per_service_failure` — fusion `ConnectError` propagated, inference never attempted, before the try/except.
+- D4 confirmation: `comfort_index.py:26` ("Ingest reuses Story 4-9's `/candidates/occupancy_update`") → occupancy NOT consumed from the context push → accept-and-ignore.
+- ADR-freshness: grep of architecture.md for the `/context` contract returned empty → no ADR documents it → no ADR update.
 
 ### Completion Notes List
-<!-- dev populates; MUST record the D1 reconciliation approach chosen + the D3 targeted-push fate + whether R3-D1 was folded in -->
+
+- **D1 = Option B (chosen).** Declared the real producer keys on fusion's `ContextPushModel`: typed `PisPush` sub-model (`extra='ignore'`, reads only `scheduled_departure`) + `trip_number`/`alarms`/`occupancy` as **accept-and-ignore** (declared so the body validates, never written to `ContextState` — D4 confirmed nothing reads them). Kept `extra='forbid'` so unknown/typo'd fields still 422 (AC2 preserved; both strict-validation tests stay green). Rejected Option A (`extra='ignore'`) — would discard strict validation.
+- **D3 = remove the 10-4 targeted push (D3-a).** `scheduled_departure` now rides the full-delta push's nested `pis` on every `update_pis` (single source of truth). Removed the flat field from fusion's model + the targeted `_post_with_retry` from `update_pis`; converted the fusion unit test + the vlan-pollers producer test to the nested-`pis` wire. `_state_to_dict` always carries `pis`, so PIS lands on the first post-update push (guard test proves it).
+- **D4 = accept-and-ignore** for `occupancy`/`alarms`/`trip_number` (no fusion reader; no speculative plumbing).
+- **F21 closed** — `_push_context_delta` isolates per-consumer failures (try/except + `context_push_failed` log per target); a fusion outage no longer starves inference. (Sequence-number ordering not added — unneeded for PoC single-train.)
+- **R3-D1 NOT folded in** — kept scope tight (separate `door_firmware_version=""` provenance guard); left in deferred-work.md.
+- **AC5 / D2** — 6-4 removes the `/context` 422 trigger; the `DEFAULT_RETRY`-on-4xx policy fix stays with Epic 7 **7-1**. deferred-work.md annotated.
+- **Security-sentinel: APPROVED** — untrusted-input boundary preserved (still rejects unknown fields; only `pis.scheduled_departure` string is read); no secrets/injection/PII/log-leak. Strictly safer than the prior silent-422-drop.
+- **Gates:** fusion **176** (cov 93.73%, mypy --strict + ruff clean); vlan-pollers **90** (mypy + ruff clean). No regression.
 
 ### File List
-<!-- dev populates -->
+
+**fusion/**
+- `src/fusion/models.py` (EDIT — `PisPush` sub-model + accept-ignore fields; removed flat `scheduled_departure` — AC1/AC2/AC3)
+- `src/fusion/context_state.py` (EDIT — `update_from_push` reads nested `pis.scheduled_departure` — AC3)
+- `tests/contract/test_candidate_payload_contract.py` (EDIT — `_build_test_app` helper + full-delta + unknown-field tests; removed 10-4 flat-targeted test)
+- `tests/unit/test_enrichment.py` (EDIT — `test_context_push_carries_scheduled_departure` → nested-pis wire)
+
+**vlan-pollers/**
+- `src/vlan_pollers/context_state.py` (EDIT — removed 10-4 targeted push; per-service error isolation in `_push_context_delta` — AC4/F21/D3)
+- `tests/unit/test_context_state.py` (EDIT — producer test → nested-pis; new isolation test)
+
+**bookkeeping**
+- `_bmad-output/implementation-artifacts/deferred-work.md` (EDIT — F21 resolved; DEFAULT_RETRY/7-1 cross-ref)
+- `_bmad-output/implementation-artifacts/6-4-vlan-pollers-fusion-context-contract.md` (EDIT — story record)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (EDIT — status)
 
 ### Change Log
-<!-- dev populates -->
+
+- 2026-06-14 — Implemented E6-S4 (vlan-pollers↔fusion `/context` contract reconciliation). Option B: fusion's `ContextPushModel` declares the real producer keys (typed `PisPush` + accept-and-ignore `trip_number`/`alarms`/`occupancy`), keeping `extra='forbid'` for unknown fields → full-delta push accepted (200) not 422. `scheduled_departure` rewired to nested `pis` (canonical wire); 10-4 targeted push + flat field removed (single source of truth). `_push_context_delta` gains per-service error isolation (closes F21). DEFAULT_RETRY-on-4xx fix left to 7-1 (D2). Security-sentinel APPROVED. fusion 176 (93.73%), vlan-pollers 90 — all green; mypy/ruff clean. Status ready-for-dev → review.

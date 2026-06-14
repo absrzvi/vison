@@ -153,12 +153,10 @@ async def test_speed_update_pushes_context() -> None:
 
 @pytest.mark.unit
 @respx.mock
-async def test_update_pis_sends_targeted_scheduled_departure_to_fusion() -> None:
-    """E10-S4: update_pis must push a TARGETED {scheduled_departure, journey_id} body
-    to fusion (mirroring set_station_approach) so fusion's flat scheduled_departure
-    field — which is the only thing fusion's ContextPushModel reads — is populated.
-    The full-delta push nests scheduled_departure under `pis`, which fusion never reads
-    (and which extra='forbid' rejects), so the targeted push is the real delivery path."""
+async def test_update_pis_delivers_scheduled_departure_via_nested_pis() -> None:
+    """E6-S4: scheduled_departure reaches fusion via the full-delta push's NESTED `pis`
+    object (fusion's ContextPushModel now declares `pis` and reads pis.scheduled_departure).
+    The E10-S4 targeted flat push is removed — single delivery path."""
     import json
 
     fusion_route = respx.post(f"{FUSION}/context").mock(return_value=httpx.Response(200))
@@ -177,11 +175,43 @@ async def test_update_pis_sends_targeted_scheduled_departure_to_fusion() -> None
         )
     )
 
-    # At least one fusion push must carry a FLAT scheduled_departure key (not nested in pis).
     bodies = [json.loads(call.request.content) for call in fusion_route.calls]
-    targeted = [b for b in bodies if b.get("scheduled_departure") == "2026-05-19T12:05:00Z"]
-    assert targeted, f"no targeted scheduled_departure push to fusion; bodies={bodies}"
-    assert targeted[0].get("journey_id") == "OBB-1_T1_20260517"
+    # scheduled_departure rides the full-delta push NESTED under `pis` — no flat key.
+    sched = "2026-05-19T12:05:00Z"
+    with_pis = [b for b in bodies if b.get("pis", {}).get("scheduled_departure") == sched]
+    assert with_pis, f"no full-delta push carrying nested pis.scheduled_departure; bodies={bodies}"
+    assert all("scheduled_departure" not in b for b in bodies), (
+        "flat scheduled_departure key must be gone"
+    )
+
+
+@pytest.mark.unit
+async def test_push_context_delta_isolates_per_service_failure() -> None:
+    """E6-S4 AC4 / deferred F21: a failure POSTing to one consumer must NOT skip the
+    other. If the fusion POST raises, inference must still receive the push."""
+    calls: list[str] = []
+
+    async def fake_post(url: str, payload: object) -> None:
+        calls.append(url)
+        if url.startswith(FUSION):
+            raise httpx.ConnectError("fusion down")
+
+    from vlan_pollers import context_state as cs_module
+
+    orig = cs_module._post_with_retry
+    try:
+        cs_module._post_with_retry = fake_post  # type: ignore[assignment]
+        ctx = _make_ctx()
+        ctx._state.journey_id = "OBB-1_T1_20260517"
+        await ctx._push_context_delta()
+    finally:
+        cs_module._post_with_retry = orig  # type: ignore[assignment]
+
+    # Both consumers attempted despite fusion raising.
+    assert any(u.startswith(FUSION) for u in calls), f"fusion not attempted: {calls}"
+    assert any(u.startswith(INFERENCE) for u in calls), (
+        f"inference starved by fusion failure: {calls}"
+    )
 
 
 @pytest.mark.unit

@@ -38,9 +38,9 @@ class ContextState:
     vehicle_id: str | None = None
     speed_kmh: float | None = None
     station_approach: bool = False
-    # E10-S4: scheduled departure (ISO-UTC string) from vlan-pollers PIS feed,
-    # delivered via a targeted FLAT /context push in update_pis (not the nested
-    # `pis` dict). enrichment derives seconds_to_departure from it. "" / None = unknown.
+    # E10-S4 (rewired by E6-S4): scheduled departure (ISO-UTC) from vlan-pollers PIS,
+    # read from the nested `pis` object in the full-delta /context push. enrichment
+    # derives seconds_to_departure from it. "" / None = unknown.
     scheduled_departure: str | None = None
     maintenance_mode: bool = False
     depot_mode: bool = False
@@ -105,11 +105,12 @@ class ContextState:
             self.consist = dict(model.consist)
         if model.door_firmware_version is not None:
             self.door_firmware_version = model.door_firmware_version
-        if model.scheduled_departure is not None:
-            self.scheduled_departure = model.scheduled_departure
+        # E10-S4 (rewired by E6-S4): scheduled_departure arrives nested in `pis`.
+        # Present (incl. "") replaces; absent + journey change clears so a new
+        # journey never inherits the prior journey's departure.
+        if model.pis is not None and model.pis.scheduled_departure is not None:
+            self.scheduled_departure = model.pis.scheduled_departure
         elif self.journey_id != prev_journey_id:
-            # E10-S4 (review): a new journey must not inherit the prior journey's
-            # departure. Clear on journey change unless this push set a new one.
             self.scheduled_departure = None
         after = (
             self.maintenance_mode,

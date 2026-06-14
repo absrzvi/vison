@@ -149,17 +149,7 @@ def test_context_push_extra_field_returns_422(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
-@pytest.mark.contract
-def test_real_targeted_pis_push_populates_scheduled_departure() -> None:
-    """E10-S4 — real-producer contract: the EXACT targeted-push body vlan-pollers
-    sends on a PIS update (vlan_pollers/context_state.py update_pis) must validate
-    through fusion's ContextPushModel and land on ContextState.scheduled_departure.
-
-    This bridges the producer→consumer wire that the unit tests previously bypassed:
-    vlan-pollers POSTs a FLAT {scheduled_departure, journey_id} dict (NOT the nested
-    `pis` object), which is the only shape fusion's extra='forbid' model accepts.
-    Self-contained app so we hold the ctx reference to assert against.
-    """
+def _build_test_app() -> tuple[TestClient, ContextState, httpx.AsyncClient]:
     settings = _settings()
     ctx = ContextState(journey_id="OBB-TEST_t1_20260520", vehicle_id="OBB-TEST")
     http_client = httpx.AsyncClient()
@@ -171,14 +161,56 @@ def test_real_targeted_pis_push_populates_scheduled_departure() -> None:
         settings=settings, ctx=ctx, gate=gate, enricher=enricher, client=http_client,
         ledger=ledger, comfort=comfort,
     )
-    wire_body = {
-        "scheduled_departure": "2026-05-19T12:05:00Z",
+    return TestClient(app), ctx, http_client
+
+
+# Mirrors vlan_pollers.context_state._state_to_dict(state) for a fully-populated
+# ContextState — the REAL full-delta push body. fusion must accept this (200), not 422.
+def _real_full_delta_body() -> dict[str, object]:
+    return {
         "journey_id": "OBB-TEST_t1_20260520",
+        "trip_number": "t1",
+        "vehicle_id": "OBB-TEST",
+        "speed_kmh": 0.0,
+        "station_approach": True,
+        "alarms": [],
+        "pis": {
+            "next_station": "Wien Hbf",
+            "next_station_arrival_utc": "",
+            "scheduled_departure": "2026-05-19T12:05:00Z",
+            "actual_departure": "",
+            "platform": "2",
+            "delay_min": 0,
+        },
+        "occupancy": {},
+        "reservations": {"car-1": 12},
     }
-    with TestClient(app) as tc:
-        resp = tc.post("/context", json=wire_body)
+
+
+@pytest.mark.contract
+def test_real_full_delta_push_accepted_and_scheduled_departure_lands() -> None:
+    """6-4 AC1/AC3 — the REAL vlan-pollers full-delta `/context` body (with nested `pis`,
+    `occupancy`, `alarms`, `trip_number`) must be ACCEPTED (200, not 422), and
+    scheduled_departure must land from the nested `pis` object — the canonical wire.
+    """
+    tc, ctx, http_client = _build_test_app()
+    with tc:
+        resp = tc.post("/context", json=_real_full_delta_body())
     assert resp.status_code == 200, resp.text
-    assert ctx.scheduled_departure == "2026-05-19T12:05:00Z"
+    assert ctx.scheduled_departure == "2026-05-19T12:05:00Z"  # from nested pis
+    assert ctx.station_approach is True
+    assert ctx.reservations == {"car-1": 12}
+    del http_client
+
+
+@pytest.mark.contract
+def test_context_push_still_rejects_genuinely_unknown_field() -> None:
+    """6-4 AC2 — the reconciliation accepts the KNOWN producer keys, not ALL keys.
+    A genuinely-unknown field must still 422 (strict-validation intent preserved)."""
+    tc, _ctx, http_client = _build_test_app()
+    with tc:
+        resp = tc.post("/context", json={"made_up_field": True})
+    assert resp.status_code == 422
     del http_client
 
 

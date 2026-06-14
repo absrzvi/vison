@@ -17,15 +17,36 @@ integer id; the contract test replays the exact int type.
 """
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, StrictBool
+
+
+class PisPush(BaseModel):
+    """Nested `pis` object inside the vlan-pollers full-delta push (E6-S4).
+
+    fusion only consumes ``scheduled_departure`` (for E10-S4 seconds_to_departure).
+    ``extra='ignore'`` tolerates the other PisState fields (next_station, platform,
+    delay_min, …) without listing them, so a new PisState field never 422s fusion.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    scheduled_departure: str | None = None
 
 
 class ContextPushModel(BaseModel):
     """POST /context body. Every field is optional with ``None`` meaning
     "absent in this push — keep current ContextState value". This is the
     resolved contract from code-review decision 2 + 5 (2026-05-20).
+
+    E6-S4: declares the full vlan-pollers `_state_to_dict` key set so the real
+    full-delta push is ACCEPTED (200) instead of 422'd. `extra='forbid'` is
+    retained so a genuinely-unknown/typo'd field still fails loudly. fusion only
+    READS the keys it needs (pis.scheduled_departure, speed, station_approach,
+    reservations, suppression flags, …); `trip_number`/`alarms`/`occupancy` are
+    accepted-and-ignored (fusion gets occupancy via /candidates/occupancy_update,
+    not the context push — comfort_index.py D4).
     """
 
     model_config = ConfigDict(strict=True, extra="forbid")
@@ -59,12 +80,19 @@ class ContextPushModel(BaseModel):
     # E10-S1 AC9: door controller firmware version from SNMP (absent keeps prior).
     door_firmware_version: str | None = None
 
-    # E10-S4: scheduled departure (ISO-UTC) for seconds_to_departure derivation.
-    # vlan-pollers POSTs this as a FLAT top-level key via a targeted /context push in
-    # update_pis (mirroring set_station_approach) — NOT the nested `pis` dict in the
-    # full-delta push, which this extra='forbid' model rejects.
-    # Absent keeps prior; an explicit value (incl. "") replaces.
-    scheduled_departure: str | None = None
+    # E10-S4 (rewired by E6-S4): scheduled departure for seconds_to_departure now
+    # arrives NESTED inside the full-delta push's `pis` object (the canonical wire);
+    # update_from_push reads pis.scheduled_departure. The flat top-level field +
+    # targeted update_pis push from E10-S4 are removed (single source of truth).
+    pis: PisPush | None = None
+
+    # E6-S4 accept-and-ignore: present in the real vlan-pollers full-delta body but
+    # NOT consumed by fusion (occupancy → /candidates/occupancy_update; alarms →
+    # diagnostics path; trip_number → unused). Declared so the push validates;
+    # never written to ContextState (no speculative plumbing).
+    trip_number: str | None = None
+    alarms: list[dict[str, Any]] | None = None
+    occupancy: dict[str, Any] | None = None
 
 
 class SlipFallCandidate(BaseModel):

@@ -283,12 +283,16 @@ def test_seconds_to_departure_in_transit_returns_none() -> None:
 
 @pytest.mark.unit
 def test_context_push_carries_scheduled_departure() -> None:
-    """The real targeted-push WIRE BODY (raw dict, as vlan-pollers POSTs) validates
-    through ContextPushModel and lands on ContextState — not synthetic kwargs."""
+    """The real full-delta WIRE BODY (raw dict, as vlan-pollers POSTs) validates
+    through ContextPushModel and scheduled_departure lands from the NESTED `pis`
+    object (E6-S4 canonical wire) — not a flat key, not synthetic kwargs."""
     from fusion.models import ContextPushModel
 
     ctx = ContextState()
-    wire_body = {"scheduled_departure": "2026-05-20T08:01:30Z", "journey_id": "J1"}
+    wire_body = {
+        "journey_id": "J1",
+        "pis": {"scheduled_departure": "2026-05-20T08:01:30Z", "platform": "2"},
+    }
     ctx.update_from_push(ContextPushModel.model_validate(wire_body))
     assert ctx.scheduled_departure == "2026-05-20T08:01:30Z"
 

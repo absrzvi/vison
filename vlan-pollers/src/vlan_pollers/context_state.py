@@ -88,18 +88,10 @@ class ContextStateManager:
         if dataclasses.asdict(self._state.pis) == dataclasses.asdict(pis):
             return
         self._state.pis = pis
-        # E10-S4: targeted fusion push so fusion's flat `scheduled_departure` field is
-        # populated (fusion's ContextPushModel has extra='forbid' and reads a top-level
-        # scheduled_departure — it does NOT read the nested `pis` dict the full-delta
-        # push carries). Mirrors set_station_approach. The full-delta push below still
-        # carries pis/occupancy to inference.
-        await _post_with_retry(
-            f"{self._fusion_url}/context",
-            {
-                "scheduled_departure": pis.scheduled_departure,
-                "journey_id": self._state.journey_id,
-            },
-        )
+        # E6-S4: scheduled_departure now reaches fusion via the full-delta push's
+        # nested `pis` (fusion's ContextPushModel declares it and reads
+        # pis.scheduled_departure). The E10-S4 targeted flat push is removed — single
+        # delivery path, no divergence.
         await self._push_context_delta()
 
 
@@ -118,9 +110,16 @@ class ContextStateManager:
         await self._push_context_delta()
 
     async def _push_context_delta(self) -> None:
+        # E6-S4 (deferred F21): isolate per-consumer failures — a fusion outage must
+        # not starve inference of the push (and vice versa). Each POST is attempted
+        # and its failure logged independently; the caller's poller swallows nothing
+        # it shouldn't, since both consumers always get their turn.
         payload = _state_to_dict(self._state)
         for url in (self._fusion_url, self._inference_url):
-            await _post_with_retry(f"{url}/context", payload)
+            try:
+                await _post_with_retry(f"{url}/context", payload)
+            except Exception:
+                log.warning("context_push_failed", target=url, recoverable=True)
 
 
 def _state_to_dict(state: ContextState) -> dict[str, Any]:
