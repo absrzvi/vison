@@ -7,10 +7,11 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from cloud_backend.config import get_settings
 from cloud_backend.main import app
 
-_HEADERS = {"X-API-Key": get_settings().api_key}
+from .conftest import auth_header
+
+_HEADERS = auth_header()
 _ENDPOINT = "/api/v1/escalations-audit"
 
 

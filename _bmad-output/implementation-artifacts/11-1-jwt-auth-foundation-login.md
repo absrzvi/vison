@@ -1,10 +1,24 @@
 ---
-baseline_commit: 4384535
+baseline_commit: 2e2f5a4
 ---
 
 # Story 11.1: JWT Auth Foundation + Login Flow
 
-Status: ready-for-dev
+Status: review
+
+<!-- PRE-FLIGHT RESOLUTION (Amelia, 2026-06-14, dev-story): The D8 open question is resolved.
+     Verified: the live frontend has NO SSE/EventSource client — FleetContext.jsx:24-31 wires
+     RealWebSocketClient (WebSocket → a backend /ws that does not exist) when VITE_WS_URL is set,
+     else MockWebSocketClient. The backend's only live route is SSE /api/v1/alerts/stream.
+     USER DECISION: 11-1 swaps alerts_sse to the ?token= query-param verifier (same verify core,
+     preserves the AC4 seam) and proves it with a BACKEND integration test only. NO browser SSE
+     client is wired in this story (there is none to wire); building a real SSE client + fixing the
+     WS/SSE transport mismatch stays the already-flagged separate task. AC6's "live stream carries
+     identity" is therefore satisfied backend-side (route-level ?token= gate + integration test);
+     no SSE browser-verify in T8 (the login flow IS still browser-verified per AC6).
+     Note: ai_pipeline.py and the standalone /api/v1/health route SHARE prefix /api/v1/health — both
+     are cut over; AC5 treats /api/v1/health as one gated prefix. baseline_commit corrected
+     4384535 → 2e2f5a4 (the original predated this story file; 2e2f5a4 is the true pre-dev HEAD). -->
 
 <!-- Created 2026-06-14 via bmad-create-story (Amelia). First story of Epic 11 (Control Centre Admin & Identity).
      Source: _bmad-output/planning-artifacts/epics.md §"Epic 11" → "E11-S1 — JWT auth foundation + login flow".
@@ -104,37 +118,14 @@ Write each to fail for the right reason first, then implement:
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — Dependencies + Settings** (AC1, AC4, AC7, D5, D6)
-  - [ ] Add `pyjwt` and `passlib[bcrypt]` to `cloud-backend/pyproject.toml` (pin versions; verify latest stable via Context7 before pinning — see Dev Notes "Latest tech").
-  - [ ] Add to `Settings` ([config/__init__.py](../../cloud-backend/src/cloud_backend/config/__init__.py)): `jwt_secret: str = ""` (env `JWT_SECRET`, fail-closed empty default — comment it like `cc_admin_key`), `jwt_issuer: str = "oebb-cloud-backend"`, `jwt_algorithm: str = "HS256"`, `jwt_access_ttl_minutes: int = 60`. Add all four to `.env.example` if one exists for this package.
-- [ ] **T2 — Alembic 0009 users table** (AC9, D7)
-  - [ ] `cloud-backend/migrations/versions/0009_users.py`, `revision="0009"`, `down_revision="0008"` (current head — [0008_escalation_seconds_to_departure.py](../../cloud-backend/migrations/versions/0008_escalation_seconds_to_departure.py)). Mirror the [0006_escalations.py](../../cloud-backend/migrations/versions/0006_escalations.py) shape.
-  - [ ] Columns: `user_id` (`UUID(as_uuid=False)`, PK), `username` (Text, unique, NOT NULL), `password_hash` (Text, NOT NULL), `role` (Text, NOT NULL, `CheckConstraint("role IN ('admin','operator')", name="ck_users_role_valid")`), `is_active` (Boolean, NOT NULL, server_default `true`), `created_at`/`updated_at` (TIMESTAMPTZ, NOT NULL, server_default `now()`). Unique index on `username`.
-  - [ ] New-table-only (safe under concurrent reads). `test_upgrade_head_idempotent` must still pass.
-- [ ] **T3 — auth module: verification seam + token mint** (AC1–AC4, AC7, D5, D7)
-  - [ ] Extend [api/auth.py](../../cloud-backend/src/cloud_backend/api/auth.py): `CurrentUser` pydantic model `{user_id, username, role}`; `hash_password`/`verify_password` (passlib bcrypt); `create_access_token(user) -> str` (claims `sub`,`role`,`iss`,`exp`); `get_current_user(creds = Security(HTTPBearer(auto_error=False))) -> CurrentUser` (decode with explicit `algorithms=[settings.jwt_algorithm]`, `issuer=settings.jwt_issuer`, `options={"require":["exp","sub","role"]}` → 401 on any `PyJWTError`/missing claim, **never 500**); `require_role(*roles)` factory → 403 on role mismatch.
-  - [ ] **Seam discipline (AC4):** `get_current_user` reads algorithm/issuer/key from `Settings` only; the 14 routers depend on `get_current_user`/`require_role`, never on JWT internals.
-- [ ] **T4 — routes/auth.py: login + me** (AC1, AC2, Security Test 7)
-  - [ ] `POST /api/v1/auth/login` (unauthenticated): look up user by username; **always** run `verify_password` (against a dummy hash if user absent — uniform timing, Security Test 7); on match + `is_active` mint token; else 401 ADR-10. Mount in [main.py](../../cloud-backend/src/cloud_backend/main.py).
-  - [ ] `GET /api/v1/auth/me` (`Depends(get_current_user)`) → returns `CurrentUser`.
-- [ ] **T5 — frontend login + token store + interceptor** (AC6) — *UX: see Freya note in Dev Notes*
-  - [ ] `control-centre/src/components/auth/Login.jsx` + CSS (use `--obb-*` tokens — see Dev Notes token list); `/login` route in the router.
-  - [ ] Token store (`src/lib/auth/tokenStore.js`): in-memory + `sessionStorage`; `getToken/setToken/clearToken`.
-  - [ ] Central fetch wrapper / interceptor: attach `Authorization: Bearer <token>`; on `401` clear token + redirect `/login`. **Replace the `X-API-Key: VITE_API_KEY` header** across the 25 `src/api/*.js` files (Dev Notes lists them) — prefer routing them through one shared helper if not already.
-  - [ ] Route guard: unauthenticated → `/login`; logout control clears token.
-- [ ] **T6 — staged cutover of 14 routers + /api/v1/health** (AC5, D2, D3, D4) — *do AFTER T3–T5 are green*
-  - [ ] In each of the 14 router files, swap `dependencies=[Security(require_api_key)]` → `dependencies=[Security(get_current_user)]` (router list in Dev Notes). For [health.py:77](../../cloud-backend/src/cloud_backend/routes/health.py), swap the per-route `dependencies=[Security(require_api_key)]` on `/api/v1/health` only.
-  - [ ] **Leave `/health/live` and `/health/ready` OPEN** (D3).
-  - [ ] **Do NOT delete** `require_api_key`/`Settings.api_key` (D4) — add the dead-code comment; cleanup deferred to E11-S3.
-  - [ ] Update [tests/unit/test_rest_api.py](../../cloud-backend/tests/unit/test_rest_api.py) and any test using `_HEADERS = {"X-API-Key": ...}` to use a Bearer token (these will break on cutover — that's expected; fix them in the same pass).
-- [ ] **T7 — ADR-23 + ADR-7/ADR-22 updates + CLAUDE.md** (AC8, D1)
-  - [ ] Author `#### ADR-23: Self-Contained JWT Authentication (2026-06-14)` in [architecture.md](../../_bmad-output/planning-artifacts/architecture.md) after ADR-22: decision (self-contained HS256 JWT, local users table, bcrypt), the **verification-seam contract** (AC4), and the OIDC/Keycloak Phase-2 swap-in (cite ADR-6/ADR-7 upgrade-path language).
-  - [ ] Update ADR-7 ([architecture.md:568](../../_bmad-output/planning-artifacts/architecture.md)) and ADR-22's line-712 note (D1).
-  - [ ] Rewrite the `cloud-backend/CLAUDE.md` "Auth" line to match shipped reality (`get_current_user` real; `Authorization: Bearer`; `require_role` in route).
-- [ ] **T8 — Security Tests (RED-first) + integration tests** (Security Tests §, Integration test §, AC9)
-  - [ ] Write the 8 Security Tests first (RED), then `test_auth_flow_end_to_end` (A3 real-seed), `test_all_protected_routes_require_token` (AC5), `test_seam_oidc_swap` (AC4).
-  - [ ] **Run integration tests on real Postgres and watch them pass BEFORE flipping to review** (A1 hard gate). If Docker truly unavailable after a real attempt, HALT and tell the user — do not flip to review on unit coverage alone.
-  - [ ] Browser-verify the login flow (AC6) — golden path + bad-creds + expired-token→redirect.
+- [x] **T1 — Dependencies + Settings** (AC1, AC4, AC7, D5, D6) — pyjwt + bcrypt (NOT passlib, see Change Log 1) in pyproject.toml; 4 jwt_* Settings fields with fail-closed empty jwt_secret + dead-key comment on api_key.
+- [x] **T2 — Alembic 0009 users table** (AC9, D7) — `0009_users.py`, down_revision 0008, columns + role check + unique username index; idempotent (test green on real PG).
+- [x] **T3 — auth module: verification seam + token mint** (AC1–AC4, AC7, D5, D7) — `_verify_token` core (config-driven algorithms allow-list + issuer + require exp/sub/role) with two extractors (`get_current_user` header, `get_current_user_from_query` ?token=); `create_access_token`; `require_role` factory; bcrypt hash/verify with 72-byte truncation.
+- [x] **T4 — routes/auth.py: login + me** (AC1, AC2, Security Test 7) — login (unconditional dummy-hash verify → uniform timing), /me; `create_user` helper for the A3 real-seed path; mounted in main.py.
+- [x] **T5 — frontend login + token store + interceptor** (AC6) — Login.jsx + CSS (--obb-* dark-ops), /login route + RequireAuth guard, tokenStore (sessionStorage, env-safe), authFetch (authHeaders + handle401), AuthContext, all 9 src/api/*.js + the dismissal beacon swapped to Bearer.
+- [x] **T6 — staged cutover of 15 routers + /api/v1/health** (AC5, D2, D3, D4) — all router gates → get_current_user (alerts_sse → get_current_user_from_query per D8); capacity_review + preferences param-deps swapped (queued_by→username, oid→user_id per user decision); probes stay open; require_api_key kept importable (D4); 10 unit + 9 integration test files re-pointed to Bearer.
+- [x] **T7 — ADR-23 + ADR-7/ADR-22 updates + CLAUDE.md** (AC8, D1) — ADR-23 authored in architecture.md; ADR-7 + ADR-22:712 updated; cloud-backend/CLAUDE.md Auth section rewritten to shipped reality.
+- [x] **T8 — Security Tests (RED-first) + integration tests** (Security Tests §, Integration test §, AC9) — 8 security tests (13 incl. positive) green; `test_auth_flow_end_to_end` (A3 real-seed), `test_all_protected_routes_require_token` (AC5, 15 prefixes + open probes/login), `test_seam_oidc_swap` (AC4) all green on real Postgres (A1 gate satisfied, Docker confirmed up); browser-verified login flow (see Completion Notes).
 
 ## Dev Notes
 
@@ -228,8 +219,34 @@ Confirm current stable versions + any security notes via Context7 before pinning
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Amelia)
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- **DEVIATION — bcrypt direct, not passlib (Change Log 1).** The T1 "verify versions via Context7 before pinning" step surfaced a real incompatibility: `passlib 1.7.4` (last released 2020, unmaintained) cannot read `bcrypt 5.0.0`'s version (`module 'bcrypt' has no attribute '__about__'`) and raised `ValueError` on its 72-byte detection probe. Switched to using `bcrypt` directly (already a transitive dep) — fewer dependencies, no stale wrapper, explicit 72-byte truncation on both hash and verify.
+- **CUTOVER SCOPE — 15 routers + 1 per-route gate (16 surfaces).** Pre-flight (D2) confirmed no central middleware. `capacity_review` is two routers; `ai_pipeline` + the standalone health route share `/api/v1/health`. `preferences` + `capacity_review` used the API key as a VALUE (operator-id key / `queued_by` attribution) — per user decision, swapped to `current_user.user_id` / `current_user.username` now (the `operator_preferences` DATA re-key migration stays E11-S3; existing rows read 404→graceful defaults until then). Dead `_key_fingerprint` helper + `hashlib` import removed from capacity_review (my own change).
+- **D8 RESOLVED at pre-flight (user decision).** No live SSE/EventSource client exists (FleetContext wires a WebSocket client → a backend `/ws` that doesn't exist, else the mock). So the SSE `?token=` gate is backend-only + integration-tested; no browser SSE-client wiring (that + the WS/SSE transport mismatch is the separate flagged task 8-3).
+- **SECURITY-SENTINEL caught a Major (fixed in-review):** the cutover broke the 10-2 silent-dismissal telemetry beacon (`src/lib/telemetry/dismissal.js`) — it POSTs to a now-JWT-gated escalations endpoint but still sent `X-API-Key`, so it would 401 silently (the `.catch()` hides it). The beacon lives outside the 9 `src/api/*.js` files, so it wasn't in the AC5 inventory. Found by grepping the real diff for residual `X-API-Key`. Fixed → `authHeaders()` (Bearer); test updated. Sentinel verdict APPROVED.
+- **TEST-ISOLATION fix:** `get_settings()` builds fresh from env each call, so multiple test modules mutating `JWT_SECRET` caused flaky cross-module failures. Added a root `tests/conftest.py` pinning a suite-stable secret; verified deterministic across 3 consecutive full-suite runs (228 backend tests).
+- **GATES (all green):** backend 113 unit + 115 integration on real Postgres (testcontainers), mypy --strict clean (38 files), ruff clean (src + tests). Frontend 264 vitest. A1 integration gate satisfied (Docker up, ran locally — not deferred to CI).
+- **BROWSER-VERIFIED (AC6)** with a live backend (seeded user `claudia`/operator) + Vite dev-proxy (added `control-centre-verify` launch config; prod is same-origin so no CORS): (1) unauthenticated → `/dashboard/live` redirects to `/login` (snapshot: login form); (2) golden path — valid creds → token stored → full dashboard renders (header/nav/KPIs/fleet list); (3) bad creds → stays on /login, error "Invalid username or password" (role=alert); (4) corrupted token → backend 401 (verify seam rejects tamper). Only console errors are the pre-existing `fetchTrainAlerts` 404s (now 404 not 401 = auth is flowing).
+
 ### File List
+
+**Backend (new):** `migrations/versions/0009_users.py`, `src/cloud_backend/routes/auth.py`, `tests/conftest.py`, `tests/unit/conftest.py`, `tests/unit/test_auth_security.py`, `tests/integration/conftest.py`, `tests/integration/test_auth_jwt.py`
+**Backend (modified):** `pyproject.toml`, `src/cloud_backend/config/__init__.py`, `src/cloud_backend/api/auth.py`, `src/cloud_backend/main.py`, `CLAUDE.md`, the 15 cut-over routers (`ai_pipeline`, `ai_quality`, `alerts_sse`, `analytics`, `capacity_review`, `config`, `escalations`, `escalations_audit`, `fleet`, `health`, `ingest`, `kpi`, `maintenance`, `preferences`), 10 unit test files + 9 integration test files re-pointed to Bearer
+**Frontend (new):** `src/lib/auth/tokenStore.js`, `src/lib/auth/authFetch.js`, `src/lib/auth/__tests__/authFetch.test.js`, `src/api/auth.js`, `src/context/AuthContext.jsx`, `src/components/auth/Login.jsx`, `src/components/auth/Login.css`
+**Frontend (modified):** `src/main.jsx`, `src/App.jsx`, `src/test-setup.js`, `vite.config.js` (dev proxy), the 9 `src/api/*.js`, `src/lib/telemetry/dismissal.js` (+test), 6 `src/api/__tests__/*.js`
+**Docs:** `_bmad-output/planning-artifacts/architecture.md` (ADR-23 + ADR-7/ADR-22), `.claude/launch.json` (control-centre-verify config — gitignored, local tooling)
+
+## Change Log
+
+| # | Change | Rationale |
+|---|---|---|
+| 1 | Dependency: `passlib[bcrypt]` → `bcrypt` (direct) | passlib 1.7.4 is incompatible with bcrypt 5.0.0 (can't read version → ValueError). Surfaced by the Context7 version-check gate. bcrypt direct is fewer deps + explicit 72-byte handling. |
+| 2 | `preferences`/`capacity_review` operator-id source swapped to JWT identity | These used the API-key string as a value (prefs key / queued_by). After the gate swap they must use `current_user` (user decision). DATA migration of existing operator_preferences rows stays E11-S3. |
+| 3 | Silent-dismissal beacon → Bearer (security-sentinel Major) | The beacon's endpoint is now JWT-gated; it still sent X-API-Key → would 401 silently. |
+| 4 | Root `tests/conftest.py` pins a suite-stable JWT secret | `get_settings()` reads env per-call; cross-module secret mutation caused flaky tests. |
+| 5 | `vite.config.js` dev proxy (VITE_DEV_PROXY) + `control-centre-verify` launch config | Browser-verify needs same-origin (prod serves SPA from backend origin; no CORS). Dev-only, opt-in via env. |

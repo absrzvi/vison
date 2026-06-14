@@ -15,12 +15,12 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.ai_quality import AlertQualityRates
-from ..api.auth import require_api_key
+from ..api.auth import get_current_user
 from ..database import get_db
 from ..services.ai_quality_rates import resolution_rates
 
 router = APIRouter(
-    prefix="/api/v1/ai-quality", dependencies=[Security(require_api_key)]
+    prefix="/api/v1/ai-quality", dependencies=[Security(get_current_user)]
 )
 
 

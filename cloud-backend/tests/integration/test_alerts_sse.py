@@ -50,6 +50,8 @@ from testcontainers.postgres import PostgresContainer
 
 from cloud_backend.config import get_settings
 
+from .conftest import auth_header
+
 _ALEMBIC_INI = str(Path(__file__).parents[2] / "alembic.ini")
 
 
@@ -124,10 +126,8 @@ async def app_client(
     _subscribers.clear()
 
 
-# P9: API key comes from settings, not a hardcoded literal — no key value
-# appears in this test file. The test assertion file in test_security.py
-# greps for the literal to verify this.
-_HEADERS = {"X-API-Key": get_settings().api_key}
+# E11-S1: protected routes now require a JWT Bearer token (auth_header()).
+_HEADERS = auth_header()
 
 
 # ── Helper: fake Request with controllable is_disconnected ────────────────────
@@ -533,8 +533,8 @@ async def test_unauthenticated_returns_401_envelope(app_client: AsyncClient) -> 
     assert r.status_code == 401
     body = r.json()
     assert body["detail"]["error"] == "UNAUTHORIZED"
-    # P10: full detail string assertion
-    assert body["detail"]["detail"] == "API key required"
+    # E11-S1: SSE now authenticates via ?token= JWT (D8); envelope detail string.
+    assert body["detail"]["detail"] == "Valid token required"
     assert body["detail"]["recoverable"] is False
 
 

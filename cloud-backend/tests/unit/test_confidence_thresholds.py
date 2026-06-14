@@ -6,12 +6,13 @@ import inspect
 import pytest
 from fastapi.testclient import TestClient
 
-from cloud_backend.config import get_settings
 from cloud_backend.main import app
+
+from .conftest import auth_header
 
 pytestmark = pytest.mark.unit
 
-_HEADERS = {"X-API-Key": get_settings().api_key}
+_HEADERS = auth_header()
 
 _EXPECTED_CLASSES = {
     "unattended_bag",

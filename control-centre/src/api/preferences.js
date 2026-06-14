@@ -3,8 +3,9 @@ import {
   DEFAULT_STALENESS_THRESHOLD_SECONDS,
 } from '../constants/preferences';
 
+import { authHeaders, handle401 } from '../lib/auth/authFetch';
+
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
-const API_KEY  = import.meta.env.VITE_API_KEY  ?? '';
 
 const FETCH_TIMEOUT_MS = 10000;
 
@@ -25,11 +26,11 @@ const _DEFAULTS = {
  * Throws on network errors or unexpected non-404 error statuses.
  */
 export async function getPreferences() {
-  const res = await fetch(`${API_BASE}/api/v1/operators/me/preferences`, {
+  const res = handle401(await fetch(`${API_BASE}/api/v1/operators/me/preferences`, {
     method: 'GET',
-    headers: { 'X-API-Key': API_KEY },
+    headers: authHeaders(),
     signal: _timeoutSignal(FETCH_TIMEOUT_MS),
-  });
+  }));
   if (res.status === 404) return { ..._DEFAULTS };
   if (!res.ok) {
     const err = new Error(`API error ${res.status}`);
@@ -44,15 +45,12 @@ export async function getPreferences() {
  * can revert the UI and show an error toast.
  */
 export async function patchPreferences(patch) {
-  const res = await fetch(`${API_BASE}/api/v1/operators/me/preferences`, {
+  const res = handle401(await fetch(`${API_BASE}/api/v1/operators/me/preferences`, {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': API_KEY,
-    },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(patch),
     signal: _timeoutSignal(FETCH_TIMEOUT_MS),
-  });
+  }));
   if (!res.ok) {
     const err = new Error(`API error ${res.status}`);
     err.status = res.status;

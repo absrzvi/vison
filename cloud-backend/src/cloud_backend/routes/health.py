@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..api.auth import require_api_key
+from ..api.auth import get_current_user
 from ..config.confidence_thresholds import DEGRADED_BANNER_FLOOR
 from ..database import check_connection, get_db
 
@@ -74,7 +74,7 @@ async def health_ready() -> JSONResponse:
     return JSONResponse(content={"status": "ok", "db_connected": True})
 
 
-@router.get("/api/v1/health", dependencies=[Security(require_api_key)])
+@router.get("/api/v1/health", dependencies=[Security(get_current_user)])
 async def api_health(db: AsyncSession = Depends(get_db)) -> dict[str, str | bool]:
     """CC-facing health summary. E10-S1 AC17: server-computed degraded flag
     (fleet-wide rolling-1h mean of model-basis confidence vs the banner floor).

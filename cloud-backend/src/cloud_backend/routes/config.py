@@ -3,13 +3,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Security
 
-from ..api.auth import require_api_key
+from ..api.auth import get_current_user
 from ..config.confidence_thresholds import (
     DEFAULT_CONFIDENCE_THRESHOLDS,
     DEGRADED_BANNER_FLOOR,
 )
 
-router = APIRouter(prefix="/api/v1/config", dependencies=[Security(require_api_key)])
+router = APIRouter(prefix="/api/v1/config", dependencies=[Security(get_current_user)])
 
 
 @router.get("/confidence-thresholds")

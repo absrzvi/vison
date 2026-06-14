@@ -15,14 +15,14 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..api.auth import require_api_key
+from ..api.auth import get_current_user
 from ..api.escalations_audit import AlertFunnel
 from ..database import get_db
 
 log = structlog.get_logger()
 
 router = APIRouter(
-    prefix="/api/v1/escalations-audit", dependencies=[Security(require_api_key)]
+    prefix="/api/v1/escalations-audit", dependencies=[Security(get_current_user)]
 )
 
 

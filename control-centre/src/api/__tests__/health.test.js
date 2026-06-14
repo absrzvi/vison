@@ -34,7 +34,7 @@ describe('getSystemHealth', () => {
     expect(result).toEqual(MOCK_RESPONSE);
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/v1/analytics/system-health'),
-      expect.objectContaining({ headers: expect.objectContaining({ 'X-API-Key': expect.any(String) }) })
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer test-jwt-token' }) })
     );
   });
 

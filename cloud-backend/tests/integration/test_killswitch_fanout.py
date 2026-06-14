@@ -22,8 +22,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-from cloud_backend.config import get_settings
 from cloud_backend.services.fanout_filter import alert_class_filter
+
+from .conftest import auth_header
 
 _ALEMBIC_INI = str(Path(__file__).parents[2] / "alembic.ini")
 _ADMIN_KEY = "integration-admin-key-fixture"
@@ -90,7 +91,7 @@ async def app_client(
     _subscribers.clear()
 
 
-_API_HEADERS = {"X-API-Key": get_settings().api_key}
+_API_HEADERS = auth_header()
 _ADMIN_HEADERS = {"X-Admin-Key": _ADMIN_KEY}
 
 

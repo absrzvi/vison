@@ -8,15 +8,16 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from cloud_backend.config import get_settings
 from cloud_backend.database import get_db
 from cloud_backend.main import app
 from cloud_backend.routes.health import degraded_cache
 
+from .conftest import auth_header
+
 pytestmark = pytest.mark.unit
 
-# R3 clou-2: /api/v1/health now requires X-API-Key (matching sibling /api/v1/*).
-_HEADERS = {"X-API-Key": get_settings().api_key}
+# E11-S1: /api/v1/health now requires a JWT Bearer token (matching sibling /api/v1/*).
+_HEADERS = auth_header()
 
 
 class _MeanSession:

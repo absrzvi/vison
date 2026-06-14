@@ -14,7 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-from cloud_backend.config import get_settings
+from .conftest import auth_header
 
 _ALEMBIC_INI = str(Path(__file__).parents[2] / "alembic.ini")
 _MV = {"detector_arch": "yolox_s_leaky", "detector_code": "git:9d4a60df"}
@@ -104,7 +104,7 @@ async def test_heartbeat_ingest_upserts_row(
     app_client: AsyncClient,
     factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    headers = {"X-API-Key": get_settings().api_key}
+    headers = auth_header()
 
     r = await app_client.post(
         "/api/v1/events",

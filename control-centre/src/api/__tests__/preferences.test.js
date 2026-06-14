@@ -44,13 +44,13 @@ describe('getPreferences', () => {
     await expect(getPreferences()).rejects.toMatchObject({ status: 500 });
   });
 
-  it('GETs /api/v1/operators/me/preferences with X-API-Key header', async () => {
+  it('GETs /api/v1/operators/me/preferences with Authorization header', async () => {
     mockFetch.mockResolvedValueOnce(okResponse({ threshold_sec: 60, staleness_threshold_sec: 120 }));
     await getPreferences();
     const [url, opts] = mockFetch.mock.calls[0];
     expect(url).toMatch(/\/api\/v1\/operators\/me\/preferences$/);
     expect(opts.method).toBe('GET');
-    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(opts.headers.Authorization).toBe('Bearer test-jwt-token');
   });
 });
 
@@ -77,7 +77,7 @@ describe('patchPreferences', () => {
     expect(url).toMatch(/\/api\/v1\/operators\/me\/preferences$/);
     expect(opts.method).toBe('PATCH');
     expect(JSON.parse(opts.body)).toEqual({ threshold_sec: 30 });
-    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(opts.headers.Authorization).toBe('Bearer test-jwt-token');
   });
 
   it('returns parsed body on 200', async () => {

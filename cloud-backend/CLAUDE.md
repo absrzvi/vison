@@ -54,7 +54,7 @@ src/cloud_backend/
 
 SSE push: the `/events` endpoint streams from an asyncio queue populated by the ingest worker. Do not poll the DB on each SSE tick — push from the queue.
 
-Auth: every protected endpoint uses `Depends(get_current_user)`. The `get_current_user` dependency validates the JWT and extracts role. Role checks happen inside the route, not in middleware.
+Auth (E11-S1 / ADR-23): self-contained JWT. Protected routers attach `Security(get_current_user)` (Authorization: Bearer) — auth is per-router, there is no central middleware. `get_current_user` decodes/validates the token (via the single `_verify_token` core in `api/auth.py`, which reads issuer/algorithm/key from `Settings` only) and yields a `CurrentUser{user_id, username, role}`. Role-gate a route with `Security(require_role("admin"))` (a dependency factory) — not by checking the role inside the body. The SSE stream (`/api/v1/alerts/stream`) uses `get_current_user_from_query` (`?token=`) because EventSource can't set a header. `login` and the infra probes (`/health/live`, `/health/ready`) stay unauthenticated. `JWT_SECRET` empty fails closed. The legacy `X-API-Key` (`require_api_key`) is retired for routing but kept importable until E11-S3/S4.
 
 Error shape: all 4xx/5xx responses use `{"detail": "..."}` — never return raw exception messages to clients.
 

@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from cloud_backend.config import get_settings
 from cloud_backend.main import app
 
-_API_KEY = get_settings().api_key
-_HEADERS = {"X-API-Key": _API_KEY}
+from .conftest import auth_header
+
+_HEADERS = auth_header()
 
 # ── Security Tests ─────────────────────────────────────────────────────────
 
@@ -48,13 +48,13 @@ def test_patch_preferences_invalid_threshold_returns_422() -> None:
     assert body["detail"]["recoverable"] is True
 
 
-# SEC2: operator_id in request body is ignored — derived from API key server-side
+# SEC2: operator_id in request body is ignored — derived from the JWT identity
 @pytest.mark.unit
 def test_patch_preferences_body_operator_id_ignored() -> None:
     """Even if the client sends operator_id in the body, the server ignores it
-    and uses the API key to derive the real operator_id."""
+    and uses the authenticated user's user_id (E11-S1 JWT cutover)."""
     mock_row = MagicMock()
-    mock_row.operator_id = _API_KEY
+    mock_row.operator_id = "u-operator"  # = auth_header() token's user_id
     mock_row.threshold_sec = 60
     mock_row.staleness_threshold_sec = 120
 
@@ -113,7 +113,7 @@ def test_get_preferences_returns_404_when_no_row() -> None:
 @pytest.mark.unit
 def test_get_preferences_returns_200_with_row() -> None:
     mock_row = MagicMock()
-    mock_row.operator_id = _API_KEY
+    mock_row.operator_id = "u-operator"
     mock_row.threshold_sec = 90
     mock_row.staleness_threshold_sec = 180
 
@@ -134,7 +134,7 @@ def test_get_preferences_returns_200_with_row() -> None:
         body = r.json()
         assert body["threshold_sec"] == 90
         assert body["staleness_threshold_sec"] == 180
-        assert body["operator_id"] == _API_KEY
+        assert body["operator_id"] == "u-operator"
     finally:
         app.dependency_overrides.pop(get_db, None)
 
@@ -142,7 +142,7 @@ def test_get_preferences_returns_200_with_row() -> None:
 @pytest.mark.unit
 def test_patch_preferences_valid_threshold_returns_200() -> None:
     mock_row = MagicMock()
-    mock_row.operator_id = _API_KEY
+    mock_row.operator_id = "u-operator"
     mock_row.threshold_sec = 30
     mock_row.staleness_threshold_sec = 120
     mock_row.updated_at = "2026-05-18T10:00:00+00:00"

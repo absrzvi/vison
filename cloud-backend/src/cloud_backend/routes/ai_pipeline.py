@@ -8,10 +8,10 @@ from fastapi import APIRouter, Depends, Security
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..api.auth import require_api_key
+from ..api.auth import get_current_user
 from ..database import get_db
 
-router = APIRouter(prefix="/api/v1/health", dependencies=[Security(require_api_key)])
+router = APIRouter(prefix="/api/v1/health", dependencies=[Security(get_current_user)])
 
 _STALE_S = 180.0  # 3 minutes
 _RANK = {"green": 0, "amber": 1, "red": 2}

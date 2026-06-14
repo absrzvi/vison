@@ -27,10 +27,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-from cloud_backend.config import get_settings
+from .conftest import auth_header
 
 _ALEMBIC_INI = str(Path(__file__).parents[2] / "alembic.ini")
-_API_HEADERS = {"X-API-Key": get_settings().api_key}
+_API_HEADERS = auth_header()
 _ENDPOINT = "/api/v1/ai-quality/resolution-rates"
 
 

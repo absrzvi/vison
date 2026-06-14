@@ -24,12 +24,12 @@ from ..api.analytics import (
     PerTrainUptime,
     TrainHealthRecord,
 )
-from ..api.auth import require_api_key
+from ..api.auth import get_current_user
 from ..database import get_db
 
 log = structlog.get_logger()
 
-router = APIRouter(prefix="/api/v1/analytics", dependencies=[Security(require_api_key)])
+router = APIRouter(prefix="/api/v1/analytics", dependencies=[Security(get_current_user)])
 
 _VALID_RANGES = {"7d", "14d", "30d"}
 _RANGE_MAP = {"7d": timedelta(days=7), "14d": timedelta(days=14), "30d": timedelta(days=30)}

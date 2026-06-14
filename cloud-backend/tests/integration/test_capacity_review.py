@@ -12,6 +12,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
+from .conftest import auth_header
+
 
 @pytest.fixture(scope="module")
 def pg_url() -> Generator[str, None, None]:
@@ -98,7 +100,7 @@ async def client(pg_url: str) -> AsyncGenerator[AsyncClient, None]:
     await engine.dispose()
 
 
-_HEADERS = {"X-API-Key": "dev-insecure-key"}
+_HEADERS = auth_header()
 
 
 @pytest.mark.integration

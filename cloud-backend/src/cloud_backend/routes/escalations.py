@@ -18,7 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..api.auth import require_api_key
+from ..api.auth import get_current_user
 from ..api.escalations import (
     ACTION_TAG_KEYS,
     AckRequest,
@@ -31,7 +31,7 @@ from ..services.escalation_audit import record_silently_dismissed, record_transi
 
 log = structlog.get_logger()
 
-router = APIRouter(prefix="/api/v1/escalations", dependencies=[Security(require_api_key)])
+router = APIRouter(prefix="/api/v1/escalations", dependencies=[Security(get_current_user)])
 
 
 def _publish_lifecycle(escalation_id: str, status: str) -> None:

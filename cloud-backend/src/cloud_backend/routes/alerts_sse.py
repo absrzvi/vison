@@ -10,13 +10,18 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..api.auth import require_api_key
+from ..api.auth import get_current_user_from_query
 from ..database import get_db
 from ..services.fanout_filter import alert_class_filter
 
 log = structlog.get_logger()
 
-router = APIRouter(prefix="/api/v1/alerts", dependencies=[Security(require_api_key)])
+# SSE/EventSource cannot set an Authorization header, so this stream authenticates
+# via a ?token=<jwt> query param verified by the same JWT core as the header path
+# (D8 / ADR-23). Header-based get_current_user is NOT used here.
+router = APIRouter(
+    prefix="/api/v1/alerts", dependencies=[Security(get_current_user_from_query)]
+)
 
 # Alert event types pushed over SSE (ADR-20: landside push allow-list)
 ALERT_EVENT_TYPES = frozenset({

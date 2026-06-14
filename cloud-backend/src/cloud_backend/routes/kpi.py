@@ -9,12 +9,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..api.auth import require_api_key
+from ..api.auth import get_current_user
 from ..api.kpi import DelayMinutesAvoided
 from ..database import get_db
 from ..services.delay_minutes_avoided import delay_minutes_avoided
 
-router = APIRouter(prefix="/api/v1/kpi", dependencies=[Security(require_api_key)])
+router = APIRouter(prefix="/api/v1/kpi", dependencies=[Security(get_current_user)])
 
 _WINDOW_HOURS = 24
 

@@ -6,11 +6,11 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-from cloud_backend.config import get_settings
 from cloud_backend.main import app
 
-_API_KEY = get_settings().api_key
-_HEADERS = {"X-API-Key": _API_KEY}
+from .conftest import auth_header
+
+_HEADERS = auth_header()
 _VALID_BODY = {"train_id": "4011", "issue_summary": "CCTV degraded", "raised_by": "op-1"}
 
 

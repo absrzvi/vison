@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 describe('emitSilentlyDismissed', () => {
-  it('POSTs a keepalive request to the silently-dismissed endpoint with the X-API-Key header', () => {
+  it('POSTs a keepalive request to the silently-dismissed endpoint with the Authorization header', () => {
     emitSilentlyDismissed({
       escalationId: 'esc-1',
       operatorId: 'op-9',
@@ -29,7 +29,7 @@ describe('emitSilentlyDismissed', () => {
     expect(opts.method).toBe('POST');
     // keepalive is what lets the request survive page unload (sendBeacon successor).
     expect(opts.keepalive).toBe(true);
-    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(opts.headers.Authorization).toBe('Bearer test-jwt-token');
     expect(opts.headers['Content-Type']).toBe('application/json');
   });
 

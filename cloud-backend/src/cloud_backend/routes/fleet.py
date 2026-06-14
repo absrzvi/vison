@@ -6,12 +6,12 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..api.auth import require_api_key
+from ..api.auth import get_current_user
 from ..database import get_db
 
 log = structlog.get_logger()
 
-router = APIRouter(prefix="/api/v1/fleet", dependencies=[Security(require_api_key)])
+router = APIRouter(prefix="/api/v1/fleet", dependencies=[Security(get_current_user)])
 
 _SEVERITY_RANK = {"critical": 3, "warning": 2, "info": 1}
 _ALERT_TYPES = {

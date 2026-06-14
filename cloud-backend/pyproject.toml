@@ -16,6 +16,8 @@ dependencies = [
     "pydantic-settings>=2.2",
     "structlog>=24.1",
     "tenacity>=8.3",
+    "pyjwt>=2.8",
+    "bcrypt>=4.1",
     "oebb-shared",
 ]
 
@@ -42,6 +44,12 @@ select = ["E", "F", "B", "DTZ", "RUF", "I", "UP"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
 "src/**/routes/**" = ["B008"]
+
+# FastAPI's Depends/Security in argument defaults is the framework idiom, not the
+# B008 mutable-default bug. Treat them as immutable so the auth dependency
+# factory (api/auth.py) and inline-route tests don't trip B008.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Security"]
 
 [tool.mypy]
 strict = true

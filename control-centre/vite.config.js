@@ -58,6 +58,13 @@ function mockApiPlugin() {
 
 export default defineConfig({
   plugins: [react(), mockApiPlugin()],
+  // Dev-only: when VITE_DEV_PROXY is set, proxy /api to the local backend so the
+  // browser sees same-origin requests (prod serves the SPA from the backend
+  // origin, so no CORS there). Lets REST/auth surfaces be browser-verified
+  // without adding CORS middleware to the backend.
+  server: process.env.VITE_DEV_PROXY
+    ? { proxy: { '/api': { target: process.env.VITE_DEV_PROXY, changeOrigin: true } } }
+    : undefined,
   test: {
     environment: 'node',
     globals: true,

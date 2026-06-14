@@ -1,0 +1,79 @@
+/* E11-S1 login — dark-ops theme, --obb-* tokens only. */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--obb-surface-0);
+  padding: 24px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px;
+  background: var(--obb-surface-1);
+  border: 1px solid var(--obb-border-dark);
+  border-radius: 8px;
+}
+
+.login-title {
+  margin: 0;
+  font-size: 20px;
+  color: var(--obb-text-on-dark-1);
+}
+
+.login-subtitle {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--obb-text-on-dark-3);
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  color: var(--obb-text-on-dark-2);
+}
+
+.login-field input {
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--obb-text-on-dark-1);
+  background: var(--obb-surface-2);
+  border: 1px solid var(--obb-border-bright);
+  border-radius: 4px;
+}
+
+.login-field input:focus {
+  outline: none;
+  border-color: var(--obb-blue-accent);
+}
+
+.login-error {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--obb-sev-critical);
+}
+
+.login-submit {
+  margin-top: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--obb-text-on-dark-1);
+  background: var(--obb-blue-accent);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.login-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

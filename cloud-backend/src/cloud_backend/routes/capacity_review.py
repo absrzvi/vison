@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import csv
-import hashlib
 import io
 from datetime import UTC, datetime
 from typing import Any
@@ -14,7 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..api.auth import require_api_key
+from ..api.auth import CurrentUser, get_current_user
 from ..api.capacity_review import ReviewRequest, ReviewResponse, StatusResponse
 from ..database import get_db
 
@@ -33,21 +32,16 @@ def _csv_safe(value: str | None) -> str:
     return s
 
 
-def _key_fingerprint(api_key: str) -> str:
-    """Return a short SHA-256 fingerprint of the API key — never store the raw secret."""
-    return hashlib.sha256(api_key.encode()).hexdigest()[:16]
-
-
 # review/dismiss/reopen share the same router prefix as the analytics exceptions endpoint
 _exceptions_router = APIRouter(
     prefix="/api/v1/analytics/exceptions",
-    dependencies=[Security(require_api_key)],
+    dependencies=[Security(get_current_user)],
 )
 
 # export lives under a separate prefix
 _export_router = APIRouter(
     prefix="/api/v1/capacity-review-queue",
-    dependencies=[Security(require_api_key)],
+    dependencies=[Security(get_current_user)],
 )
 
 
@@ -56,7 +50,7 @@ async def review_exception(
     exception_id: str,
     body: ReviewRequest,
     db: AsyncSession = Depends(get_db),
-    api_key: str = Security(require_api_key),
+    current_user: CurrentUser = Security(get_current_user),
 ) -> ReviewResponse:
     now = datetime.now(UTC)
     result: CursorResult[Any] = await db.execute(  # type: ignore[assignment]
@@ -88,7 +82,7 @@ async def review_exception(
             "eid": exception_id,
             "priority": body.priority,
             "note": body.note,
-            "queued_by": _key_fingerprint(api_key),
+            "queued_by": current_user.username,
             "queued_at": now,
         },
     )
@@ -102,7 +96,7 @@ async def review_exception(
 async def dismiss_exception(
     exception_id: str,
     db: AsyncSession = Depends(get_db),
-    api_key: str = Security(require_api_key),
+    current_user: CurrentUser = Security(get_current_user),
 ) -> StatusResponse:
     result: CursorResult[Any] = await db.execute(  # type: ignore[assignment]
         text("""
@@ -124,7 +118,7 @@ async def dismiss_exception(
             ON CONFLICT (exception_id)
             DO UPDATE SET status = 'dismissed'
         """),
-        {"eid": exception_id, "queued_by": _key_fingerprint(api_key)},
+        {"eid": exception_id, "queued_by": current_user.username},
     )
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="exception not found")

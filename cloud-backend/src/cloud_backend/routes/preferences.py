@@ -3,7 +3,10 @@
 GET  /api/v1/operators/me/preferences
 PATCH /api/v1/operators/me/preferences
 
-operator_id is derived server-side from the X-API-Key header value.
+operator_id is the authenticated user's user_id (E11-S1 JWT cutover). Existing
+rows keyed by the old shared API-key string read as 404 → graceful defaults
+until E11-S3 re-keys/backfills them (Alembic migration). The data migration is
+E11-S3's job; this story only swaps the identity source.
 """
 from __future__ import annotations
 
@@ -13,14 +16,14 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..api.auth import require_api_key
+from ..api.auth import CurrentUser, get_current_user
 from ..database import get_db
 
 log = structlog.get_logger()
 
 router = APIRouter(
     prefix="/api/v1/operators/me",
-    dependencies=[Security(require_api_key)],
+    dependencies=[Security(get_current_user)],
 )
 
 _VALID_THRESHOLD = frozenset({30, 60, 90, 120})
@@ -49,7 +52,7 @@ class PreferencesPatch(BaseModel):
 
 @router.get("/preferences", response_model=PreferencesOut)
 async def get_preferences(
-    api_key: str = Security(require_api_key),
+    current_user: CurrentUser = Security(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PreferencesOut:
     result = await db.execute(
@@ -57,7 +60,7 @@ async def get_preferences(
             "SELECT operator_id, threshold_sec, staleness_threshold_sec "
             "FROM operator_preferences WHERE operator_id = :oid"
         ),
-        {"oid": api_key},
+        {"oid": current_user.user_id},
     )
     row = result.fetchone()
     if row is None:
@@ -82,7 +85,7 @@ async def get_preferences(
 @router.patch("/preferences", response_model=PreferencesPatchOut)
 async def patch_preferences(
     body: PreferencesPatch,
-    api_key: str = Security(require_api_key),
+    current_user: CurrentUser = Security(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PreferencesPatchOut:
     if body.threshold_sec is not None and body.threshold_sec not in _VALID_THRESHOLD:
@@ -121,7 +124,7 @@ async def patch_preferences(
     result = await db.execute(
         text(_UPSERT),
         {
-            "oid": api_key,
+            "oid": current_user.user_id,
             "t": body.threshold_sec if body.threshold_sec is not None else _DEFAULT_THRESHOLD,
             "s": (
                 body.staleness_threshold_sec

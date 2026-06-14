@@ -1,5 +1,6 @@
+import { authHeaders, handle401 } from '../lib/auth/authFetch';
+
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
-const API_KEY  = import.meta.env.VITE_API_KEY  ?? '';
 
 const FETCH_TIMEOUT_MS = 10_000;
 
@@ -11,11 +12,11 @@ function _timeoutSignal(ms) {
 }
 
 async function _get(path) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = handle401(await fetch(`${API_BASE}${path}`, {
     method: 'GET',
-    headers: { 'X-API-Key': API_KEY },
+    headers: authHeaders(),
     signal: _timeoutSignal(FETCH_TIMEOUT_MS),
-  });
+  }));
   if (!res.ok) {
     const err = new Error(`API error ${res.status}`);
     err.status = res.status;
@@ -25,15 +26,12 @@ async function _get(path) {
 }
 
 async function _post(path, body) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = handle401(await fetch(`${API_BASE}${path}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': API_KEY,
-    },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: body !== undefined ? JSON.stringify(body) : undefined,
     signal: _timeoutSignal(FETCH_TIMEOUT_MS),
-  });
+  }));
   if (!res.ok) {
     const err = new Error(`API error ${res.status}`);
     err.status = res.status;
@@ -76,11 +74,11 @@ export function reopenException(id) {
 
 export async function exportCapacityReviewCsv() {
   const dateStr = new Date().toISOString().slice(0, 10);
-  const res = await fetch(`${API_BASE}/api/v1/capacity-review-queue/export?format=csv`, {
+  const res = handle401(await fetch(`${API_BASE}/api/v1/capacity-review-queue/export?format=csv`, {
     method: 'GET',
-    headers: { 'X-API-Key': API_KEY },
+    headers: authHeaders(),
     signal: _timeoutSignal(FETCH_TIMEOUT_MS),
-  });
+  }));
   if (!res.ok) {
     const err = new Error(`API error ${res.status}`);
     err.status = res.status;

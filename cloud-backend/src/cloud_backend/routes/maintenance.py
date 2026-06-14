@@ -8,13 +8,13 @@ import structlog
 from fastapi import APIRouter, Security
 from pydantic import BaseModel
 
-from ..api.auth import require_api_key
+from ..api.auth import get_current_user
 
 log = structlog.get_logger()
 
 router = APIRouter(
     prefix="/api/v1/maintenance",
-    dependencies=[Security(require_api_key)],
+    dependencies=[Security(get_current_user)],
 )
 
 

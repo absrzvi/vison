@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..api.auth import require_api_key
+from ..api.auth import get_current_user
 from ..database import get_db
 from ..routes.alerts_sse import ALERT_EVENT_TYPES, publish_alert
 from ..services.escalation_audit import record_raised
@@ -20,7 +20,7 @@ from ..services.heartbeat_ingest import upsert_heartbeat
 
 log = structlog.get_logger()
 
-router = APIRouter(prefix="/api/v1/events", dependencies=[Security(require_api_key)])
+router = APIRouter(prefix="/api/v1/events", dependencies=[Security(get_current_user)])
 
 
 class IngestRequest(BaseModel):

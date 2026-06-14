@@ -32,7 +32,7 @@ describe('acknowledgeEscalation', () => {
     const [url, opts] = mockFetch.mock.calls[0];
     expect(url).toMatch(/\/api\/v1\/escalations\/esc-1\/acknowledge$/);
     expect(opts.method).toBe('POST');
-    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(opts.headers.Authorization).toBe('Bearer test-jwt-token');
     const body = JSON.parse(opts.body);
     expect(body.operator_id).toBe('op-1');
     expect(result).toEqual({ status: 'acknowledged' });
@@ -82,7 +82,7 @@ describe('getTrainAlerts', () => {
     const [url, opts] = mockFetch.mock.calls[0];
     expect(url).toMatch(/\/api\/v1\/trains\/train-99\/alerts\?status=active$/);
     expect(opts.method).toBe('GET');
-    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(opts.headers.Authorization).toBe('Bearer test-jwt-token');
     expect(result).toEqual(alerts);
   });
 

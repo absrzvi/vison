@@ -10,6 +10,7 @@ from .routes.ai_pipeline import router as ai_pipeline_router
 from .routes.ai_quality import router as ai_quality_router
 from .routes.alerts_sse import router as alerts_router
 from .routes.analytics import router as analytics_router
+from .routes.auth import router as auth_router
 from .routes.capacity_review import capacity_review_router
 from .routes.config import router as config_router
 from .routes.escalations import router as escalations_router
@@ -35,6 +36,7 @@ app = FastAPI(title="OEBB Cloud Backend", version="0.1.0")
 
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
+app.include_router(auth_router)
 app.include_router(analytics_router)
 app.include_router(capacity_review_router)
 app.include_router(health_router)

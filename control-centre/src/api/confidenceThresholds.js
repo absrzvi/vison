@@ -1,5 +1,6 @@
+import { authHeaders, handle401 } from '../lib/auth/authFetch';
+
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
-const API_KEY  = import.meta.env.VITE_API_KEY  ?? '';
 
 let _cache = null;
 
@@ -7,8 +8,8 @@ let _cache = null;
 export function getConfidenceThresholds() {
   if (_cache) return _cache;
   _cache = fetch(`${API_BASE}/api/v1/config/confidence-thresholds`, {
-    headers: { 'X-API-Key': API_KEY },
-  }).then(res => {
+    headers: authHeaders(),
+  }).then(handle401).then(res => {
     if (!res.ok) {
       const err = new Error(`API error ${res.status}`);
       err.status = res.status;

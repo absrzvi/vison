@@ -46,11 +46,11 @@ describe('raiseMaintenanceTicket', () => {
     expect(body.raised_by).toBe('op-1');
   });
 
-  it('sends X-API-Key header', async () => {
+  it('sends Authorization Bearer header', async () => {
     mockFetch.mockResolvedValueOnce(okResponse({ ticket_id: 'REF#00001', created_at: '2026-05-19T10:00:00Z' }));
     await raiseMaintenanceTicket('4011', 'issue', 'op-1');
     const [, opts] = mockFetch.mock.calls[0];
-    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(opts.headers.Authorization).toBe('Bearer test-jwt-token');
   });
 
   it('sends Content-Type: application/json header', async () => {

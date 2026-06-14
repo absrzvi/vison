@@ -3,13 +3,14 @@
 // Emitted when an operator opens an unacknowledged escalation and leaves without
 // acknowledging. Must survive page unload (tab close / navigation), so this uses
 // `fetch(..., { keepalive: true })` fire-and-forget — the documented successor to
-// navigator.sendBeacon that, unlike sendBeacon, can still send the X-API-Key
-// header the endpoint requires. We deliberately do NOT await: an awaited fetch in
-// an unload handler is cancelled, whereas a keepalive request is flushed by the
-// browser after the page goes away.
+// navigator.sendBeacon that, unlike sendBeacon, can still send the Authorization
+// header the endpoint requires (E11-S1: the escalations router is JWT-gated). We
+// deliberately do NOT await: an awaited fetch in an unload handler is cancelled,
+// whereas a keepalive request is flushed by the browser after the page goes away.
+
+import { authHeaders } from '../auth/authFetch';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
-const API_KEY = import.meta.env.VITE_API_KEY ?? '';
 
 export function emitSilentlyDismissed({ escalationId, operatorId, tViewed, tDismissed, dwellFocusMs }) {
   const path = `/api/v1/escalations/${encodeURIComponent(escalationId)}/silently-dismissed`;
@@ -17,10 +18,7 @@ export function emitSilentlyDismissed({ escalationId, operatorId, tViewed, tDism
     fetch(`${API_BASE}${path}`, {
       method: 'POST',
       keepalive: true,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': API_KEY,
-      },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         operator_id: operatorId,
         t_viewed: tViewed,

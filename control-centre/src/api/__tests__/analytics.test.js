@@ -46,7 +46,7 @@ describe('getCapacityExceptions', () => {
     const [url, opts] = mockFetch.mock.calls[0];
     expect(url).toMatch(/\/api\/v1\/analytics\/exceptions\?range=7d$/);
     expect(opts.method).toBe('GET');
-    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(opts.headers.Authorization).toBe('Bearer test-jwt-token');
     expect(result).toEqual(records);
   });
 
@@ -170,7 +170,7 @@ describe('getOccupancyHeatmap', () => {
     const [url, opts] = mockFetch.mock.calls[0];
     expect(url).toMatch(/\/api\/v1\/analytics\/occupancy-heatmap\?range=7d$/);
     expect(opts.method).toBe('GET');
-    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(opts.headers.Authorization).toBe('Bearer test-jwt-token');
     expect(result).toEqual(heatmapPayload);
   });
 
@@ -213,7 +213,7 @@ describe('getDetectionQuality', () => {
     const [url, opts] = mockFetch.mock.calls[0];
     expect(url).toMatch(/\/api\/v1\/analytics\/detection-quality\?range=7d$/);
     expect(opts.method).toBe('GET');
-    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(opts.headers.Authorization).toBe('Bearer test-jwt-token');
     expect(result).toEqual(detectionPayload);
   });
 
@@ -249,7 +249,7 @@ describe('getDwellTime', () => {
     const [url, opts] = mockFetch.mock.calls[0];
     expect(url).toMatch(/\/api\/v1\/analytics\/dwell-time\?range=7d$/);
     expect(opts.method).toBe('GET');
-    expect(opts.headers['X-API-Key']).toBeDefined();
+    expect(opts.headers.Authorization).toBe('Bearer test-jwt-token');
     expect(result).toEqual(dwellPayload);
   });
 
