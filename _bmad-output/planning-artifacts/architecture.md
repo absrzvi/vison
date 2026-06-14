@@ -151,16 +151,17 @@ Source docs filed at `reference/vendor-docs/` (IoB Konzept is **Freigegeben/rele
 **Answer:** **Yes, comfortably — for the confirmed PoC scope (door-threshold counting only).** Saloon occupancy *distribution* (ADR-16) is NOT on the Hailo for the PoC; if it returns, re-run this budget (≈50 streams does not fit comfortably and would need door-open gating — see ADR-15 Phase 2 amendment).
 
 **Load (per ADR-15 / ADR-17):**
-- 24 door-threshold streams (2 doors/car/side × 6 cars) + ~5 gangway streams ≈ **~29 streams** needing the YOLOX person detector.
+- **Only one platform side opens per stop**, so door cameras are **24 INSTALLED** (both sides, route-dependent which side) but only **12 ACTIVE per stop** (2 doors/car × 6 cars, single side). Sizing must use the **active** count.
+- 12 active door-threshold streams + ~5 gangway streams ≈ **~17 streams** needing the YOLOX person detector. (Pre-correction sizing assumed 24 active door streams ≈ ~29 total — superseded; only one side is ever live.)
 - Counting frame rate, **NOT** video frame rate: tripwire crossing is reliable at **5 FPS** (a passenger spends ~1–2 s crossing a threshold). The §Cross-Cutting item-6 schedule (P1 door 10fps) is the *ceiling*, not the counting requirement.
 
 **Budget:**
 | Scenario | Inferences/s | Hailo-8 YOLOX-S capacity (~200+ FPS aggregate) | Verdict |
 |---|---|---|---|
-| 29 streams × 5 FPS | ~145 | ~200+ | ✅ ~25–30% headroom |
-| 29 streams × 10 FPS | ~290 | ~200+ | ❌ over — drop FPS or gate |
+| 17 active streams × 5 FPS | ~85 | ~200+ | ✅ ~55–60% headroom |
+| 17 active streams × 10 FPS | ~170 | ~200+ | ✅ ~15% headroom |
 
-**The real bottleneck is NOT the Hailo.** Inference fits. The risk is **CPU/decode-bound**: decoding ~29 H.264/H.265 RTSP streams + running `hailotracker` (Kalman+IoU runs on **CPU**, not the Hailo) on the R5001c CCU. Bench bring-up must measure **(a) actual YOLOX FPS at the chosen input resolution** and **(b) CCU CPU headroom decoding ~29 streams + tracker** — these two numbers convert "plausible" to "confirmed." The ~200 FPS is Hailo's published YOLOX-S benchmark, not yet measured on this pipeline.
+**The real bottleneck is NOT the Hailo.** Inference fits. The risk is **CPU/decode-bound**: decoding ~17 active H.264/H.265 RTSP streams + running `hailotracker` (Kalman+IoU runs on **CPU**, not the Hailo) on the R5001c CCU. Bench bring-up must measure **(a) actual YOLOX FPS at the chosen input resolution** and **(b) CCU CPU headroom decoding ~17 active streams + tracker** — these two numbers convert "plausible" to "confirmed." The ~200 FPS is Hailo's published YOLOX-S benchmark, not yet measured on this pipeline.
 
 ---
 
