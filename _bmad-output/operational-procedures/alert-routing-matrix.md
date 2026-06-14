@@ -36,14 +36,14 @@
 |---|---|---|---|---|---|
 | high (≥0.85) | any | conductorless | `landside-immediate` | `TBD` | `TBD` |
 | high (≥0.85) | any | Fernverkehr | `fernverkehr-onboard-first` | `TBD` | `TBD` |
-| medium (0.60–0.85) | any | any | `advisory-only` | `TBD` | `TBD` |
+| medium (0.60–<0.85) | any | any | `advisory-only` | `TBD` | `TBD` |
 | low (<0.60) | any | any | `advisory-only` | `TBD` | `TBD` |
 
-### `door_obstruction` (live) / `door_fault` (anticipated) — door-at-speed (fusion, [enrichment.py:30-45](../../fusion/src/fusion/enrichment.py))
+### `door_obstruction` (live) / `door_fault` (anticipated) — door-at-speed (fusion, [enrichment.py:61-76](../../fusion/src/fusion/enrichment.py))
 
 > Severity is already speed-correlated in code: `critical` when `speed_kmh > 0` **or** speed unknown (fail-closed); `warning` at standstill. The matrix mirrors that.
 >
-> `door_obstruction` is live (producer [door_obstruction.py:74](../../fusion/src/fusion/door_obstruction.py)). `door_fault` has **no shipped producer** — it appears only in the `_severity_for` map at [enrichment.py:38](../../fusion/src/fusion/enrichment.py) and will route identically once a producer emits it (same caveat as `fire` / `unattended_item` below).
+> `door_obstruction` is live (producer [door_obstruction.py:74](../../fusion/src/fusion/door_obstruction.py)). `door_fault` has **no shipped producer** — it appears only in the `_severity_for` map at [enrichment.py:69](../../fusion/src/fusion/enrichment.py) and will route identically once a producer emits it (same caveat as `fire` / `unattended_bag` below).
 
 | confidence | speed / location | train type | Decision | ÖBB owner | Signoff |
 |---|---|---|---|---|---|
@@ -60,9 +60,9 @@
 | n/a (sensor) | any | conductorless | `landside-immediate` | `TBD` | `TBD` |
 | n/a (sensor) | any | Fernverkehr | `fernverkehr-onboard-first` | `TBD` | `TBD` |
 
-### `unattended_item` — *forward-looking, NO shipped producer*
+### `unattended_bag` — *forward-looking, NO shipped producer*
 
-> Listed for completeness. No producer emits it today. Expected model-basis (carries `confidence_score`) when implemented.
+> Listed for completeness. No producer emits it today. Expected model-basis (carries `confidence_score`) when implemented. (`unattended_bag` is the class named in [confidence_thresholds.py:9](../../cloud-backend/src/cloud_backend/config/confidence_thresholds.py); no fusion producer emits it yet.)
 
 | confidence | speed / location | train type | Decision | ÖBB owner | Signoff |
 |---|---|---|---|---|---|

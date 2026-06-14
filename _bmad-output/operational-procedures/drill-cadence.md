@@ -12,7 +12,7 @@
 ### Monthly — tabletop drill
 
 - **Who:** the landside team (Fleet Manager + secondary Control Centre operator). For a **Fernverkehr** scenario, an onboard conductor participates (or is role-played) to exercise the onboard-ack branch (SOP §3.2).
-- **What:** walk the [critical-alert SOP](critical-alert-sop.md) end-to-end for **one randomly selected critical alert class** (`slip_fall`, `door_obstruction`/`door_fault` at speed; once shipped, `fire` / `unattended_item`).
+- **What:** walk the [critical-alert SOP](critical-alert-sop.md) end-to-end for **one randomly selected critical alert class** (`slip_fall`, `door_obstruction`/`door_fault` at speed; once shipped, `fire` / `unattended_bag`).
 - **Cover at least one failure branch each month, rotating:** landside-unreachable (§3.3) and dead-zone (§3.4).
 - **Output:** a one-paragraph drill note — which branch was walked, time-to-acknowledge observed, any SOP wording that was unclear. File alongside this doc as `drill-log-{YYYY-MM}.md`.
 

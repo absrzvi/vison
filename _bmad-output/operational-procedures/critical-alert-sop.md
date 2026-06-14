@@ -26,7 +26,7 @@ The PoC uses a **single-landside-actor** model. Two facts govern everything belo
 
 An alert is **critical** when **either** condition holds:
 
-- **By class** — the alert is one of the critical alert codes (see [alert-routing-matrix.md](alert-routing-matrix.md)), **regardless of score**. This covers sensor-basis alerts that carry no `confidence_score` (e.g. a TCMS fire alarm). The shipped per-door-fault logic already escalates `door_obstruction` / `door_fault` to **`critical`** severity when the train is moving (`speed_kmh > 0`, or unknown speed — fail-closed) — see [enrichment.py:30-45](../../fusion/src/fusion/enrichment.py).
+- **By class** — the alert is one of the critical alert codes (see [alert-routing-matrix.md](alert-routing-matrix.md)), **regardless of score**. This covers sensor-basis alerts that carry no `confidence_score` (e.g. a TCMS fire alarm). The shipped per-door-fault logic already escalates `door_obstruction` / `door_fault` to **`critical`** severity when the train is moving (`speed_kmh > 0`, or unknown speed — fail-closed) — see `_severity_for` at [enrichment.py:61-76](../../fusion/src/fusion/enrichment.py).
 - **By confidence** — a model- or fused-basis alert whose `confidence_score >= 0.85`.
 
 **Critical alert codes (this PoC):**
@@ -34,12 +34,12 @@ An alert is **critical** when **either** condition holds:
 | Class | Shipped `alert_code` | Producer | Notes |
 |---|---|---|---|
 | Door-at-speed (live) | `door_obstruction` | fusion ([door_obstruction.py:74](../../fusion/src/fusion/door_obstruction.py)) | Critical only while moving; advisory at standstill |
-| Door-at-speed (anticipated) | `door_fault` | *not yet emitted* — severity-mapped only ([enrichment.py:38](../../fusion/src/fusion/enrichment.py)) | No shipped producer; routes identically to `door_obstruction` once live |
+| Door-at-speed (anticipated) | `door_fault` | *not yet emitted* — severity-mapped only ([enrichment.py:69](../../fusion/src/fusion/enrichment.py)) | No shipped producer; routes identically to `door_obstruction` once live |
 | Fall / slip | `slip_fall` | fusion ([health.py:218](../../fusion/src/fusion/health.py)) | |
 | Fire | *not yet emitted* | — | Forward-looking; no shipped producer. TCMS/sensor-basis when it lands (no `confidence_score`) |
-| Unattended item | *not yet emitted* | — | Forward-looking; no shipped producer |
+| Unattended item | `unattended_bag` *(not yet emitted)* | — | Forward-looking; no shipped producer. Class named in [confidence_thresholds.py:9](../../cloud-backend/src/cloud_backend/config/confidence_thresholds.py) |
 
-> `alert_code` is a **producer-defined string, not an enum**. An alert with an unrecognised code is handled as **advisory-only** (the default), not as a critical alert. `fire` and `unattended_item` are listed for completeness but have **no shipped producer** — they become live only when inference/fusion emit them.
+> `alert_code` is a **producer-defined string, not an enum**. An alert with an unrecognised code is handled as **advisory-only** (the default), not as a critical alert. `fire` and `unattended_bag` are listed for completeness but have **no shipped producer** — they become live only when inference/fusion emit them.
 
 > **`confidence_score` may be `None`** (when `confidence_basis == "sensor"`). The 0.85 gate applies **only when a score is present**. A sensor-basis critical-class alert (e.g. a fire alarm) is critical **by class** and is **never** downgraded for lacking a score.
 
@@ -50,6 +50,7 @@ An alert is **critical** when **either** condition holds:
 When a critical alert fires, follow the branch that matches the train type. The **amber window** is **10 minutes** (PoC default — `pending ÖBB confirm`): the period an alert may sit `unacknowledged` before fall-through/paging.
 
 ### 3.1 Conductorless-train branch — DEFAULT / PRIMARY
+*(routing-matrix decision: `landside-immediate`)*
 
 ```
 Conrad (on-train platform) raises critical alert
@@ -75,6 +76,7 @@ Landside Fleet Manager (Claudia) sees it in the Control Centre escalations inbox
 There is **no onboard human** on a conductorless train. The Fleet Manager / remote staff are the only actors.
 
 ### 3.2 Fernverkehr-train branch
+*(routing-matrix decision: `fernverkehr-onboard-first`)*
 
 ```
 Conrad raises critical alert → escalation row unacknowledged
@@ -117,8 +119,10 @@ Event is queued ONBOARD in the event-store (sync cursor holds the prefix)
         │
         ▼
 On reconnect, the queued ALERT_RAISED syncs landside and the escalation
-SURFACES in the inbox — it is NOT lost and the amber window starts ON SURFACING,
-not at the original fire time (an alert cannot "expire" during an outage)
+SURFACES in the inbox — within the onboard retention window it is NOT lost, and
+the amber window starts ON SURFACING, not at the original fire time (the amber
+window does not "expire" the alert during the outage — but see the retention
+caveat below for the >3-journey silent-drop edge)
         │
         ▼
         → resume §3.1 / §3.2 from the point of surfacing

@@ -54,7 +54,7 @@ The SOP states the **critical-confidence threshold = `confidence_score >= 0.85`*
 Given the matrix in `_bmad-output/operational-procedures/alert-routing-matrix.md`,
 when an alert is emitted,
 then the matrix defines, **per `alert_code`**, the priority/handling decision as a function of: `confidence_score` bucket, train speed bucket (in-station / in-transit), location (in-station vs in-transit), **and train type (conductorless vs Fernverkehr)**.
-Each row carries a **signoff date column** and an **ÖBB ops owner column** (left as `TBD — ÖBB signoff` placeholders since signoff is a pilot-kickoff process boundary, not a dev deliverable). The matrix's outputs are decisions like `{landside-immediate, fernverkehr-onboard-first-then-landside, advisory-only}` — no `police/station` output exists.
+Each row carries a **signoff date column** and an **ÖBB ops owner column** (left as `TBD — ÖBB signoff` placeholders since signoff is a pilot-kickoff process boundary, not a dev deliverable). The matrix's outputs are decisions like `{landside-immediate, fernverkehr-onboard-first, advisory-only}` (the `fernverkehr-onboard-first` decision includes the fall-through-to-landside-after-the-amber-window behaviour) — no `police/station` output exists.
 
 **AC3 — Drill cadence document + pilot-kickoff-checklist wiring**
 Given `_bmad-output/operational-procedures/drill-cadence.md`,
@@ -207,3 +207,30 @@ claude-opus-4-8[1m] (Claude Opus 4.8, 1M context)
 ### Dismissed (verified true-negatives — no change)
 
 amber-window-anchor consistency (§3.4 "starts on surfacing" is correct); location dimension redundancy (faithful to AC2, self-disclosed); fire/unattended_item forward-looking framing (clear); scope discipline (no police/station/Conrad-as-human reintroduced); link integrity (all resolve); §2 table title (Class column already carries the "Door-at-speed" qualifier).
+
+## Senior Developer Review (AI) — Round 2
+
+**Reviewer:** Claude (Opus 4.8) · **Date:** 2026-06-14 · **Mode:** adapted docs review (5 finder angles — AC-gap, cross-doc contradiction, accuracy-vs-shipped-code, security/safety procedure, drill realism — each candidate verified against ground-truth code/story). **Outcome:** 6 doc-defects patched; 5 authoring gaps logged as pilot-kickoff dependencies; safety items confirmed correctly scope-deferred.
+
+### Patched (mechanical / internal-contradiction fixes — applied 2026-06-14)
+
+- [x] **[Accuracy] `enrichment.py` severity citations drifted.** SOP §2 and the matrix door-at-speed section cited `enrichment.py:38` / `:30-45` for the door-severity logic, but those lines are `_seconds_to_departure` (the E10-S4 dwell-time helper inserted ahead of the severity map). `_severity_for` — the actual `{"door_obstruction","door_fault"}` map — is at `enrichment.py:61-76` (set at line 69). Re-anchored all four citations; the behavioural prose was correct and unchanged. [critical-alert-sop.md §2, alert-routing-matrix.md door section]
+- [x] **[Accuracy] Invented `unattended_item` string (violates D2).** Docs named the forward-looking class `unattended_item`, but the only shipped artifact naming it is `confidence_thresholds.py:9 = unattended_bag`; no source emits `unattended_item`. Renamed to `unattended_bag` across SOP, matrix, and drill-cadence, with the thresholds-file citation. [critical-alert-sop.md §2, alert-routing-matrix.md, drill-cadence.md]
+- [x] **[Contradiction] `slip_fall` medium-bucket boundary not half-open (Round-1 miss).** The Round-1 "[LOW][Clarity]" fix changed only the legend; the `slip_fall` table row still read `medium (0.60–0.85)`, dual-matching the `high (≥0.85)` row at exactly 0.85 (one row → `advisory-only`, the other → `landside-immediate`). Changed the row to `medium (0.60–<0.85)` so 0.85 resolves uniquely to `high`. [alert-routing-matrix.md slip_fall table]
+- [x] **[Consistency] Within-story decision-token drift.** Story AC2 illustrated the Fernverkehr decision as `fernverkehr-onboard-first-then-landside`; the matrix emits `fernverkehr-onboard-first`. Aligned AC2 to the shipped token (7/7 occurrences now consistent), with an inline note that the token includes the fall-through-to-landside behaviour. [10-3 story AC2]
+- [x] **[Usability] Matrix token → SOP branch crosswalk.** The matrix emits decision tokens but SOP §3 used prose headings only, leaving an operator with a matrix token no labelled landing point. Added the matrix decision token under SOP §3.1/§3.2 headings. [critical-alert-sop.md §3.1, §3.2]
+- [x] **[Contradiction] §3.4 dead-zone diagram over-promised.** The diagram said absolutely "an alert cannot 'expire' during an outage", contradicting the section's own retention caveat (a >3-journey outage can age out an un-pulled alert). Bounded the diagram text to the retention window and pointed at the caveat. [critical-alert-sop.md §3.4]
+
+### Logged as pilot-kickoff dependencies (authoring gaps — content decisions, not mechanical fixes; deferred to ÖBB ops input)
+
+These are real gaps in operational completeness, but each needs an ÖBB ops decision rather than a markdown correction. Tracked so they are not lost; do not block the documentation deliverable (which authored the structure the story scoped):
+
+- **[Safety] Per-class "required action" guidance.** The SOP routes/tags critical alerts but never states the real-world operator response per class (slip_fall → ?, fire → ?). "Takes the required action" is undefined. Needs ÖBB ops to define the physical response per critical class. → pilot-kickoff gate.
+- **[Safety] Life-safety closure rule.** Nothing prevents closing a `fire`/`slip_fall` escalation `false_alarm`/`no_action_needed` without field verification (raw video never leaves the train, so landside cannot visually confirm). Needs an ÖBB ops rule on what may close a life-safety class. → pilot-kickoff gate.
+- **[Realism] Drill branch coverage + feedback loop.** Monthly rotation drills only §3.3/§3.4; the primary §3.1/§3.2 paths are exercised only incidentally, and no step feeds drill findings back into SOP revision (no named owner). → drill-cadence follow-up.
+- **[Realism] Dead-zone drill tests only the happy path.** The live dead-zone drill confirms loss-free reconnect but never exercises the >3-journey retention edge the SOP itself flags as a silent-drop risk. → tie to the retention-window sizing dependency already in the checklist.
+- **[Usability] Checklist blocker labelling + operator training gate.** The pilot-kickoff "Open dependencies" list mixes a last-line-of-defence blocker (undefined §3.3 ÖBB on-call path) with tunable params (amber window) without a blocker/non-blocker label, and gates on SOP *signoff* but not operator *training*. → checklist refinement.
+
+### Confirmed correctly scope-deferred (no change — the doc discloses these as PoC limitations by design)
+
+Flat 10-min amber window (D4 — value pending ÖBB confirm); no automatic pager (D4 — explicitly Phase 2 / Epic 11, correctly disclosed in §3.3); per-class confidence thresholds vs the flat 0.85 gate (D3 — deliberate story-locked simplification, and the matrix legend already discloses the divergence).
