@@ -35,6 +35,7 @@ class _Funnel(TypedDict):
     dismissed: int
     ack_rate: float | None
     median_ack_s: float | None
+    p95_ack_s: float | None
 
 
 class _ClassStateEvent(TypedDict):
@@ -75,7 +76,10 @@ async def _funnel_rows(
                 COUNT(*) FILTER (WHERE transition = 'silently_dismissed') AS dismissed,
                 PERCENTILE_CONT(0.5) WITHIN GROUP (
                     ORDER BY GREATEST(EXTRACT(EPOCH FROM (t_event - t_fired)), 0)
-                ) FILTER (WHERE transition = 'acknowledged')             AS median_ack
+                ) FILTER (WHERE transition = 'acknowledged')             AS median_ack,
+                PERCENTILE_CONT(0.95) WITHIN GROUP (
+                    ORDER BY GREATEST(EXTRACT(EPOCH FROM (t_event - t_fired)), 0)
+                ) FILTER (WHERE transition = 'acknowledged')             AS p95_ack
             FROM escalation_audit
             WHERE t_event >= :from AND t_event < :to
             GROUP BY alert_code
@@ -96,6 +100,7 @@ async def _funnel_rows(
             # NULL/zero-denominator trap from deferred-work.md).
             ack_rate=(ack / raised) if raised > 0 else None,
             median_ack_s=float(r.median_ack) if r.median_ack is not None else None,
+            p95_ack_s=float(r.p95_ack) if r.p95_ack is not None else None,
         ))
     return out
 
@@ -196,12 +201,15 @@ def _render(
     lines.append("## Median ack latency by alert class")
     lines.append("")
     if funnels:
-        lines.append("| Alert code | Raised | Ack | Resolved | Dismissed | Median ack |")
-        lines.append("|---|---:|---:|---:|---:|---:|")
+        lines.append(
+            "| Alert code | Raised | Ack | Resolved | Dismissed | Median ack | P95 ack |"
+        )
+        lines.append("|---|---:|---:|---:|---:|---:|---:|")
         for f in sorted(funnels, key=lambda f: -f["raised"]):
             lines.append(
                 f"| {f['alert_code']} | {f['raised']} | {f['acknowledged']} | "
-                f"{f['resolved']} | {f['dismissed']} | {_fmt_secs(f['median_ack_s'])} |"
+                f"{f['resolved']} | {f['dismissed']} | "
+                f"{_fmt_secs(f['median_ack_s'])} | {_fmt_secs(f['p95_ack_s'])} |"
             )
     else:
         lines.append("_No data._")
