@@ -309,16 +309,31 @@ def test_context_push_absent_scheduled_departure_keeps_prior() -> None:
 
 
 @pytest.mark.unit
-def test_scheduled_departure_cleared_on_journey_change() -> None:
-    """E10-S4 review (medium): a new journey must NOT inherit the prior journey's
-    departure — else a journey-B alert before journey-B's first PIS push derives
-    seconds_to_departure from journey A's stale departure, on an invalid basis."""
+def test_journey_change_clears_stale_departure_real_wire() -> None:
+    """E10-S4 invariant, re-pinned by E6-S4 review R1/R2 to the REAL wire.
+    On a journey change the producer resets _state.pis (E6-S4 vlan-pollers fix), so the
+    J1→J2 full-delta push carries an EMPTY nested pis. fusion's truthiness gate must
+    then CLEAR the prior journey's departure (not store ""), so J2 never inherits J1's.
+    The old synthetic pis=None body could never occur on the real wire and masked this."""
     from fusion.models import ContextPushModel
 
     ctx = ContextState(journey_id="J1", scheduled_departure="2026-05-20T08:01:30Z")
-    # journey changes; the push carries no scheduled_departure for the new journey yet
-    ctx.update_from_push(ContextPushModel(journey_id="J2"))
+    wire = {"journey_id": "J2", "pis": {"scheduled_departure": ""}}  # real journey-change wire
+    ctx.update_from_push(ContextPushModel.model_validate(wire))
     assert ctx.scheduled_departure is None
+
+
+@pytest.mark.unit
+def test_empty_pis_departure_keeps_prior_within_journey() -> None:
+    """E6-S4 review R3: within the SAME journey, an empty nested departure (PisState
+    default on an unrelated delta push) must NOT clobber a known departure — the
+    truthiness gate treats "" as "no value in this push" (absent-keeps)."""
+    from fusion.models import ContextPushModel
+
+    ctx = ContextState(journey_id="J1", scheduled_departure="2026-05-20T08:01:30Z")
+    wire = {"journey_id": "J1", "pis": {"scheduled_departure": ""}, "speed_kmh": 30.0}
+    ctx.update_from_push(ContextPushModel.model_validate(wire))
+    assert ctx.scheduled_departure == "2026-05-20T08:01:30Z"
 
 
 # --- AC2: emit_alert stamps the derived value end-to-end ---

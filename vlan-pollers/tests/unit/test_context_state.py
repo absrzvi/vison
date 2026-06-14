@@ -186,6 +186,36 @@ async def test_update_pis_delivers_scheduled_departure_via_nested_pis() -> None:
 
 
 @pytest.mark.unit
+@respx.mock
+async def test_update_journey_resets_pis_so_journey_change_carries_no_stale_departure() -> None:
+    """E6-S4 review R1: a journey change must NOT push the prior journey's PIS. The PIS
+    poller for the new journey hasn't run yet, so update_journey resets _state.pis —
+    otherwise the J1→J2 full-delta push carries J1's scheduled_departure and fusion
+    inherits it on J2."""
+    import json
+
+    fusion_route = respx.post(f"{FUSION}/context").mock(return_value=httpx.Response(200))
+    respx.post(f"{INFERENCE}/context").mock(return_value=httpx.Response(200))
+
+    ctx = _make_ctx()
+    await ctx.update_journey("OBB-1_T1_20260517", "T1", "OBB-1")
+    await ctx.update_pis(
+        PisState(scheduled_departure="2026-05-19T12:05:00Z", next_station="Wien")
+    )
+    # New journey starts before its PIS is polled.
+    fusion_route.calls.reset()
+    await ctx.update_journey("OBB-1_T2_20260517", "T2", "OBB-1")
+
+    body = json.loads(fusion_route.calls.last.request.content)
+    assert body["journey_id"] == "OBB-1_T2_20260517"
+    # The nested pis must be RESET (empty departure), not carry J1's value.
+    assert body["pis"]["scheduled_departure"] == "", (
+        f"journey-change push leaked stale pis: {body['pis']}"
+    )
+    assert ctx.state.pis.scheduled_departure == ""
+
+
+@pytest.mark.unit
 async def test_push_context_delta_isolates_per_service_failure() -> None:
     """E6-S4 AC4 / deferred F21: a failure POSTing to one consumer must NOT skip the
     other. If the fusion POST raises, inference must still receive the push."""
@@ -217,8 +247,8 @@ async def test_push_context_delta_isolates_per_service_failure() -> None:
 @pytest.mark.unit
 @respx.mock
 async def test_pis_update_suppresses_on_no_change() -> None:
-    # E10-S4: update_pis now also fires a targeted scheduled_departure push to fusion
-    # (before _push_context_delta) — mock it so suppression is exercised, not the network.
+    # E6-S4: update_pis fires only _push_context_delta (the E10-S4 targeted flat push
+    # was removed). Mock fusion so suppression is exercised, not the network.
     respx.post(f"{FUSION}/context").mock(return_value=httpx.Response(200))
 
     call_count = 0
@@ -234,7 +264,7 @@ async def test_pis_update_suppresses_on_no_change() -> None:
     await ctx.update_pis(pis)
     assert call_count == 1
 
-    await ctx.update_pis(pis)  # same values — suppress (no targeted push, no delta push)
+    await ctx.update_pis(pis)  # same values — suppress (no delta push)
     assert call_count == 1
 
 

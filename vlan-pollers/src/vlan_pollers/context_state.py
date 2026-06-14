@@ -52,6 +52,12 @@ class ContextStateManager:
         self._state.journey_id = journey_id
         self._state.trip_number = trip_number
         self._state.vehicle_id = vehicle_id
+        # E6-S4 review (R1): clear the prior journey's PIS so the journey-change
+        # full-delta push does NOT carry the old journey's scheduled_departure (the
+        # PIS poller for the new journey hasn't run yet). Without this, fusion would
+        # inherit the prior journey's departure on the new journey. The new journey's
+        # real PIS arrives on the next pis_poller tick.
+        self._state.pis = PisState()
         await self._push_context_delta()
 
     async def update_alarm(self, entry: AlarmEntry) -> None:

@@ -106,10 +106,16 @@ class ContextState:
         if model.door_firmware_version is not None:
             self.door_firmware_version = model.door_firmware_version
         # E10-S4 (rewired by E6-S4): scheduled_departure arrives nested in `pis`.
-        # Present (incl. "") replaces; absent + journey change clears so a new
-        # journey never inherits the prior journey's departure.
-        if model.pis is not None and model.pis.scheduled_departure is not None:
-            self.scheduled_departure = model.pis.scheduled_departure
+        # Gate on TRUTHINESS, not `is not None`: the producer always sends `pis` and
+        # PisState.scheduled_departure defaults to "" (never None), so a present-but-
+        # empty departure must count as "no value in this push" — otherwise the
+        # journey-change clear is unreachable and a new journey inherits the prior
+        # journey's stale departure (the full-delta push on a J1→J2 update_journey
+        # still carries J1's pis because update_journey does not reset _state.pis).
+        # A non-empty departure replaces; empty/absent + journey change clears.
+        new_dep = model.pis.scheduled_departure if model.pis is not None else None
+        if new_dep:
+            self.scheduled_departure = new_dep
         elif self.journey_id != prev_journey_id:
             self.scheduled_departure = None
         after = (
