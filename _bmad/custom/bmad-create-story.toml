@@ -41,6 +41,15 @@ persistent_facts = [
   # cheapest place to prevent this is at story-authoring time: require the realistic seed path.
   "STORY CONTEXT RULE — REAL-PRODUCER TEST SEEDING: For any story that emits or consumes an event, adds or reads from a DB table, or crosses a producer→consumer boundary, the story's test tasks MUST require at least one test that seeds via the REAL producer path (the actual ingest endpoint / the actual upsert / the actual poller→/context push), NOT raw INSERTs or synthetic kwargs that bypass the production code. Write the acceptance criterion so a green test cannot pass while the production wire is broken. Name the proven sibling to mirror (e.g. test_delay_minutes_avoided.py seeds escalations via real ingest; 10-5's _seed_parent satisfies the FK the real path would). This is the create-story half of the dev-story 'integration must run before review' gate (E10 A1) — the gate runs the test; this rule makes the test exercise the real path.",
 
+  # E11 retrospective finding (party-mode, 2026-06-15): three same-species defects across
+  # S3→S5 were 'valid-but-wrong-at-a-boundary' values — S5's degraded-banner floor=0.0 was
+  # a VALID float in [0,1] that silently disabled the gate (mean<floor never fires), a
+  # fail-OPEN the story's own invariant said was impossible; all green tests missed it,
+  # caught only by adversarial review. SCOPE IS DELIBERATELY TIGHT — gate/threshold/comparison
+  # values only, NOT every constrained input (open-ended 'enumerate bad values' is the
+  # adversarial review's job, not a create-story rule). The rule is three MECHANICAL questions.
+  "STORY CONTEXT RULE — GATE-VALUE SEMANTICS: For any story that persists, reads, or PATCHes a value that drives a GATE, THRESHOLD, or COMPARISON (e.g. a confidence floor, a suppression cutoff, a rate limit, a staleness window), the story MUST state in its ACs, per such value: (1) the VALID RANGE; (2) the in-range values that are SEMANTICALLY WRONG — values that pass the type/range check but break the gate (e.g. a degraded-banner floor of 0.0 makes `mean < floor` never fire → banner silently disabled) — and require rejecting these at the API boundary with a 422 in the project error envelope; (3) what the gate does on a MALFORMED or MISSING STORED value — it MUST fail SAFE to a hardcoded default, NEVER fail-open (no '0.0 = never fires', no gate-disable). This is the create-story complement to the dev-story Pre-Flight fail-safe check: the AC names the bad value, the Pre-Flight verifies the guard is implemented + tested. Scope is TIGHT (gate/threshold/comparison values only). Origin: E11-S5 review caught an admin-settable floor=0.0 fail-open that all green tests missed.",
+
   # Load project-context.md which now contains: async stale-closure patterns (A3),
   # full CSS token reference (A2 backing), ADR-2 + ADR-18 full text, E4 dependency status.
   "file:{project-root}/project-context.md",
