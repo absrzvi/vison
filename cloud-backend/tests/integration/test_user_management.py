@@ -406,8 +406,11 @@ async def test_last_admin_guard_concurrent(
         return r.status_code
 
     codes = await asyncio.gather(_deact(a1), _deact(a2))
-    # At least one must be a 409 (guard fired); not both 200.
-    assert 200 in codes or 409 in codes
+    # Security Test 6 (code-review P4): at MOST one deactivation may succeed, and
+    # the guard must have fired at least once — a tautological "200 or 409 in codes"
+    # would pass even on the catastrophic [200,200]. Pin the exact property.
+    assert codes.count(200) <= 1, f"more than one deactivation succeeded: {codes}"
+    assert 409 in codes, f"last-admin guard never fired: {codes}"
     async with factory() as s:
         remaining = (await s.execute(
             text("SELECT count(*) AS c FROM users WHERE role='admin' AND is_active=true")
@@ -432,6 +435,28 @@ async def test_duplicate_username_uniform_conflict(
     assert second.status_code == 409
     # generic detail — does not echo the specific username back
     assert "dup" not in second.json()["detail"]["detail"]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_concurrent_duplicate_create_is_409_not_500(
+    app_client: AsyncClient, factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Code-review P1: two concurrent creates of the same username both pass the
+    pre-check SELECT; the loser's INSERT hits uq_users_username. It must surface
+    the uniform 409 (caught IntegrityError), NEVER an uncaught 500."""
+    await _seed_user(factory, username="admin4", password="admin-pw-1234", role="admin")
+    admin_t = await _login(app_client, "admin4", "admin-pw-1234")
+    body = {"username": "racer", "password": "operator-pw-12", "role": "operator"}
+
+    async def _create() -> int:
+        r = await app_client.post("/api/v1/admin/users", json=body, headers=_bearer(admin_t))
+        return r.status_code
+
+    codes = await asyncio.gather(_create(), _create())
+    assert codes.count(201) == 1, f"expected exactly one create to win: {codes}"
+    assert codes.count(409) == 1, f"loser must be 409, not 500: {codes}"
+    assert 500 not in codes
 
 
 # ── AC8 — migration 0010 idempotent ──────────────────────────────────────────

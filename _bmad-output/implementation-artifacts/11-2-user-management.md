@@ -4,7 +4,7 @@ baseline_commit: f45013f
 
 # Story 11.2: User Management (CRUD + roles + password reset)
 
-Status: review
+Status: done
 
 <!-- Created 2026-06-14 via bmad-create-story (Amelia). Second story of Epic 11 (Control Centre Admin & Identity).
      Source: _bmad-output/planning-artifacts/epics.md §"Epic 11" → "E11-S2 — User management (CRUD + roles + password reset)".
@@ -125,6 +125,26 @@ Plus `test_last_admin_guard_concurrent` (AC6/D3), `test_seam_liveness_survives_v
 - [x] **T5 — Frontend admin Users screen** (AC7) — `src/api/users.js` (through the shared `authFetch` Bearer helper, [src/lib/auth/authFetch.js](../../control-centre/src/lib/auth/authFetch.js)); `src/components/admin/Users.jsx` (+CSS, `--obb-*` only) — list / create-modal / role-toggle / deactivate-reactivate / reset-password; role-gated nav + route guard so operators never see it (extend the existing `RequireAuth` pattern with a role check, [src/App.jsx](../../control-centre/src/App.jsx) / AuthContext). vitest for the api client + component states.
 - [x] **T6 — Integration tests + browser verify** (A1 gate, AC7, AC8) — `test_user_management_end_to_end` (A3 real-seed), `test_last_admin_guard_concurrent`, migration re-apply — all green on real Postgres (Docker up, run locally). Browser-verify the Users golden path + one edge per AC7. Confirm `ruff`/`mypy --strict`/coverage gates.
 - [x] **T7 — Docs** (D1, AC8) — one-line note in `cloud-backend/CLAUDE.md` auth/audit section recording the user-audit transport decision (D1 Option A) and the mid-session liveness check (D2). **ADR FRESHNESS:** the D2 liveness check refines ADR-23's "claims are the source of truth" posture (it now reads "claims authenticate; a local `is_active` check in the extractor authorizes — without coupling the verifier to local state"). Add a **one-line ADR-23 addendum** in `architecture.md` to that effect (not a new ADR — confirmed by the party-mode seam ruling).
+
+### Review Findings
+
+> **Code review — Round 1 (2026-06-14, FULL adversarial wire-replay):** Blind Hunter + Edge Case Hunter + Acceptance Auditor, then per-finding refutation. 5 patches, 2 deferred, 4 dismissed (incl. one refuted Blocker). No correct-behaviour VIOLATION found — every AC and Decision is implemented correctly in code; the patches close test-coverage gaps and two real-but-narrow edge cases. **All 5 patches APPLIED + verified 2026-06-15; gate re-run green (265 backend passed, mypy --strict + ruff clean, +8 new tests). Bonus: fixed the same latent last-char-flip tamper flaky in the UNIT `test_auth_security.py::test_tampered_signature` that this work's ordering exposed (now reverses the sig; 10/10 deterministic).**
+
+- [x] [Review][Patch] Concurrent duplicate-username create → 500 instead of the 409 envelope [cloud-backend/src/cloud_backend/routes/users.py] — FIXED: `try/except IntegrityError` around the INSERT/audit/commit → `rollback()` + uniform 409. New test `test_concurrent_duplicate_create_is_409_not_500` asserts exactly one 201, one 409, no 500.
+- [x] [Review][Patch] `password Field(max_length=72)` counts characters, not bytes — multibyte password silently truncated [cloud-backend/src/cloud_backend/api/users.py] — FIXED: replaced char `max_length=72` with a `field_validator` enforcing UTF-8 **byte** length ≤ 72 on both `UserCreate.password` and `PasswordReset.password`. New tests: 72-multibyte-char (144 bytes) → rejected; exactly-72-bytes → accepted.
+- [x] [Review][Patch] D7 / Security-Test-5: no runtime test for an empty/junk `role` claim against an admin route [cloud-backend/tests/unit/test_auth_security.py] — FIXED: `test_empty_or_junk_role_cannot_reach_admin_route` parametrized over `["", "superuser", "Admin", "admin "]` mints each as a token and asserts `/admin-only` → 403 (never 200/500).
+- [x] [Review][Patch] Concurrent last-admin guard test assertion is tautological [cloud-backend/tests/integration/test_user_management.py] — FIXED: now `assert codes.count(200) <= 1` AND `assert 409 in codes` (guard fired) AND `remaining.c >= 1`. Verified deterministic 3×.
+- [x] [Review][Patch] bcrypt floor has no test for the realistic prod path (`APP_ENV` unset + `BCRYPT_ROUNDS=4`) [cloud-backend/tests/unit/test_user_management_security.py] — FIXED: `test_bcrypt_rounds_below_floor_rejected_when_app_env_unset` pops `APP_ENV` (defaults to prod) + sets cost 4 → asserts ValidationError. (Floor itself was already correct — this refuted the Blind Hunter "Blocker".)
+- [x] [Review][Defer] Already-open SSE stream is not killed mid-session on deactivation [cloud-backend/src/cloud_backend/routes/alerts_sse.py:23,152] — deferred. `get_current_user_from_query` runs once at connection; the generator loop never re-checks `is_active`, so a user deactivated *after* their stream is open keeps receiving alerts until disconnect/expiry. AC3 (new-request revocation) is met; per-tick stream revocation is a known hard problem (11-1 already documented `?token=` as a PoC limitation). Bundle into the Phase-2 SSO / stream-scoped-ticket work.
+- [x] [Review][Defer] Frontend 403-on-role-demotion-mid-session dead-ends [control-centre/src/lib/auth/authFetch.js:34] — deferred. If an admin is demoted mid-session, their cached JWT still says `admin` so the Users UI renders, but every call 403s; `handle401` only acts on 401, so a 403 isn't redirected. Real UX gap, but role-change-mid-session UX is an epic-wide concern (same shape as the SSO refresh story), not 11-2-specific.
+
+### Round-1 resolution — DONE (2026-06-15)
+
+All 5 patches applied + test-locked; both deferred items logged to `deferred-work.md`. **Post-patch gates green:** cloud-backend **265 passed** (unit + integration on real Postgres, A1 gate ran locally), determinism re-confirmed (the previously-flaky tamper tests now 10/10), **mypy --strict** clean (40 files), **ruff** clean; control-centre **users vitest** green (11/11). +8 new tests (concurrent-create-409, multibyte/exact-72-byte password, empty/junk-role-on-admin-route, APP_ENV-unset floor, tightened concurrent-guard). Bonus fix: the unit `test_tampered_signature` last-char-flip flaky (same species as the integration one) reversed-sig fixed. **Code-review outcome: APPROVED → story DONE.**
+
+### Security Sentinel — Round 1 (2026-06-15)
+
+**Verdict: APPROVED.** No Critical, no Major. Checklist: AuthN/AuthZ PASS (server-side `require_role("admin")` on every endpoint; 401 vs 403 distinct; issuer validated; liveness on both extractors; empty/junk role blocked + tested), Secret Hygiene PASS (`UserOut` excludes `password_hash`; reset audits action only; bcrypt floor fail-closed), Injection PASS (dynamic UPDATE = hardcoded fragments + bound params only; password byte-cap), Log Safety PASS (logs carry only actor/target/role/changes — no token/hash/password), Frontend PASS (no new storage writes; role-gate UI-only with server enforcement). Video/CCTV/Hailo/Conrad sections N/A (not touched); shared/ confirmed untouched. Two Observations (in-flight SSE revocation; frontend 403 handling) are the same deferred, pre-existing/epic-wide items — neither exploitable for escalation or data leakage (server enforces per-request).
 
 ## Dev Notes
 

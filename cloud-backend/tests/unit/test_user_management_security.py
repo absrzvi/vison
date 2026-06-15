@@ -19,13 +19,19 @@ from cloud_backend.api.users import PasswordReset, UserCreate, UserOut, UserPatc
 # ── D6 — bcrypt_rounds fail-closed floor ─────────────────────────────────────
 
 
-def _settings_with(env: dict[str, str]):
+def _settings_with(env: dict[str, str | None]):
     """Build a fresh Settings with the given env overrides applied, restoring the
-    prior environment afterward. Settings reads the process env at construction."""
+    prior environment afterward. Settings reads the process env at construction.
+    A value of None means UNSET that var for the duration (e.g. to test the
+    APP_ENV-default path, since the suite conftest pins APP_ENV=test)."""
     from cloud_backend.config import Settings
 
     prev = {k: os.environ.get(k) for k in env}
-    os.environ.update(env)
+    for k, v in env.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
     try:
         return Settings()
     finally:
@@ -42,6 +48,16 @@ def test_bcrypt_rounds_below_floor_rejected_in_prod() -> None:
     value cannot escape into a deployment (D6 fail-closed floor)."""
     with pytest.raises(ValidationError):
         _settings_with({"APP_ENV": "prod", "BCRYPT_ROUNDS": "4"})
+
+
+@pytest.mark.unit
+def test_bcrypt_rounds_below_floor_rejected_when_app_env_unset() -> None:
+    """Code-review P5: the REALISTIC prod path — APP_ENV not set at all (defaults
+    to 'prod') + BCRYPT_ROUNDS=4 — must still be rejected. The prior test set
+    APP_ENV='prod' explicitly; this proves the default-path floor can't silently
+    regress (e.g. if app_env stopped populating info.data)."""
+    with pytest.raises(ValidationError):
+        _settings_with({"APP_ENV": None, "BCRYPT_ROUNDS": "4"})
 
 
 @pytest.mark.unit
@@ -71,13 +87,36 @@ def test_password_below_min_length_rejected() -> None:
 
 @pytest.mark.unit
 def test_password_over_72_bytes_rejected_not_truncated() -> None:
-    """The 72-byte cap closes the silent-truncation footgun: a >72-byte password
+    """The 72-BYTE cap closes the silent-truncation footgun: a >72-byte password
     is rejected at the boundary, never quietly hashed on its first 72 bytes."""
     too_long = "a" * 73
     with pytest.raises(ValidationError):
         UserCreate(username="x", password=too_long, role="operator")
     with pytest.raises(ValidationError):
         PasswordReset(password=too_long)
+
+
+@pytest.mark.unit
+def test_password_multibyte_over_72_bytes_rejected() -> None:
+    """Code-review P2: the cap is BYTES not characters. 72 multibyte chars
+    (72x 'ä' = 144 bytes) must be REJECTED — otherwise bcrypt would silently
+    truncate to 72 bytes and authenticate a different credential than typed."""
+    multibyte = "ä" * 72  # 72 chars, 144 bytes
+    assert len(multibyte) == 72 and len(multibyte.encode("utf-8")) == 144
+    with pytest.raises(ValidationError):
+        UserCreate(username="x", password=multibyte, role="operator")
+    with pytest.raises(ValidationError):
+        PasswordReset(password=multibyte)
+
+
+@pytest.mark.unit
+def test_password_exactly_72_bytes_accepted() -> None:
+    """Boundary: exactly 72 bytes (and >= 12) is accepted — the cap rejects only
+    what bcrypt would truncate."""
+    exactly_72 = "a" * 72  # 72 chars == 72 bytes
+    assert len(exactly_72.encode("utf-8")) == 72
+    assert UserCreate(username="x", password=exactly_72, role="operator").password == exactly_72
+    assert PasswordReset(password=exactly_72).password == exactly_72
 
 
 @pytest.mark.unit

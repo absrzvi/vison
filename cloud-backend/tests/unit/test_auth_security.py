@@ -116,10 +116,12 @@ def test_expired_token_returns_401(client: TestClient) -> None:
 @pytest.mark.unit
 def test_tampered_signature_returns_401(client: TestClient) -> None:
     token = _mint()
-    # Flip the last char of the signature segment.
+    # Reverse the whole signature segment — guaranteed to change the bytes. (A
+    # last-char base64url A/B flip leaves the signature byte-identical ~5.5% of the
+    # time because the trailing char carries only ~2 significant bits — a latent
+    # flake; the verifier itself is correct.)
     head, payload, sig = token.split(".")
-    bad_sig = ("A" if sig[-1] != "A" else "B")
-    tampered = f"{head}.{payload}.{sig[:-1]}{bad_sig}"
+    tampered = f"{head}.{payload}.{sig[::-1]}"
     r = client.get("/protected", headers=_auth(tampered))
     assert r.status_code == 401
 
@@ -167,6 +169,21 @@ def test_admin_on_admin_route_returns_200(client: TestClient) -> None:
     token = _mint(role="admin")
     r = client.get("/admin-only", headers=_auth(token))
     assert r.status_code == 200
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("bad_role", ["", "superuser", "Admin", "admin "])
+def test_empty_or_junk_role_cannot_reach_admin_route(
+    client: TestClient, bad_role: str
+) -> None:
+    """E11-S2 D7 / Security Test 5 (code-review P3): a token whose role is empty or
+    not in the allow-list must NOT satisfy require_role('admin') — 403, never 200,
+    never 500. Closes 11-1's deferred 'empty role authenticates' gap at the route
+    level (the model-boundary role check doesn't cover a hand-minted token)."""
+    token = _mint(role=bad_role)
+    r = client.get("/admin-only", headers=_auth(token))
+    assert r.status_code == 403, f"role={bad_role!r} reached admin route ({r.status_code})"
+    assert r.json()["detail"]["error"] == "FORBIDDEN"
 
 
 # ── Security Test 6 — missing role claim → 401/403, not 500 ──────────────────

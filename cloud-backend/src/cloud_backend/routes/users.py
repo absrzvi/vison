@@ -21,6 +21,7 @@ import uuid
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Security
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.auth import CurrentUser, hash_password, require_role
@@ -126,8 +127,10 @@ async def create_user_endpoint(
     db: AsyncSession = Depends(get_db),
 ) -> UserOut:
     # Duplicate username → uniform conflict (no enumeration of which names exist
-    # beyond the unavoidable conflict signal). Check before the unique-index raise
-    # so we return the controlled ADR-10 envelope, not a DB integrity error.
+    # beyond the unavoidable conflict signal). The pre-check returns the controlled
+    # ADR-10 envelope on the common (sequential) path; the unique-index catch below
+    # closes the concurrent TOCTOU race (two creates both pass the SELECT, one INSERT
+    # loses) so a duplicate is ALWAYS a 409, never an uncaught IntegrityError → 500.
     existing = await db.execute(
         text("SELECT 1 FROM users WHERE username = :u"), {"u": body.username}
     )
@@ -139,26 +142,32 @@ async def create_user_endpoint(
     # INSERT + audit here (not via the committing create_user helper) so the user
     # row and its audit row land in ONE transaction (AC5: no user without an audit).
     user_id = str(uuid.uuid4())
-    await db.execute(
-        text(
-            "INSERT INTO users (user_id, username, password_hash, role) "
-            "VALUES (:uid, :username, :pwhash, :role)"
-        ),
-        {
-            "uid": user_id,
-            "username": body.username,
-            "pwhash": hash_password(body.password),
-            "role": body.role,
-        },
-    )
-    await _audit(
-        db,
-        actor_user_id=current.user_id,
-        target_user_id=user_id,
-        action="create",
-        detail=f"role={body.role}",
-    )
-    await db.commit()
+    try:
+        await db.execute(
+            text(
+                "INSERT INTO users (user_id, username, password_hash, role) "
+                "VALUES (:uid, :username, :pwhash, :role)"
+            ),
+            {
+                "uid": user_id,
+                "username": body.username,
+                "pwhash": hash_password(body.password),
+                "role": body.role,
+            },
+        )
+        await _audit(
+            db,
+            actor_user_id=current.user_id,
+            target_user_id=user_id,
+            action="create",
+            detail=f"role={body.role}",
+        )
+        await db.commit()
+    except IntegrityError as exc:
+        # uq_users_username lost the concurrent race → same uniform 409 as the
+        # pre-check (never a 500). Roll back so the session is usable.
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=_CONFLICT) from exc
     log.info(
         "admin.user_created",
         actor_user_id=current.user_id,
