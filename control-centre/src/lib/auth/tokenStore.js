@@ -34,11 +34,21 @@ export function clearToken() {
 // needed here; a forged role only changes what the UI renders, never what the API
 // permits. Returns null if there is no token or it can't be parsed.
 export function getRole() {
+  return _claim('role');
+}
+
+// Decode the `username` claim from the current JWT, for display on the Profile
+// screen (E11-S3). Display-only, same non-security caveat as getRole().
+export function getUsername() {
+  return _claim('username');
+}
+
+function _claim(name) {
   if (!_token) return null;
   try {
     const payload = _token.split('.')[1];
     const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-    return JSON.parse(json).role ?? null;
+    return JSON.parse(json)[name] ?? null;
   } catch {
     return null;
   }

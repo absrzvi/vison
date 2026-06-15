@@ -59,6 +59,8 @@ Auth (E11-S1 / ADR-23): self-contained JWT. Protected routers attach `Security(g
 
 Liveness (E11-S2): both extractors run an `is_active` lookup (`assert_user_active`) AFTER `_verify_token`, so deactivating a user invalidates their existing token mid-session, not just their next login. This is authorization, layered in the extractor — `_verify_token` stays pure (the ADR-23 OIDC-swap seam). Never fold the `is_active` SELECT into `_verify_token`. `bcrypt_rounds` is config-driven (prod default 12); a Settings validator rejects `< 10` unless `app_env == "test"` (so the cheap test cost can't leak into prod). Admin user-management (`routes/users.py`, `require_role("admin")`) audits every mutation to the local `user_audit` table (Alembic 0010) + a structured log, in the same transaction as the mutation — NOT via the event envelope (user-account actions are landside-local). The last active admin cannot be deactivated/demoted (atomic `SELECT … FOR UPDATE` guard → 409).
 
+Preferences (E11-S3): `operator_preferences.operator_id` is a UUID FK to `users.user_id` (Alembic 0011). It was re-keyed from the old shared-API-key TEXT string — the defunct rows were dropped (drop/seed, Decision D1: no honest 1-key→N-user mapping existed), not migrated. `routes/preferences.py` keys the GET/PATCH by `current_user.user_id` (token-only identity; any body `operator_id` is ignored). The raw-SQL `RETURNING operator_id` yields a UUID object → coerce to `str` for the `str`-typed response model (the model stays `str`, the column is `uuid`). `unattended_threshold_min` is localStorage-only (no server column) and is NOT on the Profile screen.
+
 Error shape: all 4xx/5xx responses use `{"detail": "..."}` — never return raw exception messages to clients.
 
 ## Review Failure Scenarios

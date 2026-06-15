@@ -88,6 +88,34 @@ def test_patch_preferences_body_operator_id_ignored() -> None:
 
 # ── Unit Tests ─────────────────────────────────────────────────────────────
 
+
+# AC5 carve-out (E11-S3): 401 is ONLY for an absent/invalid token. A VALID token
+# whose user has no saved row still returns the preserved E2-S8 404→defaults
+# envelope (the frontend depends on this — api/preferences.js maps 404→defaults).
+# These two tests pin the distinction so AC5 doesn't read as contradicting the
+# 404 contract: no-token → 401 (above); valid-token-no-row → 404 (below).
+@pytest.mark.unit
+def test_valid_token_no_row_returns_404_not_401() -> None:
+    """A valid token with no saved preferences row → 404→defaults, NOT 401.
+    401 is reserved for the absent/invalid-token case (E11-S3 AC5 carve-out)."""
+    async def _fake_gen():
+        session = AsyncMock()
+        result = MagicMock()
+        result.fetchone = MagicMock(return_value=None)
+        session.execute = AsyncMock(return_value=result)
+        yield session
+
+    from cloud_backend.database import get_db
+    app.dependency_overrides[get_db] = _fake_gen
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            r = client.get("/api/v1/operators/me/preferences", headers=_HEADERS)
+        assert r.status_code == 404
+        assert r.json()["detail"]["error"] == "NOT_FOUND"
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
 @pytest.mark.unit
 def test_get_preferences_returns_404_when_no_row() -> None:
     async def _fake_gen():

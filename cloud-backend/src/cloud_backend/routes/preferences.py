@@ -3,10 +3,12 @@
 GET  /api/v1/operators/me/preferences
 PATCH /api/v1/operators/me/preferences
 
-operator_id is the authenticated user's user_id (E11-S1 JWT cutover). Existing
-rows keyed by the old shared API-key string read as 404 → graceful defaults
-until E11-S3 re-keys/backfills them (Alembic migration). The data migration is
-E11-S3's job; this story only swaps the identity source.
+operator_id is the authenticated user's user_id (E11-S1 JWT cutover). E11-S3
+(Alembic 0011) re-keyed operator_preferences.operator_id from the old shared
+API-key TEXT string to a real UUID FK on users(user_id): the defunct rows were
+dropped (no honest 1-key→N-user mapping existed) and new rows are created on
+demand by the PATCH upsert below, keyed by current_user.user_id. A valid token
+with no saved row still returns 404 → the client uses defaults.
 """
 from __future__ import annotations
 
@@ -76,7 +78,9 @@ async def get_preferences(
             },
         )
     return PreferencesOut(
-        operator_id=row.operator_id,
+        # operator_id is a uuid column post-E11-S3 (Alembic 0011); the raw-SQL
+        # path returns it as a UUID object — coerce to str to match the model.
+        operator_id=str(row.operator_id),
         threshold_sec=row.threshold_sec,
         staleness_threshold_sec=row.staleness_threshold_sec,
     )
@@ -138,7 +142,7 @@ async def patch_preferences(
     await db.commit()
     row = result.one()
     return PreferencesPatchOut(
-        operator_id=row.operator_id,
+        operator_id=str(row.operator_id),  # uuid column post-0011 → str for the model
         threshold_sec=row.threshold_sec,
         staleness_threshold_sec=row.staleness_threshold_sec,
         updated_at=str(row.updated_at),

@@ -379,6 +379,61 @@ def test_journey_id_column_comment(pg_url: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Story 11-3 AC2 — operator_preferences re-keyed to UUID FK on users (0011)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_operator_preferences_rekeyed_to_user_fk(pg_url: str) -> None:
+    """After 0011, operator_id is uuid with a FK to users(user_id); the two
+    threshold CHECK constraints survive the ALTER (asserted via the catalog)."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    async def _check() -> None:
+        engine = create_async_engine(pg_url)
+        async with engine.connect() as conn:
+            col_type = (
+                await conn.execute(
+                    text(
+                        "SELECT data_type FROM information_schema.columns "
+                        "WHERE table_name='operator_preferences' "
+                        "AND column_name='operator_id'"
+                    )
+                )
+            ).scalar()
+            fk = (
+                await conn.execute(
+                    text(
+                        "SELECT 1 FROM information_schema.table_constraints tc "
+                        "JOIN information_schema.constraint_column_usage ccu "
+                        "  ON tc.constraint_name = ccu.constraint_name "
+                        "WHERE tc.table_name='operator_preferences' "
+                        "  AND tc.constraint_type='FOREIGN KEY' "
+                        "  AND ccu.table_name='users' AND ccu.column_name='user_id'"
+                    )
+                )
+            ).scalar()
+            checks = {
+                row[0]
+                for row in await conn.execute(
+                    text(
+                        "SELECT conname FROM pg_constraint con "
+                        "JOIN pg_class rel ON rel.oid = con.conrelid "
+                        "WHERE rel.relname='operator_preferences' AND con.contype='c'"
+                    )
+                )
+            }
+        await engine.dispose()
+        assert col_type == "uuid"
+        assert fk == 1
+        assert "ck_threshold_sec_valid" in checks
+        assert "ck_staleness_threshold_sec_valid" in checks
+
+    _run(_check())
+
+
+# ---------------------------------------------------------------------------
 # AC5 — second alembic upgrade head is idempotent
 # ---------------------------------------------------------------------------
 

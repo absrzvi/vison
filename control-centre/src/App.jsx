@@ -8,6 +8,7 @@ import { SystemHealth } from './components/health/SystemHealth';
 import { Analytics } from './components/analytics/Analytics';
 import { EscalationsDashboard } from './components/escalations/EscalationsDashboard';
 import { Users } from './components/admin/Users';
+import { Profile } from './components/profile/Profile';
 import { Login } from './components/auth/Login';
 import { useAuth } from './context/AuthContext';
 import './styles/global.css';
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="analytics"    element={<ErrorBoundary><Analytics /></ErrorBoundary>} />
           <Route path="escalations"  element={<ErrorBoundary><EscalationsDashboard /></ErrorBoundary>} />
           <Route path="users"        element={<RequireAdmin><ErrorBoundary><Users /></ErrorBoundary></RequireAdmin>} />
+          <Route path="profile"      element={<ErrorBoundary><Profile /></ErrorBoundary>} />
         </Route>
       </Routes>
     </BrowserRouter>

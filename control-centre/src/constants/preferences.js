@@ -8,3 +8,7 @@ export const LS_KEY_ALERT_THRESHOLD = 'oebb.cc.alertThresholdSeconds';
 export const LS_KEY_STALENESS_THRESHOLD = 'oebb.cc.stalenessThresholdSeconds';
 export const LS_KEY_UNATTENDED_THRESHOLD = 'oebb.cc.unattendedThresholdMinutes';
 export const WS_STALENESS_THRESHOLD_MS = 120_000;
+
+// Segmented-control label formatter for second-valued thresholds (shared by the
+// gear-modal and the Profile screen — E11-S3).
+export const formatSec = (s) => `${s}s`;

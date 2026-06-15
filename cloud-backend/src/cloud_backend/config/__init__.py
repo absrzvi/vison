@@ -13,9 +13,13 @@ class Settings(BaseSettings):
     app_env: str = "prod"
 
     database_url: str = "postgresql+asyncpg://oebb:oebb@localhost:5432/oebb"
-    # DEAD for routing after the E11-S1 JWT cutover; kept because preferences.py
-    # still keys operator_preferences by this string until E11-S3 re-keys it, and
-    # require_api_key remains importable. Removed when E11-S3 lands.
+    # DEAD for human-facing routing after the E11-S1 JWT cutover, BUT still live:
+    # require_api_key guards the machine-to-machine `POST /api/v1/events` ingest
+    # (11-1 D1 / ADR-23 — an unattended producer; a human JWT is the wrong model).
+    # E11-S3 removed the preferences-keying reason for it (operator_preferences is
+    # now FK'd to users.user_id, Alembic 0011), but the ingest service-token
+    # remains. Replacing it with proper per-producer service identity is Phase-2
+    # (tracked in deferred-work.md). NOT removed here.
     api_key: str = "dev-insecure-key"
     # E10-S1 AC12: admin key for the alert-class kill-switch endpoints.
     # MUST come from env CC_ADMIN_KEY; empty default fails closed (all admin

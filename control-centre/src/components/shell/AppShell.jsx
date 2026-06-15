@@ -78,6 +78,7 @@ export function AppShell() {
         {role === 'admin' && (
           <NavLink to="/dashboard/users" className={({ isActive }) => `tab-bar__tab ${isActive ? 'tab-bar__tab--active' : ''}`} data-testid="nav-users">Users</NavLink>
         )}
+        <NavLink to="/dashboard/profile" className={({ isActive }) => `tab-bar__tab ${isActive ? 'tab-bar__tab--active' : ''}`} data-testid="nav-profile">Profile</NavLink>
       </nav>
 
       {wsStatus === 'reconnecting' && (
