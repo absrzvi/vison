@@ -2025,13 +2025,13 @@ The shared HTTP retry policy correctly classifies 4xx responses as non-retriable
 
 ---
 
-### Epic 8: Analytics UI Hardening
+### Epic 8: Control Centre UI Hardening
 
-All four analytics tabs and the system health view handle rapid date-range changes without stale fetches, retry controls are debounced, and the `FleetContext` provider does not cause unnecessary re-renders on every WebSocket tick.
+All four analytics tabs and the system health view handle rapid date-range changes without stale fetches, retry controls are debounced, and the `FleetContext` provider does not cause unnecessary re-renders on every WebSocket tick. **Scope broadened 2026-06-15:** also absorbs the Epic-11 admin/identity shell coherence findings (S4–S8 below) from Freya's WDS coherence review — the admin shell (login, nav, Users, Profile, Alert Classes, Configuration) was built code-first per-story and needs a unifying pass. The epic title was "Analytics UI Hardening"; it now covers Control-Centre UI hardening across both analytics and admin surfaces.
 
-**Source:** Deferred items from E3-S3, E3-S4, E3-S5, E3-S7, E2-S2, E5-S1 code reviews  
-**Component files:** `src/components/analytics/`, `src/context/FleetContext.jsx`  
-**FRs covered:** UX-DR8–UX-DR12 (analytics interactions), NFR1 (uptime)
+**Source:** Deferred items from E3-S3, E3-S4, E3-S5, E3-S7, E2-S2, E5-S1 code reviews (S1–S3); Freya WDS coherence review 2026-06-15 (S4–S8 — see `_bmad-output/design-artifacts/D-UX-Design/2026-06-15-epic-11-admin-shell-coherence-review.md`)  
+**Component files:** `src/components/analytics/`, `src/context/FleetContext.jsx` (S1–S3); `src/components/admin/`, `src/components/auth/`, `src/components/profile/`, `src/components/shell/` (S4–S8)  
+**FRs covered:** UX-DR8–UX-DR12 (analytics interactions), NFR1 (uptime); admin-shell coherence (S4–S8) is UX-quality hardening, no new FR
 
 ---
 
@@ -2092,6 +2092,77 @@ All four analytics tabs and the system health view handle rapid date-range chang
 
 **Dependencies:** E2-S1 (FleetContext real WS client)  
 **Files changed:** `src/context/FleetContext.jsx`
+
+---
+
+> **Admin/identity shell coherence (S4–S8).** Folded in from Freya's WDS coherence review (2026-06-15) of the Epic-11 admin shell — built code-first per story, never designed as one surface. Findings F1–F8 in `D-UX-Design/2026-06-15-epic-11-admin-shell-coherence-review.md`. Recommended sequence: S4 → S5 (enabling refactor) → S6 → S7 → S8. None block; the shell is shippable as-is. Each is a UI-only quality story; run create-story per-story before dev.
+
+#### Story E8-S4 — Sign-out control + header identity (F1)
+
+**As a** signed-in Control Centre user,
+**I want** a visible identity affordance and a way to sign out from the app shell,
+**so that** I can see who I'm signed in as and deliberately end my session (today `AuthContext.logout()` exists but is rendered nowhere).
+
+**Acceptance criteria (sketch — refine at create-story):**
+- **Given** an authenticated user, **when** the AppShell header renders, **then** it shows the username + role and a Sign-out control (e.g. a small user menu anchored near the ⚙ button).
+- **Given** the user clicks Sign out, **then** `AuthContext.logout()` is invoked, the token is cleared, and the route guard redirects to `/login`.
+- **Given** the identity affordance, **then** the username/role treatment is defined once and reused (coordinate with S8/F7 — not re-invented per screen).
+- Browser-verified; `--obb-*` tokens only.
+
+**Files:** `src/components/shell/AppShell.jsx`, `src/context/AuthContext.jsx` (consume existing `logout`). **Depends:** — (F1).
+
+#### Story E8-S5 — Shared admin component primitives (F3)
+
+**As a** developer,
+**I want** the duplicated admin table/button/pill/field CSS across Users, Alert Classes, and Configuration extracted into one shared primitive set,
+**so that** the three admin screens stop drifting and future restyles touch one place.
+
+**Acceptance criteria (sketch):**
+- **Given** the three admin screens, **when** the shared primitives land (e.g. `AdminTable`/`AdminButton` components or a shared `.obb-admin-*` class layer), **then** Users / Alert Classes / Configuration consume them and the per-screen duplicate class roots (`.users-btn`, `.alert-classes-btn`, `.configuration-btn`, etc.) are removed.
+- **Given** the refactor, **then** all three screens render visually identically to before (browser-verified, no visual regression) and all existing vitest pass.
+- `--obb-*` tokens only; no hex.
+
+**Files:** new shared admin primitives under `src/components/admin/` (or `src/components/shell/`); `Users.{jsx,css}`, `AlertClasses.{jsx,css}`, `Configuration.{jsx,css}`. **Depends:** — (enabling refactor; do before S6/S8).
+
+#### Story E8-S6 — Admin screen consistency: headers, edit affordances, audit-visibility (F4 + F5 + F8)
+
+**As a** Control Centre admin,
+**I want** the admin screens to share one header pattern, one in-table edit/confirm language, and consistent "last changed by" visibility,
+**so that** the admin surface reads as one coherent tool rather than three independently-grown screens.
+
+**Acceptance criteria (sketch):**
+- **F4** — standardise the admin page header: `<h2>` title + optional one-line description + optional right-aligned primary action, applied identically across Users / Alert Classes / Configuration.
+- **F5** — unify the in-table edit visual language (actions-column placement, Save/confirm affordance, disabled/dirty states), while keeping the justified per-screen control types (role toggle vs numeric input).
+- **F8** — surface "last changed by / at" consistently: Configuration shows the `updated_by`/`updated_at` it already records (matching Alert Classes), or both adopt one treatment.
+- Browser-verified; built on S5's shared primitives.
+
+**Files:** the `__header`/`<tbody>` blocks in `Users.jsx`, `AlertClasses.jsx`, `Configuration.jsx`. **Depends:** E8-S5.
+
+#### Story E8-S7 — Unify the settings home (F2)
+
+**As a** Control Centre operator,
+**I want** my preferences to live in one place rather than split between the Profile screen and the ⚙ gear-modal,
+**so that** "settings" has a single, predictable home.
+
+**Acceptance criteria (sketch):**
+- **Given** `unattended_threshold_min` has server persistence (E11S3-D5 prerequisite), **when** preferences are consolidated, **then** the gear-modal controls fold into the Profile screen and the ⚙ either opens Profile or is retired.
+- **Given** the consolidation, **then** all preference controls are server-backed and follow the user (no localStorage-only control on the canonical settings screen).
+- Browser-verified.
+
+**Files:** `src/components/shell/AppShell.jsx` (⚙ + `OperatorPreferences`), `src/components/profile/Profile.jsx`. **Depends:** **E11S3-D5** (server-persist `unattended_threshold_min` — backend column + model field) — sequence after that lands.
+
+#### Story E8-S8 — Login branding + identity treatment (F6 + F7)
+
+**As a** Control Centre user,
+**I want** the login screen and the in-app identity (avatar/initial) to match the product's dark-ops design language,
+**so that** the first impression and the identity treatment feel like one designed product.
+
+**Acceptance criteria (sketch):**
+- **F6** — light brand pass on `Login.jsx`: ÖBB logo lockup, the dark-ops surface treatment used elsewhere, consistent vertical rhythm; still theme-correct (`--obb-*`) and functional (3 states preserved).
+- **F7** — define the identity/avatar treatment once and reuse it (Profile + the S4 header affordance), not invented per screen.
+- Browser-verified.
+
+**Files:** `src/components/auth/Login.{jsx,css}`, `src/components/profile/Profile.jsx` (avatar), coordinate with E8-S4. **Depends:** E8-S4 (shared identity treatment). Lowest urgency.
 
 ---
 
