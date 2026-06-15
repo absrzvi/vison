@@ -198,7 +198,9 @@ async def test_floor_patch_flips_live_degraded_flag(
     )
     assert r.status_code == 202
 
-    # With the seeded floor 0.60, mean 0.50 < 0.60 → degraded TRUE.
+    # With the seeded floor 0.60, mean 0.50 < 0.60 → degraded TRUE. (Reset the flag
+    # cache once to establish the baseline — this is initial-state seeding, NOT the
+    # propagation under test.)
     degraded_cache.reset()
     r = await app_client.get("/api/v1/health", headers=_operator_header())
     assert r.status_code == 200
@@ -213,9 +215,10 @@ async def test_floor_patch_flips_live_degraded_flag(
     assert r.status_code == 200
     assert r.json()["degraded_banner_floor"] == 0.40
 
-    # The LIVE gate now reads the persisted 0.40: mean 0.50 >= 0.40 → degraded FALSE.
-    # (The PATCH invalidated threshold_store; reset the flag cache to recompute now.)
-    degraded_cache.reset()
+    # R1: the LIVE gate flips with NO manual cache reset — the PATCH itself resets
+    # degraded_cache, so the next request recomputes against the persisted 0.40
+    # (mean 0.50 >= 0.40 → degraded FALSE). This proves production behaviour, not a
+    # test-only reset that masks the ≤30s staleness.
     r = await app_client.get("/api/v1/health", headers=_operator_header())
     assert r.json()["ai_quality_degraded"] is False
 
@@ -278,9 +281,61 @@ async def test_out_of_range_patch_422_store_unchanged(
         json={"degraded_banner_floor": 1.5},
     )
     assert r.status_code == 422
+    # R1 — ADR-10 envelope, not FastAPI's default RequestValidationError body.
+    assert r.json()["detail"]["error"] == "UNPROCESSABLE"
     async with factory() as session:
         floor = (await session.execute(text(_FLOOR_SQL))).scalar()
         assert floor == 0.60  # unchanged
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_floor_zero_rejected_422_store_unchanged(
+    app_client: AsyncClient,
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """R1 — a floor of 0.0 is a fail-OPEN and must be rejected on the real wire,
+    leaving the seeded 0.60 intact."""
+    r = await app_client.patch(
+        "/api/v1/config/confidence-thresholds",
+        headers=_admin_header(),
+        json={"degraded_banner_floor": 0.0},
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"]["error"] == "UNPROCESSABLE"
+    async with factory() as session:
+        floor = (await session.execute(text(_FLOOR_SQL))).scalar()
+        assert floor == 0.60  # unchanged
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_db_check_forbids_zero_floor_raw_write(
+    app_client: AsyncClient,
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """R1 defense-in-depth: the 0013 partial CHECK rejects a RAW write of a 0.0
+    floor at the DB layer, while a raw 0.0 per-class write is allowed."""
+    from sqlalchemy.exc import IntegrityError
+
+    async with factory() as session:
+        with pytest.raises(IntegrityError):
+            await session.execute(
+                text(
+                    "UPDATE confidence_thresholds SET value = 0.0 "
+                    "WHERE config_key = 'degraded_banner_floor'"
+                )
+            )
+            await session.commit()
+    # A per-class 0.0 raw write is permitted (no fail-open — display only).
+    async with factory() as session:
+        await session.execute(
+            text(
+                "UPDATE confidence_thresholds SET value = 0.0 "
+                "WHERE config_key = 'per_class:unattended_bag'"
+            )
+        )
+        await session.commit()
 
 
 # ---------------------------------------------------------------------------

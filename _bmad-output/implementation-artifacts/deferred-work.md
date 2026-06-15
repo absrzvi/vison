@@ -1,5 +1,9 @@
 ﻿# Deferred Work
 
+## Deferred from: code review of 11-5-configuration-surface (2026-06-15)
+
+- **E11S5-R1-ChipCache** — The admin Configuration screen can lower a per-class confidence threshold, but the operator-facing `UnifiedFeed` ConfidenceChip won't reflect it until a hard page reload: `control-centre/src/api/confidenceThresholds.js` caches the GET result for the whole session (an `_inflight` promise, never invalidated on success) and is a SEPARATE client from the admin write client (`api/config.js`). Pre-existing E10-S1 design (the chip was always session-cached); per-class thresholds are display-only (no gate), so this is cosmetic, not a correctness issue. A cross-client cache-invalidation (or a short TTL / refetch-on-focus on the chip client) would close it. Out of scope for 11-5 (the chip client + UnifiedFeed were deliberately left untouched). [control-centre/src/api/confidenceThresholds.js, components/live/UnifiedFeed.jsx]
+
 ## Deferred from: code review of story 10-6 (2026-06-13)
 
 - **Duplicate `publish_alert` on duplicate ALERT_RAISED ingest** [cloud-backend/src/cloud_backend/routes/ingest.py] — pre-existing: the ALERT_RAISED SSE fan-out fires unconditionally even when the event is a duplicate (ON CONFLICT DO NOTHING on the events row). Not introduced by 10-6. Guard the publish on insert rowcount; bundle into Epic 9 (container/infra hardening) or an SSE-dedup story.

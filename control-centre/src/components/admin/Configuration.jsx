@@ -37,12 +37,22 @@ function fmt(v) {
 function ThresholdRow({ row, onSave }) {
   const [draft, setDraft] = useState(fmt(row.value));
   const [saving, setSaving] = useState(false);
-  const dirty = Number(draft) !== Number(fmt(row.value));
+  // A blank or non-numeric input must NOT be treated as a value: Number("") === 0
+  // would coerce a cleared field to 0.0, and a 0.0 floor disables the degraded
+  // banner. The floor must be strictly > 0; per-class allows >= 0. The server is
+  // the authority (422), but the button stays disabled for an unsubmittable draft.
+  const parsed = draft.trim() === '' ? NaN : Number(draft);
+  const minAllowed = row.kind === 'floor' ? 0 : -Infinity; // floor: strictly > 0 below
+  const valid =
+    Number.isFinite(parsed) &&
+    parsed <= 1 &&
+    (row.kind === 'floor' ? parsed > minAllowed : parsed >= 0);
+  const dirty = valid && parsed !== Number(fmt(row.value));
 
   const save = async () => {
     setSaving(true);
     try {
-      await onSave(row, Number(draft));
+      await onSave(row, parsed);
     } finally {
       setSaving(false);
     }

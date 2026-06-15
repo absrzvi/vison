@@ -35,15 +35,22 @@ _FLOOR_KEY = "degraded_banner_floor"
 _PER_CLASS_PREFIX = "per_class:"
 
 
-def _valid(value: Any) -> bool:
-    """A persisted value is usable only if it is a finite float in [0.0, 1.0].
-    Anything else (None, NaN, Inf, out-of-range, non-numeric) → fall back to the
-    hardcoded default (fail SAFE)."""
+def _valid(value: Any, *, floor: bool = False) -> bool:
+    """A persisted value is usable only if it is a finite float in range; anything
+    else (None, NaN, Inf, out-of-range, non-numeric) → fall back to the hardcoded
+    default (fail SAFE). Per-class values allow [0.0, 1.0]; the degraded-banner
+    floor must be STRICTLY > 0.0 (a stored 0.0 floor would make the gate never
+    fire — fail-OPEN — so it is treated as malformed and falls back to the default,
+    not honoured). E11-S5 code-review R1."""
     try:
         v = float(value)
     except (TypeError, ValueError):
         return False
-    return math.isfinite(v) and 0.0 <= v <= 1.0
+    if not math.isfinite(v) or not (0.0 <= v <= 1.0):
+        return False
+    if floor and v <= 0.0:
+        return False
+    return True
 
 
 class ThresholdStore:
@@ -89,11 +96,13 @@ class ThresholdStore:
             cfg = self._defaults()
             for r in rows:
                 key = r.config_key
-                if not _valid(r.value):
-                    continue  # fail SAFE — keep the hardcoded default for this key
                 if key == _FLOOR_KEY:
-                    cfg["degraded_banner_floor"] = float(r.value)
+                    if _valid(r.value, floor=True):
+                        cfg["degraded_banner_floor"] = float(r.value)
+                    # else fail SAFE — a 0.0/malformed floor keeps the hardcoded default
                 elif key.startswith(_PER_CLASS_PREFIX):
+                    if not _valid(r.value):
+                        continue  # fail SAFE — keep the hardcoded default for this key
                     cls = key[len(_PER_CLASS_PREFIX):]
                     # Only accept known classes; an unknown key is ignored (defaults stand).
                     if cls in DEFAULT_CONFIDENCE_THRESHOLDS:

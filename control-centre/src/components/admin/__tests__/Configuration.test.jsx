@@ -70,6 +70,23 @@ describe('Configuration — mutations', () => {
     await waitFor(() => expect(listThresholds).toHaveBeenCalledTimes(2));
   });
 
+  it('R1: a cleared floor input does NOT enable Save (no empty→0.0 coercion that would disable the banner)', async () => {
+    listThresholds.mockResolvedValue(CFG);
+    render(<Configuration />);
+    await screen.findByTestId('configuration-screen');
+
+    const save = screen.getByTestId('configuration-save-degraded_banner_floor');
+    // Clear the floor field → empty draft must NOT be treated as 0.0 / dirty.
+    fireEvent.change(screen.getByTestId('configuration-input-degraded_banner_floor'), { target: { value: '' } });
+    expect(save).toBeDisabled();
+    // An explicit 0 for the floor is also not submittable (fail-open guard).
+    fireEvent.change(screen.getByTestId('configuration-input-degraded_banner_floor'), { target: { value: '0' } });
+    expect(save).toBeDisabled();
+    // A valid floor re-enables it.
+    fireEvent.change(screen.getByTestId('configuration-input-degraded_banner_floor'), { target: { value: '0.5' } });
+    expect(save).not.toBeDisabled();
+  });
+
   it('editing the floor patches degraded_banner_floor (not per_class)', async () => {
     listThresholds.mockResolvedValue(CFG);
     patchThresholds.mockResolvedValueOnce({ ...CFG, degraded_banner_floor: 0.55 });

@@ -147,6 +147,8 @@ def test_no_token_patch_is_401() -> None:
 # ST2 — out-of-range / non-numeric over the wire rejected at the boundary (422),
 # nothing written. (NaN/Inf cannot be encoded as JSON numbers, so they can't
 # arrive over the wire; they're covered at the validator level below.)
+# R1: 0.0 is now ALSO rejected for the floor (fail-open guard) — see the dedicated
+# test below; here we keep the out-of-range/non-numeric cases.
 @pytest.mark.parametrize("bad", [1.5, -0.1, "abc"])
 def test_out_of_range_floor_rejected_422(bad: Any) -> None:
     session = _StubSession()
@@ -162,6 +164,70 @@ def test_out_of_range_floor_rejected_422(bad: Any) -> None:
     assert not any(
         "insert" in sql.lower() or "update" in sql.lower() for sql, _ in session.calls
     )
+
+
+# R1 (code-review) — a floor of 0.0 is a fail-OPEN (gate `mean < floor` never
+# fires) and must be rejected, even though it's "in [0,1]". Per-class 0.0 is fine.
+def test_floor_zero_rejected_422_fail_open_guard() -> None:
+    session = _StubSession()
+    _override_db(session)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        r = client.patch(
+            "/api/v1/config/confidence-thresholds",
+            headers=_ADMIN_HEADERS,
+            json={"degraded_banner_floor": 0.0},
+        )
+    assert r.status_code == 422
+    body = r.json()
+    # R1 — the 422 uses the ADR-10 envelope (not FastAPI's default body).
+    assert body["detail"]["error"] == "UNPROCESSABLE"
+    assert "degraded_banner_floor" in body["detail"]["detail"]
+    assert not any(
+        "insert" in sql.lower() or "update" in sql.lower() for sql, _ in session.calls
+    )
+
+
+def test_per_class_zero_allowed() -> None:
+    """Per-class 0.0 is valid (display-only, not a gate) — distinguishes the floor
+    rule from the per-class rule."""
+    session = _StubSession()
+    _override_db(session)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        r = client.patch(
+            "/api/v1/config/confidence-thresholds",
+            headers=_ADMIN_HEADERS,
+            json={"per_class": {"unattended_bag": 0.0}},
+        )
+    assert r.status_code == 200
+
+
+def test_invalid_patch_uses_adr10_envelope() -> None:
+    """R1 — every PATCH validation 422 carries the ADR-10 envelope
+    {error, detail, recoverable}, mirroring preferences.py (NOT FastAPI's default
+    RequestValidationError body)."""
+    session = _StubSession()
+    _override_db(session)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        r = client.patch(
+            "/api/v1/config/confidence-thresholds",
+            headers=_ADMIN_HEADERS,
+            json={"per_class": {"unattended_bag": 1.5}},
+        )
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert detail["error"] == "UNPROCESSABLE"
+    assert detail["recoverable"] is True
+    assert isinstance(detail["detail"], str)
+
+
+def test_store_read_rejects_zero_floor_falls_back_to_default() -> None:
+    """R1 — a PERSISTED floor of 0.0 (e.g. a legacy/raw write) must fail SAFE to the
+    hardcoded default, never be honoured (which would disable the gate)."""
+    from cloud_backend.config.confidence_thresholds import _valid
+
+    assert _valid(0.0, floor=True) is False  # floor: 0.0 rejected
+    assert _valid(0.0) is True  # per-class: 0.0 allowed
+    assert _valid(0.60, floor=True) is True
 
 
 @pytest.mark.parametrize("bad", [1.5, -0.1])
