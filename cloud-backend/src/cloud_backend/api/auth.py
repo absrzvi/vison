@@ -24,6 +24,7 @@ from fastapi import Depends, HTTPException, Security
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
@@ -133,11 +134,24 @@ async def assert_user_active(user: CurrentUser, db: AsyncSession) -> CurrentUser
 
     Do NOT fold this SELECT into `_verify_token` — that would couple the verifier
     to local state and break the seam (guarded by test_seam_liveness_survives_verifier_swap).
+
+    `users.user_id` is a uuid column (0009), so a token carrying a non-UUID `sub`
+    (a forged token, or an external IdP minting a non-UUID subject) makes the bind
+    raise asyncpg DataError. We catch that and treat the malformed `sub` exactly
+    like a never-existed user → 401, never an uncaught 500 (honouring this
+    function's own "never-existed sub → 401" contract). Catching the bind error
+    (rather than pre-validating the UUID) keeps the check correct against any
+    user_id column type a future store might use. (Surfaced by E11-S3 Security
+    Test 2; the gap predates E11-S3.)
     """
-    result = await db.execute(
-        text("SELECT is_active FROM users WHERE user_id = :uid"),
-        {"uid": user.user_id},
-    )
+    try:
+        result = await db.execute(
+            text("SELECT is_active FROM users WHERE user_id = :uid"),
+            {"uid": user.user_id},
+        )
+    except DBAPIError as exc:
+        # A non-UUID / otherwise-unbindable sub is not a live principal → 401.
+        raise HTTPException(status_code=401, detail=_UNAUTHORIZED) from exc
     row = result.fetchone()
     if row is None or not row.is_active:
         raise HTTPException(status_code=401, detail=_UNAUTHORIZED)

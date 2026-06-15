@@ -18,8 +18,10 @@ import asyncio
 import os
 import uuid
 from collections.abc import AsyncGenerator, Generator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import jwt
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -197,7 +199,9 @@ def test_operator_preferences_is_uuid_fk_with_checks(pg_url: str) -> None:
 
 
 @pytest.mark.integration
-def test_rekey_migration_drops_defunct_rows(pg_url: str) -> None:
+def test_rekey_migration_drops_defunct_rows(
+    pg_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Downgrade to 0010, insert a defunct row keyed by a NON-UUID-castable TEXT
     value (the old shared API-key string — NOT a random uuid-string, or an
     ALTER-before-DELETE bug would pass undetected — Amelia/D3), then upgrade head.
@@ -215,11 +219,14 @@ def test_rekey_migration_drops_defunct_rows(pg_url: str) -> None:
     os.environ["DATABASE_URL"] = pg_url
     try:
         command.downgrade(cfg, "0010")
-        # At 0010 the column is TEXT again — seed a non-UUID-castable defunct row.
+        # At 0010 the column is TEXT again. Clear any rows a prior test left in the
+        # module-shared DB, then seed EXACTLY ONE non-UUID-castable defunct row, so
+        # the "deleted 1" assertion is deterministic regardless of test ordering.
         conn = psycopg2.connect(sync_url)
         try:
             conn.autocommit = True
             cur = conn.cursor()
+            cur.execute("DELETE FROM operator_preferences")
             cur.execute(
                 "INSERT INTO operator_preferences "
                 "(operator_id, threshold_sec, staleness_threshold_sec) "
@@ -229,12 +236,38 @@ def test_rekey_migration_drops_defunct_rows(pg_url: str) -> None:
             conn.close()
         # upgrade head must DELETE-before-ALTER so the ::uuid cast never sees the
         # non-castable string. A wrong ordering raises invalid_text_representation.
-        command.upgrade(cfg, "head")
+        # D1 legibility rider: assert the migration logs the deleted count. We can't
+        # use caplog here — alembic's env.py calls fileConfig() at the top of EVERY
+        # migration run with disable_existing_loggers=True, which tears down any
+        # handler/propagation we attach. So we record warning() calls directly on
+        # Logger.warning (immune to fileConfig) for the duration of the upgrade.
+        import logging
+
+        warned: list[str] = []
+        _orig_warning = logging.Logger.warning
+
+        def _spy_warning(self, msg, *args, **kwargs):  # type: ignore[no-untyped-def]
+            try:
+                warned.append(str(msg) % args if args else str(msg))
+            except Exception:
+                warned.append(str(msg))
+            return _orig_warning(self, msg, *args, **kwargs)
+
+        monkeypatch.setattr(logging.Logger, "warning", _spy_warning)
+        try:
+            command.upgrade(cfg, "head")
+        finally:
+            monkeypatch.undo()
     finally:
         if _prev is None:
             os.environ.pop("DATABASE_URL", None)
         else:
             os.environ["DATABASE_URL"] = _prev
+
+    # D1 legibility: the deleted-count warning was emitted (we seeded 1 defunct row).
+    rekey_logs = [m for m in warned if "defunct operator_preferences row" in m]
+    assert rekey_logs, "migration did not log the deleted defunct-row count (D1 legibility)"
+    assert "deleted 1 defunct" in rekey_logs[-1], rekey_logs[-1]
 
     conn = psycopg2.connect(sync_url)
     try:
@@ -399,3 +432,132 @@ def test_preference_fk_rejects_unknown_user(pg_url: str) -> None:
         await engine.dispose()
 
     _run(_check())
+
+
+# ── Security Test 2 — uuid SQL-safety: a junk / SQL-metachar `sub` cannot escape ──
+
+
+def _mint(sub: str, *, role: str = "operator", minutes: int = 5) -> str:
+    """Mint a token directly (not via create_access_token) so the `sub` can be an
+    arbitrary string — used to drive a non-UUID / SQL-metachar sub through the real
+    verify+query path. Signed with the app's integration secret/issuer so it passes
+    signature/issuer checks and reaches the `:oid` bind."""
+    return jwt.encode(
+        {
+            "sub": sub,
+            "username": "probe",
+            "role": role,
+            "iss": _ISSUER,
+            "exp": datetime.now(UTC) + timedelta(minutes=minutes),
+        },
+        _JWT_SECRET,
+        algorithm="HS256",
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_junk_or_sql_metachar_sub_cannot_escape_the_bind(
+    app_client: AsyncClient, factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Security Test 2: the `sub` flows into the parametrized query as the bound
+    `:oid`, never string-formatted. A non-UUID `sub` (incl. SQL metacharacters)
+    must NOT corrupt the query, drop a table, or 500 — post-migration the column is
+    uuid, so a non-castable sub fails the bind cleanly (DataError → handled), never
+    an unparametrized SQL path. We seed a canary row to prove no DELETE/DROP escaped.
+    """
+    # Seed a real user + a baseline prefs row that must survive the attack.
+    canary_uid = await _seed_user(
+        factory, username="canary", password="canary-pw-1234", role="operator"
+    )
+    canary_t = await _login(app_client, "canary", "canary-pw-1234")
+    await app_client.patch(
+        "/api/v1/operators/me/preferences",
+        json={"threshold_sec": 90},
+        headers=_bearer(canary_t),
+    )
+
+    # Each of these is a `sub` that, if string-interpolated, would break the query
+    # or drop the table. With `:oid` binding + a uuid column they cannot.
+    for evil_sub in (
+        "'; DROP TABLE operator_preferences; --",
+        "x' OR '1'='1",
+        "not-a-uuid",
+        "00000000-0000-0000-0000-000000000000' OR true --",
+    ):
+        token = _mint(evil_sub)
+        rg = await app_client.get(
+            "/api/v1/operators/me/preferences", headers=_bearer(token)
+        )
+        rp = await app_client.patch(
+            "/api/v1/operators/me/preferences",
+            json={"threshold_sec": 60},
+            headers=_bearer(token),
+        )
+        # The non-UUID sub is rejected at the liveness gate as a non-existent
+        # principal → 401 (NOT a 500 leaking the asyncpg DataError, and NEVER a
+        # 200 with injected effects). Hardened in assert_user_active after this
+        # test surfaced the 500 gap (E11-S3 Security Test 2; gap predates E11-S3).
+        assert rg.status_code == 401, f"GET with sub={evil_sub!r} returned {rg.status_code}"
+        assert rp.status_code == 401, f"PATCH with sub={evil_sub!r} returned {rp.status_code}"
+
+    # The canary row and the table both survived — no injection escaped.
+    async with factory() as session:
+        table_ok = (
+            await session.execute(text("SELECT to_regclass('public.operator_preferences')"))
+        ).scalar()
+        canary_threshold = (
+            await session.execute(
+                text("SELECT threshold_sec FROM operator_preferences WHERE operator_id = :oid"),
+                {"oid": canary_uid},
+            )
+        ).scalar()
+    assert table_ok == "operator_preferences", "operator_preferences was dropped!"
+    assert canary_threshold == 90, "canary prefs row was tampered with"
+
+
+# ── AC5 / Security Test 3 — expired + tampered tokens → 401 on GET *and* PATCH ──
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_expired_and_tampered_tokens_401_on_both_verbs(
+    app_client: AsyncClient, factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """AC5 / Security Test 3 pinned on the preferences endpoint specifically (the
+    shared `Security(get_current_user)` core enforces it, but the named RED-first
+    test must cover BOTH verbs — the protected-paths list only had GET + no-token).
+    Expired and tampered-signature tokens → 401 on GET and PATCH; never 200, 404, 500.
+    """
+    uid = await _seed_user(
+        factory, username="exp_user", password="exp-pw-1234", role="operator"
+    )
+    valid = _mint(uid)  # a genuinely valid token for this seeded user
+    expired = _mint(uid, minutes=-5)  # exp in the past
+    head, payload, sig = valid.split(".")
+    tampered = f"{head}.{payload}.{sig[::-1]}"  # reversed sig → guaranteed-invalid
+
+    for bad in (expired, tampered):
+        rg = await app_client.get(
+            "/api/v1/operators/me/preferences", headers=_bearer(bad)
+        )
+        rp = await app_client.patch(
+            "/api/v1/operators/me/preferences",
+            json={"threshold_sec": 60},
+            headers=_bearer(bad),
+        )
+        assert rg.status_code == 401, f"GET with bad token returned {rg.status_code}"
+        assert rp.status_code == 401, f"PATCH with bad token returned {rp.status_code}"
+
+    # Sanity: the VALID token still works on both verbs (proves the 401s above are
+    # the token's fault, not a broken endpoint).
+    assert (
+        await app_client.get("/api/v1/operators/me/preferences", headers=_bearer(valid))
+    ).status_code in (200, 404)
+    assert (
+        await app_client.patch(
+            "/api/v1/operators/me/preferences",
+            json={"threshold_sec": 60},
+            headers=_bearer(valid),
+        )
+    ).status_code == 200
