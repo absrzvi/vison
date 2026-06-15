@@ -27,7 +27,6 @@ from cloud_backend.services.fanout_filter import alert_class_filter
 from .conftest import api_key_header, auth_header, seed_auth_users
 
 _ALEMBIC_INI = str(Path(__file__).parents[2] / "alembic.ini")
-_ADMIN_KEY = "integration-admin-key-fixture"
 
 
 @pytest.fixture(scope="module")
@@ -72,13 +71,10 @@ async def factory(pg_url: str) -> AsyncGenerator[async_sessionmaker[AsyncSession
 @pytest_asyncio.fixture
 async def app_client(
     factory: async_sessionmaker[AsyncSession],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> AsyncGenerator[AsyncClient, None]:
     from cloud_backend.database import get_db
     from cloud_backend.main import app
     from cloud_backend.routes.alerts_sse import _subscribers
-
-    monkeypatch.setenv("CC_ADMIN_KEY", _ADMIN_KEY)
 
     async def _override_db() -> AsyncGenerator[AsyncSession, None]:
         async with factory() as session:
@@ -93,7 +89,9 @@ async def app_client(
 
 
 _API_HEADERS = auth_header()
-_ADMIN_HEADERS = {"X-Admin-Key": _ADMIN_KEY}
+# E11-S4: the kill-switch is now JWT role-gated — toggles use an admin Bearer
+# token (was X-Admin-Key). The audit actor is the token's username ("synthetic-admin").
+_ADMIN_HEADERS = auth_header(role="admin")
 
 
 def _alert_envelope(alert_code: str, ts: datetime) -> dict[str, object]:
@@ -134,7 +132,6 @@ async def test_disabled_class_filtered_from_live_fanout_and_replay(
     r = await app_client.post(
         "/api/v1/admin/alert-classes/UNATTENDED_BAG/disable",
         headers=_ADMIN_HEADERS,
-        json={"actor_name": "nomad-oncall"},
     )
     assert r.status_code == 200
 
@@ -190,7 +187,6 @@ async def test_inflight_escalation_survives_disable_in_replay(
     r = await app_client.post(
         "/api/v1/admin/alert-classes/UNATTENDED_BAG/disable",
         headers=_ADMIN_HEADERS,
-        json={"actor_name": "nomad-oncall"},
     )
     assert r.status_code == 200
 
@@ -219,7 +215,6 @@ async def test_enable_restores_fanout_and_audit_rows_persisted(
         r = await app_client.post(
             f"/api/v1/admin/alert-classes/UNATTENDED_BAG/{action}",
             headers=_ADMIN_HEADERS,
-            json={"actor_name": "nomad-oncall"},
         )
         assert r.status_code == 200
 

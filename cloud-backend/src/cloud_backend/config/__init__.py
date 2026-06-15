@@ -21,10 +21,9 @@ class Settings(BaseSettings):
     # remains. Replacing it with proper per-producer service identity is Phase-2
     # (tracked in deferred-work.md). NOT removed here.
     api_key: str = "dev-insecure-key"
-    # E10-S1 AC12: admin key for the alert-class kill-switch endpoints.
-    # MUST come from env CC_ADMIN_KEY; empty default fails closed (all admin
-    # requests 401). Never bake a value in here. (E11-S4 swaps this for JWT role.)
-    cc_admin_key: str = ""
+    # NOTE: cc_admin_key (the E10-S1 shared X-Admin-Key for the kill-switch) was
+    # REMOVED by E11-S4 — that router now uses require_role("admin") (JWT). It had
+    # no remaining reader once require_admin_key was deleted.
     # E11-S1 (ADR-23): self-contained JWT. jwt_secret MUST come from env
     # JWT_SECRET; empty default fails closed (no token mints or verifies — AC7),
     # mirroring cc_admin_key. issuer/algorithm/key are config-driven so an

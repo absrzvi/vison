@@ -1,53 +1,34 @@
-"""Alert-class kill-switch admin endpoints — story 10-1 AC12.
+"""Alert-class kill-switch admin endpoints — story 10-1 AC12, E11-S4 auth swap.
 
-X-Admin-Key protected (env CC_ADMIN_KEY; empty key fails closed). Operated by
-Nomad on-call via curl during PoC — UI deferred to Epic 11. Every state change
-is audited three ways: alert_class_state row, structured log with source IP,
-and an ALERT_CLASS_DISABLED/REENABLED event envelope persisted to the events
-table.
+JWT-protected: `require_role("admin")` (E11-S4 — was a shared X-Admin-Key, now
+retired). Operated from the Control Centre "Alert Classes" admin screen. Every
+state change is audited three ways: alert_class_state row, structured log with
+source IP, and an ALERT_CLASS_DISABLED/REENABLED event envelope persisted to the
+events table. The audit actor is `current_user.username` (the authenticated
+admin), never a client-supplied body field (E11-S4 D1).
 """
 from __future__ import annotations
 
 import json
-import secrets
 from datetime import UTC, datetime
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, Security
-from fastapi.security import APIKeyHeader
+from fastapi import APIRouter, Depends, Request, Security
 from oebb_shared.events import AlertClassStatePayload, EventEnvelope, EventType
-from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..config import get_settings
+from ..api.auth import CurrentUser, require_role
 from ..database import get_db
 from ..services.fanout_filter import alert_class_filter
 
 log = structlog.get_logger()
 
-_admin_header = APIKeyHeader(name="X-Admin-Key", auto_error=False)
-
-
-async def require_admin_key(admin_key: str | None = Security(_admin_header)) -> str:
-    expected = get_settings().cc_admin_key
-    # Fail closed: unset/empty CC_ADMIN_KEY rejects everything.
-    if not expected or not admin_key or not secrets.compare_digest(admin_key, expected):
-        raise HTTPException(
-            status_code=401,
-            detail={"error": "UNAUTHORIZED", "detail": "Admin key required", "recoverable": False},
-        )
-    return admin_key
-
 
 router = APIRouter(
     prefix="/api/v1/admin/alert-classes",
-    dependencies=[Security(require_admin_key)],
+    dependencies=[Security(require_role("admin"))],
 )
-
-
-class AdminActionBody(BaseModel):
-    actor_name: str = Field(min_length=1)
 
 
 def _client_ip(request: Request) -> str:
@@ -117,11 +98,12 @@ async def _persist_audit_event(
 @router.post("/{alert_code}/disable")
 async def disable_alert_class(
     alert_code: str,
-    body: AdminActionBody,
     request: Request,
+    current: CurrentUser = Security(require_role("admin")),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     source_ip = _client_ip(request)
+    actor = current.username
     await db.execute(
         text("""
             INSERT INTO alert_class_state (alert_code, state, disabled_by, disabled_at)
@@ -129,13 +111,13 @@ async def disable_alert_class(
             ON CONFLICT (alert_code) DO UPDATE
             SET state = 'disabled', disabled_by = :actor, disabled_at = NOW()
         """),
-        {"alert_code": alert_code, "actor": body.actor_name},
+        {"alert_code": alert_code, "actor": actor},
     )
     await _persist_audit_event(
         db,
         event_type="ALERT_CLASS_DISABLED",
         alert_code=alert_code,
-        actor_name=body.actor_name,
+        actor_name=actor,
         source_ip=source_ip,
     )
     await db.commit()
@@ -143,7 +125,7 @@ async def disable_alert_class(
     log.info(
         "admin.alert_class_disabled",
         alert_code=alert_code,
-        actor_name=body.actor_name,
+        actor_name=actor,
         request_source_ip=source_ip,
     )
     return {"alert_code": alert_code, "state": "disabled"}
@@ -152,11 +134,12 @@ async def disable_alert_class(
 @router.post("/{alert_code}/enable")
 async def enable_alert_class(
     alert_code: str,
-    body: AdminActionBody,
     request: Request,
+    current: CurrentUser = Security(require_role("admin")),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     source_ip = _client_ip(request)
+    actor = current.username
     await db.execute(
         text("""
             INSERT INTO alert_class_state (alert_code, state, enabled_by, enabled_at)
@@ -164,13 +147,13 @@ async def enable_alert_class(
             ON CONFLICT (alert_code) DO UPDATE
             SET state = 'enabled', enabled_by = :actor, enabled_at = NOW()
         """),
-        {"alert_code": alert_code, "actor": body.actor_name},
+        {"alert_code": alert_code, "actor": actor},
     )
     await _persist_audit_event(
         db,
         event_type="ALERT_CLASS_REENABLED",
         alert_code=alert_code,
-        actor_name=body.actor_name,
+        actor_name=actor,
         source_ip=source_ip,
     )
     await db.commit()
@@ -178,7 +161,7 @@ async def enable_alert_class(
     log.info(
         "admin.alert_class_reenabled",
         alert_code=alert_code,
-        actor_name=body.actor_name,
+        actor_name=actor,
         request_source_ip=source_ip,
     )
     return {"alert_code": alert_code, "state": "enabled"}

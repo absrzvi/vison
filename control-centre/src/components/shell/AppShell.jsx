@@ -78,6 +78,9 @@ export function AppShell() {
         {role === 'admin' && (
           <NavLink to="/dashboard/users" className={({ isActive }) => `tab-bar__tab ${isActive ? 'tab-bar__tab--active' : ''}`} data-testid="nav-users">Users</NavLink>
         )}
+        {role === 'admin' && (
+          <NavLink to="/dashboard/alert-classes" className={({ isActive }) => `tab-bar__tab ${isActive ? 'tab-bar__tab--active' : ''}`} data-testid="nav-alert-classes">Alert Classes</NavLink>
+        )}
         <NavLink to="/dashboard/profile" className={({ isActive }) => `tab-bar__tab ${isActive ? 'tab-bar__tab--active' : ''}`} data-testid="nav-profile">Profile</NavLink>
       </nav>
 
