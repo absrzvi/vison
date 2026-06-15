@@ -43,6 +43,8 @@ src/inference/
   safety.py      — SafetyHandler; accessibility/ramp events, slip-fall detection
   tripwire.py    — TripwireHandler; gangway directional tripwire → gangway traversal events
   zone_counter.py — per-zone people counting from hailotracker track IDs; POST events to event-store
+  heartbeat.py   — periodic liveness/heartbeat emission
+  model_provenance.py — model file hash/provenance reporting (HEF identity)
 ```
 
 ## Key Patterns

@@ -32,7 +32,8 @@ Coverage threshold: 80%.
 src/cloud_backend/
   routes/     — one file per resource group (fleet, alerts, escalations, health)
   api/        — request/response Pydantic models
-  config.py   — pydantic-settings Settings class; all env vars here
+  services/   — business logic invoked by route handlers
+  config/     — pydantic-settings Settings; all env vars here
   database.py — async engine + session factory
   main.py     — FastAPI app factory; mounts routers
 ```
@@ -41,7 +42,7 @@ src/cloud_backend/
 
 - Routes in `routes/` contain route handlers only — no business logic
 - Pydantic models in `api/` — separate from SQLAlchemy ORM models
-- New env var → add to `config.py` Settings class first, then `.env.example`
+- New env var → add to the `config/` Settings class first, then `.env.example`
 - Migration: `alembic revision --autogenerate -m "description"` then review before applying
 
 ## What NOT to Touch

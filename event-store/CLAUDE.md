@@ -34,6 +34,9 @@ src/event_store/
   database.py — SQLite connection + schema init (reads schema.sql on startup)
   exceptions.py — domain exceptions mapped to HTTP status codes
   config.py   — pydantic-settings Settings
+  auth.py     — X-API-Key verification
+  deps.py     — FastAPI dependencies (auth gate, DB handle)
+  egress_privacy.py — edge-egress anonymisation (anonymise_page); see Key Patterns
   sync/       — sync cursor logic (last-seen event ID per consumer)
   websocket/  — optional WS push to local on-train consumers
   main.py     — app factory

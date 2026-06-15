@@ -4,14 +4,19 @@ Project-specific behavioral guidelines for the OEBB Smart Rail PoC. These overri
 
 ## Codebase Navigation
 
-This is a monorepo with four subpackages. Each has its own `CLAUDE.md` with stack, test commands, file conventions, and gotchas. **Read the subpackage CLAUDE.md before touching any files in that package.**
+This is a monorepo with nine source subpackages. Each has its own `CLAUDE.md` with stack, test commands, file conventions, and gotchas. **Read the subpackage CLAUDE.md before touching any files in that package.**
 
-| Subpackage | Language | Role |
-|---|---|---|
-| `control-centre/` | React 18 + JSX | Landside operator dashboard SPA |
-| `shared/` | Python 3.11 | Shared event schemas + adapters (`oebb-shared`) |
-| `cloud-backend/` | Python 3.11 + FastAPI | Landside REST API + SSE push, PostgreSQL |
-| `event-store/` | Python 3.11 + FastAPI | Edge event ingest + sync cursor, SQLite |
+| Subpackage | Language | Side | Role |
+|---|---|---|---|
+| `control-centre/` | React 18 + JSX | Landside | Operator dashboard SPA |
+| `cloud-backend/` | Python 3.11 + FastAPI | Landside | REST API + SSE push, PostgreSQL |
+| `cloud-sync/` | Python 3.11 + FastAPI | Onboard | MQTT gateway: event-store → landside broker |
+| `event-store/` | Python 3.11 + FastAPI | Onboard | Edge event ingest + sync cursor, SQLite |
+| `fusion/` | Python 3.11 + FastAPI | Onboard | Event correlation, suppression, ledger, comfort index |
+| `inference/` | Python 3.11 + GStreamer/TAPPAS | Onboard | Hailo-8 detection/tracking → events |
+| `rtsp-ingest/` | Python 3.11 + GStreamer/TAPPAS | Onboard | RTSP camera ingest + priority frame gating |
+| `vlan-pollers/` | Python 3.11 + FastAPI | Onboard | VLAN data pollers (SNMP/APC/PIS/reservations) → context push |
+| `shared/` | Python 3.11 | Both | Shared event schemas + adapters (`oebb-shared`) |
 
 A `.claudeignore` at the root excludes build outputs, caches, binary assets, and brainstorm scratchpads. You do not need to read those paths.
 
@@ -29,7 +34,7 @@ Nomad Digital / OEBB Hailo-8 AI Insights-as-a-Service platform. Single Hailo-8 M
 
 **Interfaces:** Conductor App, Technician App, Bistro App, Driver Display (onboard); Control Centre Dashboard, Maintenance Dashboard, Analytics & Station View (landside).
 
-**Current phase:** Architecture complete. First dev target: Control Centre Dashboard. Source control: GitLab (use `.gitlab-ci.yml`).
+**Current phase:** Implementation in progress across the onboard edge pipeline and landside backend (e.g. event-store, fusion, cloud-sync, vlan-pollers, and cloud-backend auth/user-management E11). Control Centre Dashboard stories in flight. Source control: GitLab (use `.gitlab-ci.yml`).
 
 ---
 
@@ -138,7 +143,7 @@ Tier 3 actions on shared infrastructure (CI config, DB migrations, credentials) 
 
 ### Harness Review Cadence
 
-After each model upgrade, audit the BMAD story template for rules that were workarounds for older model limitations. Remove them — dead rules become noise. The current model is Sonnet 4.6; rules written for Sonnet 4.5 context-anxiety are candidates for removal.
+After each model upgrade, audit the BMAD story template for rules that were workarounds for older model limitations. Remove them — dead rules become noise.
 
 ---
 
@@ -210,4 +215,4 @@ All WDS artifacts live in `_bmad-output/design-artifacts/`. Design tools: Figma 
 
 ### Current project position
 
-Architecture complete (BMAD Steps 1–8). Now in WDS Phase 4–5 — Freya owns Control Centre Dashboard UX Design before any coding starts.
+Architecture complete (BMAD Steps 1–8). Implementation underway: onboard edge containers (event-store, inference, rtsp-ingest, vlan-pollers, fusion, cloud-sync) and landside cloud-backend are in active story development, alongside Control Centre Dashboard UX work.

@@ -22,6 +22,10 @@ ruff check src/ tests/
 | `src/fusion/context_state.py` | `ContextState` — vlan-poller context push + edge detectors |
 | `src/fusion/suppression.py` | `SuppressionGate` — depot/maintenance/gps_invalid gate |
 | `src/fusion/enrichment.py` | `Enrichment.emit_envelope` — generic event-store POST |
+| `src/fusion/occupancy.py` | Occupancy candidate correlation |
+| `src/fusion/door_obstruction.py` | Door-obstruction candidate handling (`/candidates/door_obstruction`) |
+| `src/fusion/accessibility.py` | Accessibility/ramp candidate handling |
+| `src/fusion/models.py` | Pydantic request/response + domain models |
 | `src/fusion/main.py` | Lifespan + container wiring |
 | `src/fusion/config.py` | `Settings` (pydantic-settings) |
 
