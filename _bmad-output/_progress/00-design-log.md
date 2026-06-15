@@ -37,6 +37,21 @@
 | 2026-05-16 | 11 | cc-system-health | specified |
 | 2026-05-16 | 04 | cc-analytics-panel | specified |
 | 2026-05-16 | 12 | cc-train-detail | specified |
+| 2026-06-15 | (admin/identity) | epic-11-admin-shell | coherence-reviewed (brownfield, Built+Not-designed) |
+
+---
+
+## Epic-11 Admin/Identity Shell — Coherence Review (2026-06-15, Freya)
+
+Tracked epic-exit WDS pass over the 5 Epic-11 screens (login + logout + role-gated nav + Users + Profile + Alert Classes + Configuration), reviewed as ONE shell. These screens were built code-first (minimal-functional, browser-verified per story) with no prior UX scenario/spec → reviewed retroactively for cross-screen coherence, NOT re-specced. Full findings: [2026-06-15-epic-11-admin-shell-coherence-review.md](../design-artifacts/D-UX-Design/2026-06-15-epic-11-admin-shell-coherence-review.md).
+
+8 findings, prioritized, each a candidate follow-up story:
+- **P1:** F1 no sign-out control rendered (logout() exists in AuthContext, unused) + no header identity; F2 two settings homes (Profile screen vs ⚙ gear-modal) with unclear split (gated on E11S3-D5).
+- **P2:** F3 three copy-pasted admin button/table/pill CSS systems → extract shared admin primitives (the one structural design-system action); F4 inconsistent admin headers/titles; F5 divergent in-table edit affordances.
+- **P3:** F6 login is unbranded functional-minimal; F7 ad-hoc Profile avatar (define identity treatment once); F8 "last changed by" on Alert Classes but not Configuration.
+- Fold in **E11S4-D5** (SOP/routing-matrix still say curl+X-Admin-Key → rewrite to UI/JWT — the doc half of this surface).
+
+Recommended sequence if storified: F1 → F3 (enabling refactor) → F4+F5+F8 → F2 → F6+F7. None block; shell is shippable as-is. Design system: tokens healthy (74 --obb-*); the gap is component-level primitives (F3).
 
 ---
 
