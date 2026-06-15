@@ -90,7 +90,10 @@ async def app_client(
 
 _API_HEADERS = auth_header()
 # E11-S4: the kill-switch is now JWT role-gated — toggles use an admin Bearer
-# token (was X-Admin-Key). The audit actor is the token's username ("synthetic-admin").
+# token (was X-Admin-Key). The audit actor is the token's username claim
+# ("tester", auth_header's default) — NOT the seeded users-row username; these
+# tests assert only fan-out state/event-type, so the actor value is exercised by
+# test_killswitch_auth_swap.py, not here.
 _ADMIN_HEADERS = auth_header(role="admin")
 
 

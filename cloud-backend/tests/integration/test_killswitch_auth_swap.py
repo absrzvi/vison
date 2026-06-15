@@ -228,3 +228,97 @@ async def test_old_admin_key_without_bearer_is_401(app_client: AsyncClient) -> N
         headers={"X-Admin-Key": "any-old-value"},
     )
     assert r.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Security-envelope regression net (code-review R1, E11S4-R1: promoted from the
+# Edge Case Hunter's real-wire probes so the auth swap can't silently regress).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path,method",
+    [
+        ("/api/v1/admin/alert-classes/UNATTENDED_BAG/disable", "post"),
+        ("/api/v1/admin/alert-classes/UNATTENDED_BAG/enable", "post"),
+        ("/api/v1/admin/alert-classes", "get"),
+    ],
+)
+async def test_operator_forbidden_on_every_endpoint(
+    app_client: AsyncClient, path: str, method: str
+) -> None:
+    """AC2 on the real wire: an operator token is 403 on ALL THREE endpoints,
+    not just disable. The GET has no per-route guard — this proves the router-
+    level dependency alone gates it."""
+    if method == "post":
+        r = await app_client.post(path, headers=_operator_header())
+    else:
+        r = await app_client.get(path, headers=_operator_header())
+    assert r.status_code == 403
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_actor_spoof_ignored_on_enable_too(
+    app_client: AsyncClient,
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """AC3 on the enable path (the disable path is covered above): a spoof body is
+    ignored and the actor is the token username, persisted to enabled_by + the
+    ALERT_CLASS_REENABLED envelope."""
+    r = await app_client.post(
+        "/api/v1/admin/alert-classes/slip_fall/enable",
+        headers=_admin_header(),
+        json={"actor_name": "spoofed-enable", "enabled_by": "spoofed2"},
+    )
+    assert r.status_code == 200
+
+    async with factory() as session:
+        row = (
+            await session.execute(
+                text(
+                    "SELECT state, enabled_by FROM alert_class_state "
+                    "WHERE alert_code = 'slip_fall'"
+                )
+            )
+        ).fetchone()
+        assert row is not None
+        assert row.state == "enabled"
+        assert row.enabled_by == _ADMIN_TOKEN_USERNAME
+        assert row.enabled_by not in ("spoofed-enable", "spoofed2")
+
+        audit = (
+            await session.execute(
+                text(
+                    "SELECT payload FROM events WHERE event_type = 'ALERT_CLASS_REENABLED'"
+                )
+            )
+        ).fetchone()
+        assert audit is not None
+        assert _ADMIN_TOKEN_USERNAME in str(audit.payload)
+        assert "spoofed" not in str(audit.payload)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "bad_sub",
+    [
+        "00000000-0000-0000-0000-0000deadbeef",  # valid UUID, no users row (deleted/never-existed)
+        "not-a-uuid-at-all",  # non-UUID sub → the uuid-column bind raises, must be caught → 401
+    ],
+)
+async def test_malformed_admin_sub_is_401_not_500(
+    app_client: AsyncClient, bad_sub: str
+) -> None:
+    """The liveness gate must turn an absent or non-UUID `sub` into 401, never an
+    uncaught 500 (no stack-trace info-leak). Even a well-formed admin-role token
+    is rejected if its subject is not a live principal."""
+    token = create_access_token(user_id=bad_sub, username="ghost", role="admin")
+    r = await app_client.post(
+        "/api/v1/admin/alert-classes/UNATTENDED_BAG/disable",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 401
