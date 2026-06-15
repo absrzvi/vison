@@ -195,7 +195,7 @@ These requirements are derived from the locked prototype (DD-001) and `01-contro
 | UX-DR14 | Responsive layout: dashboard designed for 1440px+ desktop; no mobile breakpoints in PoC scope |
 | UX-DR15 | Luggage Monitoring — events grouped by train (collapsible); KPI strip with "Longest Unattended" (red) + "Longest Active" (amber) split; confidence chips colour-coded; unattended cards with pulsing border; resolved events in disclosure row |
 | UX-DR16 | Per-alert confidence chip on alert rows (states: `High confidence` / `Medium confidence` / `Verify`); no numeric score on the chip (drawer only); chip absent when `confidence_basis !== "model"`. *(Epic 10 / E10-S1c; added 2026-06-05)* |
-| UX-DR17 | "Degraded" banner at the top of the alerts list, server-triggered via the `ai_quality_degraded` flag on `GET /api/v1/health`; non-dismissible while active; copy: "AI alert quality is degraded. Nomad has been notified. Continue to verify alerts against CCTV as normal." *(Epic 10 / E10-S1c; added 2026-06-05)* |
+| UX-DR17 | "Degraded" banner at the top of the alerts list, server-triggered via the `ai_quality_degraded` flag on `GET /api/v1/health`; non-dismissible while active; copy: "AI alert quality is degraded. Nomad has been notified. Continue to verify alerts against CCTV as normal." *(Epic 10 / E10-S1c; added 2026-06-05. E11-S5, 2026-06-15: the `degraded_banner_floor` that triggers this flag is now admin-mutable + persisted (Alembic 0012); default behaviour unchanged until an admin edits it — the gate reads the persisted value.)* |
 | UX-DR18 | "AI pipeline" row on System Health — three states (Green/Amber/Red) driven by `INFERENCE_HEARTBEAT` liveness; cold state copy: "AI pipeline: starting. No inferences yet." Plus an AI Quality drawer surfacing the observable rates of UX-DR/FR42. *(Epic 10 / E10-S1c + E10-S5; added 2026-06-05)* |
 
 ---
@@ -302,7 +302,7 @@ Per architecture document, the confirmed build order is:
 | 9 | Health poll interval for `rtsp-ingest` and `event-store` | "Updated Xs ago" freshness logic | Nomad Digital |
 | 10 | Should dismissed exceptions stay visible (greyed) or be fully hidden? | Analytics exception list UX | ÖBB / Claudia |
 | 11 | Confirmed data retention period for historical occupancy data? (90 days assumed) | Analytics date picker range | Nomad Digital data governance |
-| 12 | Per-operator configurable alert threshold — stored in operator config or environment variable? | Alert threshold implementation | ÖBB operations |
+| 12 | Per-operator configurable alert threshold — stored in operator config or environment variable? | Alert threshold implementation | ÖBB operations — **RESOLVED (E11-S3 + E11-S5, 2026-06-15):** neither an env var. Per-operator alert threshold is **user-scoped** (PostgreSQL `operator_preferences`, re-keyed to a `users.user_id` FK in E11-S3). Per-class confidence thresholds + the degraded floor are **deployment-scoped, admin-mutable** (PostgreSQL `confidence_thresholds` KV table, Alembic 0012, admin `PATCH` in E11-S5 — editable without a redeploy). |
 | 13 | SSE multi-worker fan-out — in-process `_subscribers` set OK for PoC (single worker); fleet rollout needs Redis pub/sub or PG `LISTEN/NOTIFY`. Which? | SSE fan-out at fleet scale | Nomad Digital backend (non-blocking for PoC) |
 
 ---

@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.auth import get_current_user
-from ..config.confidence_thresholds import DEGRADED_BANNER_FLOOR
+from ..config.confidence_thresholds import threshold_store
 from ..database import check_connection, get_db
 
 router = APIRouter()
@@ -50,7 +50,11 @@ class _DegradedCache:
                 """)
             )
             mean = result.scalar()
-            self._value = mean is not None and float(mean) < DEGRADED_BANNER_FLOOR
+            # E11-S5: the floor is now admin-mutable — read the persisted value
+            # (cached, fail-safe to the hardcoded default) instead of the constant.
+            cfg = await threshold_store.load(db)
+            floor = cfg["degraded_banner_floor"]
+            self._value = mean is not None and float(mean) < floor
             self._computed_at = now
             return self._value
 

@@ -130,7 +130,7 @@ so that procurement conversations have a credible answer to "what happens when t
     }
     DEGRADED_BANNER_FLOOR: float = 0.60     # CALIBRATE — fleet-wide rolling-1h mean trigger
     ```
-    Every value carries a `# CALIBRATE` comment. Mutability deferred to Epic 11.
+    Every value carries a `# CALIBRATE` comment. Mutability deferred to Epic 11. *(E11-S5, 2026-06-15: REALISED — the values are now persisted in the `confidence_thresholds` KV table (Alembic 0012), seeded with these defaults, and admin-mutable via `PATCH /api/v1/config/confidence-thresholds`. These module constants remain the fail-safe fallback. No code deploy needed to change a threshold.)*
 
 16. **`GET /api/v1/config/confidence-thresholds`** returns `{"per_class": {...}, "degraded_banner_floor": 0.60}`. Read-only (no POST endpoint in E10-S1). Open to any authenticated CC client (PoC: no auth — same posture as existing endpoints).
 

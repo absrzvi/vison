@@ -1,0 +1,92 @@
+/* E11-S5 — admin Configuration screen. Dark-ops theme via --obb-* tokens only
+   (control-centre CLAUDE.md: no hex literals, no inline styles). Mirrors AlertClasses.css. */
+
+.configuration {
+  padding: 1.5rem;
+  color: var(--obb-text-on-dark-1);
+}
+
+.configuration__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.configuration__title {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--obb-text-on-dark-1);
+}
+
+.configuration-muted {
+  color: var(--obb-text-on-dark-3);
+  margin: 0.25rem 0 1rem;
+}
+
+.configuration-error {
+  color: var(--obb-sev-critical);
+  margin: 0.5rem 0;
+}
+
+.configuration-mono {
+  font-family: var(--font-mono, monospace);
+}
+
+.configuration-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--obb-surface-1);
+  border: 1px solid var(--obb-border-dark);
+}
+
+.configuration-table th,
+.configuration-table td {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--obb-border-dark);
+}
+
+.configuration-table th {
+  color: var(--obb-text-on-dark-2);
+  font-weight: 600;
+  background: var(--obb-surface-2);
+}
+
+.configuration-input {
+  background: var(--obb-surface-1);
+  color: var(--obb-text-on-dark-1);
+  border: 1px solid var(--obb-border-bright);
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
+  width: 6rem;
+  font-family: var(--font-mono, monospace);
+}
+
+.configuration-btn {
+  background: var(--obb-surface-3);
+  color: var(--obb-text-on-dark-1);
+  border: 1px solid var(--obb-border-bright);
+  border-radius: 4px;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+  font-size: var(--font-size-sm, 0.8rem);
+}
+
+.configuration-btn:hover {
+  background: var(--obb-surface-4);
+}
+
+.configuration-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.configuration-btn--primary {
+  background: var(--obb-blue-accent);
+  border-color: var(--obb-blue-accent);
+}
+
+.configuration-btn--primary:hover {
+  background: var(--obb-blue-dim);
+}
